@@ -14,7 +14,7 @@ import kotlin.math.min
  */
 object WolfImageDepthSegmenter {
 
-    private const val MAX_ANALYSIS_DIMENSION = 1280
+    private const val MAX_ANALYSIS_DIMENSION = 960
     private const val MIN_COMPONENT_PIXELS = 64
 
     data class Layers(
