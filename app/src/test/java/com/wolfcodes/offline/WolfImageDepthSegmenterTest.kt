@@ -8,6 +8,32 @@ import org.junit.Test
 class WolfImageDepthSegmenterTest {
 
     @Test
+    fun segmentationFailureReturnsFallbackAndReportsFailureInsteadOfThrowing() {
+        var failureReported = false
+
+        val result = WolfImageDepthSegmenter.attemptSegmentation<String>(
+            operation = { throw IllegalStateException("synthetic segmentation failure") },
+            onFailure = { failureReported = true }
+        )
+
+        assertEquals(null, result)
+        assertTrue(failureReported)
+    }
+
+    @Test
+    fun successfulSegmentationResultIsPreserved() {
+        var failureReported = false
+
+        val result = WolfImageDepthSegmenter.attemptSegmentation(
+            operation = { "separated-layers" },
+            onFailure = { failureReported = true }
+        )
+
+        assertEquals("separated-layers", result)
+        assertFalse(failureReported)
+    }
+
+    @Test
     fun separatesHighContrastForegroundFromBorderConnectedBackground() {
         val width = 40
         val height = 40
