@@ -561,13 +561,14 @@ object OfflineProductionEngine {
                     val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
+                    val imageLayers = image?.let { WolfImageDepthSegmenter.segment(it) }
                     try {
                         for (f in 0 until shotFrames) {
                             if (f % (fps * 5) == 0) WolfResourceGuard.ensureSafeToContinue(context)
                             val shotProgress = f.toFloat() / max(1, shotFrames - 1)
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
-                                w, h, scenes[s], s, shotIndex, shotProgress, image, includeWatermark,
+                                w, h, scenes[s], s, shotIndex, shotProgress, image, imageLayers, includeWatermark,
                                 typographyCues.getOrNull(s), sceneFrameOffset + f, fps
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
@@ -575,6 +576,7 @@ object OfflineProductionEngine {
                             started = drained.second
                         }
                     } finally {
+                        imageLayers?.recycle()
                         if (image != null && !image.isRecycled) image.recycle()
                     }
                     sceneFrameOffset += shotFrames
@@ -635,8 +637,9 @@ object OfflineProductionEngine {
 
     private fun draw(
         surface: Surface, w: Int, h: Int, caption: String, scene: Int,
-        shotIndex: Int, t: Float, bitmap: Bitmap?, includeWatermark: Boolean,
-        typographyCue: WolfHorrorTypographyEngine.Cue?, sceneFrameIndex: Int, fps: Int
+        shotIndex: Int, t: Float, bitmap: Bitmap?, imageLayers: WolfImageDepthSegmenter.Layers?,
+        includeWatermark: Boolean, typographyCue: WolfHorrorTypographyEngine.Cue?,
+        sceneFrameIndex: Int, fps: Int
     ) {
         val c: Canvas = surface.lockCanvas(null)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -691,10 +694,31 @@ object OfflineProductionEngine {
                     (h + dh) / 2f + shiftY
                 )
                 p.alpha = 255
-                val cameraSave = c.save()
-                c.rotate(camera.rotationDegrees, w / 2f, h / 2f)
-                c.drawBitmap(bitmap, source, destination, p)
-                c.restoreToCount(cameraSave)
+                if (imageLayers != null && imageLayers.separated) {
+                    val layerScale = imageLayers.sourceScale
+                    val layerSource = Rect(
+                        (source.left * layerScale).toInt().coerceIn(0, imageLayers.background.width - 1),
+                        (source.top * layerScale).toInt().coerceIn(0, imageLayers.background.height - 1),
+                        (source.right * layerScale).toInt().coerceIn(1, imageLayers.background.width),
+                        (source.bottom * layerScale).toInt().coerceIn(1, imageLayers.background.height)
+                    )
+                    WolfSceneDepthComposer.renderImageLayers(
+                        canvas = c,
+                        width = w,
+                        height = h,
+                        sceneIndex = scene,
+                        progress = shotProgress,
+                        layers = imageLayers,
+                        source = layerSource,
+                        destination = destination,
+                        rotationDegrees = camera.rotationDegrees
+                    )
+                } else {
+                    val cameraSave = c.save()
+                    c.rotate(camera.rotationDegrees, w / 2f, h / 2f)
+                    c.drawBitmap(bitmap, source, destination, p)
+                    c.restoreToCount(cameraSave)
+                }
                 p.color=android.graphics.Color.argb(46,0,0,0)
                 c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
                 if(shotProgress<0.08f) {
