@@ -147,23 +147,41 @@ class MainActivity : Activity() {
         require(story.length >= 20) { "اكتب قصة أطول قليلًا حتى يمكن تقسيمها إلى مشاهد" }
         require(duration in 5..1800) { "المدة يجب أن تكون بين 5 ثوانٍ و30 دقيقة" }
         val existing = workingProject
-        if (existing != null && (existing.story != story || existing.title != title)) {
+        val storyChanged = existing != null && existing.story != story
+        if (storyChanged) {
             voiceUri = null
-            selectedImageUris.clear()
+            // Invalidate the matching narration session as well as the project reference.
+            // Otherwise an older approved take could silently control the new story's duration.
+            runCatching {
+                WolfStoryVoiceStore.saveEditing(this, existing!!.id, story, story)
+            }.onFailure { error ->
+                throw IllegalStateException("تعذر تحديث جلسة الراوي بعد تعديل القصة: ${error.message}", error)
+            }
         }
-        val base = if (existing != null && existing.story == story && existing.title == title) existing.copy(durationSeconds = duration, audioUri = voiceUri, aspectRatio = selectedAspectRatio, imageUris = selectedImageUris.toList()) else WolfProjectStore.newProject(
-            story = story,
-            sourceUrl = "",
-            aspectRatio = selectedAspectRatio,
-            durationSeconds = duration,
-            visualStyle = "رعب سينمائي مظلم",
-            horrorType = "رعب نفسي وخارق للطبيعة",
-            soundEffectsEnabled = true,
-            imageUris = selectedImageUris.toList(),
-            audioUri = voiceUri,
-            includeIntro = true,
-            includeWatermark = true
-        ).copy(title = title)
+        val base = if (existing != null) {
+            existing.copy(
+                title = title,
+                story = story,
+                durationSeconds = duration,
+                audioUri = voiceUri,
+                aspectRatio = selectedAspectRatio,
+                imageUris = selectedImageUris.toList()
+            )
+        } else {
+            WolfProjectStore.newProject(
+                story = story,
+                sourceUrl = "",
+                aspectRatio = selectedAspectRatio,
+                durationSeconds = duration,
+                visualStyle = "رعب سينمائي مظلم",
+                horrorType = "رعب نفسي وخارق للطبيعة",
+                soundEffectsEnabled = true,
+                imageUris = selectedImageUris.toList(),
+                audioUri = voiceUri,
+                includeIntro = true,
+                includeWatermark = true
+            ).copy(title = title)
+        }
         workingProject = base
         return base
     }
@@ -268,7 +286,17 @@ class MainActivity : Activity() {
         worker.execute {
             try {
                 val voiceSession = WolfStoryVoiceStore.read(this, project.id)
-                val approvedVoice = voiceSession?.voiceApproved == true
+                val approvedVoice = project.audioUri?.let { storedAudio ->
+                    val storedPath = runCatching { Uri.parse(storedAudio).path }.getOrNull()
+                    val approvedPath = voiceSession?.voiceFilePath
+                    voiceSession?.voiceApproved == true &&
+                        !storedPath.isNullOrBlank() &&
+                        !approvedPath.isNullOrBlank() &&
+                        runCatching {
+                            File(storedPath).canonicalFile == File(approvedPath).canonicalFile &&
+                                File(approvedPath).isFile
+                        }.getOrDefault(false)
+                } ?: false
                 val effectiveDuration = if (approvedVoice) {
                     (WolfStoryVoiceStateMachine.durationSecondsCeil(voiceSession!!.audioDurationMs) +
                         if (project.includeIntro) 3 else 0).coerceIn(5, 1800)
