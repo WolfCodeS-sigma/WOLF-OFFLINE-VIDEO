@@ -1,8 +1,6 @@
 package com.wolfcodes.offline
 
 import android.graphics.Bitmap
-import android.graphics.Color
-import java.util.ArrayDeque
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -113,7 +111,6 @@ object WolfImageDepthSegmenter {
         }
 
         val backgroundColor = medianColor(border)
-        val distances = IntArray(pixels.size)
         val borderDistances = IntArray(border.size)
         for (i in border.indices) borderDistances[i] = colorDistance(border[i], backgroundColor)
         borderDistances.sort()
@@ -243,21 +240,21 @@ object WolfImageDepthSegmenter {
         val green = IntArray(colors.size)
         val blue = IntArray(colors.size)
         for (i in colors.indices) {
-            red[i] = Color.red(colors[i])
-            green[i] = Color.green(colors[i])
-            blue[i] = Color.blue(colors[i])
+            red[i] = (colors[i] ushr 16) and 0xFF
+            green[i] = (colors[i] ushr 8) and 0xFF
+            blue[i] = colors[i] and 0xFF
         }
         red.sort()
         green.sort()
         blue.sort()
         val middle = colors.size / 2
-        return Color.rgb(red[middle], green[middle], blue[middle])
+        return (0xFF shl 24) or (red[middle] shl 16) or (green[middle] shl 8) or blue[middle]
     }
 
     private fun colorDistance(first: Int, second: Int): Int {
-        val red = abs(Color.red(first) - Color.red(second))
-        val green = abs(Color.green(first) - Color.green(second))
-        val blue = abs(Color.blue(first) - Color.blue(second))
+        val red = abs(((first ushr 16) and 0xFF) - ((second ushr 16) and 0xFF))
+        val green = abs(((first ushr 8) and 0xFF) - ((second ushr 8) and 0xFF))
+        val blue = abs((first and 0xFF) - (second and 0xFF))
         return (red * 3 + green * 4 + blue * 2) / 3
     }
 
