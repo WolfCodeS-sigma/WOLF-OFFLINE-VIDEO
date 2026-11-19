@@ -26,6 +26,7 @@ class MainActivity : Activity() {
     private var workingProject: WolfProject? = null
     private var voiceRecorder: WolfVoiceRecorder? = null
     private var voiceUri: String? = null
+    private val selectedImageUris = mutableListOf<String>()
     private lateinit var progress: ProgressBar
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,6 +64,9 @@ class MainActivity : Activity() {
         val save = button("حفظ المشروع")
         root.addView(save)
         save.setOnClickListener { saveProject() }
+        val chooseImages = button("اختيار صور المشاهد (اختياري)")
+        root.addView(chooseImages)
+        chooseImages.setOnClickListener { chooseSceneImages() }
         val voice = button("تسجيل التعليق الصوتي")
         root.addView(voice)
         voice.setOnClickListener { startVoiceRecording() }
@@ -81,7 +85,18 @@ class MainActivity : Activity() {
         root.addView(status)
         root.addView(label("المشاريع المحفوظة"))
         WolfProjectStore.list(this).take(15).forEach { item ->
-            root.addView(label(item.title + " — " + item.durationSeconds + " ثانية"))
+            val projectItem = label(item.title + " — " + item.durationSeconds + " ثانية")
+            projectItem.setOnClickListener {
+                workingProject = item
+                titleField.setText(item.title)
+                storyField.setText(item.story)
+                durationField.setText(item.durationSeconds.toString())
+                voiceUri = item.audioUri
+                selectedImageUris.clear()
+                selectedImageUris.addAll(item.imageUris)
+                status.text = "تم فتح المشروع: " + item.title
+            }
+            root.addView(projectItem)
         }
         setContentView(scroll)
     }
@@ -127,13 +142,41 @@ class MainActivity : Activity() {
             visualStyle = "رعب سينمائي مظلم",
             horrorType = "رعب نفسي وخارق للطبيعة",
             soundEffectsEnabled = true,
-            imageUris = emptyList(),
+            imageUris = selectedImageUris.toList(),
             audioUri = voiceUri,
             includeIntro = true,
             includeWatermark = true
         ).copy(title = title)
         workingProject = base
         return base
+    }
+
+    private fun chooseSceneImages() {
+        val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(android.content.Intent.CATEGORY_OPENABLE)
+            type = "image/*"
+            putExtra(android.content.Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+        startActivityForResult(intent, 742)
+    }
+
+    @Deprecated("The document picker result is handled for Android versions supported by this app.")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 742 || resultCode != RESULT_OK || data == null) return
+        val picked = mutableListOf<Uri>()
+        data.clipData?.let { clip ->
+            for (index in 0 until clip.itemCount) clip.getItemAt(index).uri?.let(picked::add)
+        }
+        data.data?.let { if (picked.isEmpty()) picked.add(it) }
+        picked.distinct().take(WolfProjectStore.MAX_IMAGES).forEach { uri ->
+            runCatching {
+                contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                if (uri.toString() !in selectedImageUris) selectedImageUris.add(uri.toString())
+            }
+        }
+        workingProject = workingProject?.copy(imageUris = selectedImageUris.toList())
+        status.text = "تم اختيار " + selectedImageUris.size + " صورة للمشاهد واللقطات"
     }
 
     private fun saveProject() {
