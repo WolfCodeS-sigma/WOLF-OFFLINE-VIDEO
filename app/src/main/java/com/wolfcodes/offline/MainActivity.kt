@@ -390,8 +390,10 @@ class MainActivity : Activity() {
     }
 
     private fun approveVoiceTake() {
-        val project = workingProject ?: runCatching { currentProject() }.getOrElse {
-            showError(it)
+        val project = try {
+            currentProject().also { WolfProjectStore.save(this, it) }
+        } catch (error: Exception) {
+            showError(error)
             return
         }
         val session = WolfStoryVoiceStore.read(this, project.id)
@@ -417,8 +419,10 @@ class MainActivity : Activity() {
     }
 
     private fun requestVoiceRepeat() {
-        val project = workingProject ?: runCatching { currentProject() }.getOrElse {
-            showError(it)
+        val project = try {
+            currentProject().also { WolfProjectStore.save(this, it) }
+        } catch (error: Exception) {
+            showError(error)
             return
         }
         stopVoicePreview()
@@ -436,8 +440,10 @@ class MainActivity : Activity() {
     }
 
     private fun playVoicePreview() {
-        val project = workingProject ?: runCatching { currentProject() }.getOrElse {
-            showError(it)
+        val project = try {
+            currentProject().also { WolfProjectStore.save(this, it) }
+        } catch (error: Exception) {
+            showError(error)
             return
         }
         val session = WolfStoryVoiceStore.read(this, project.id)
