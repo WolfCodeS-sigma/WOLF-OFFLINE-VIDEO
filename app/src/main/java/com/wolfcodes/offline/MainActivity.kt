@@ -147,6 +147,10 @@ class MainActivity : Activity() {
         require(story.length >= 20) { "اكتب قصة أطول قليلًا حتى يمكن تقسيمها إلى مشاهد" }
         require(duration in 5..1800) { "المدة يجب أن تكون بين 5 ثوانٍ و30 دقيقة" }
         val existing = workingProject
+        if (existing != null && (existing.story != story || existing.title != title)) {
+            voiceUri = null
+            selectedImageUris.clear()
+        }
         val base = if (existing != null && existing.story == story && existing.title == title) existing.copy(durationSeconds = duration, audioUri = voiceUri, aspectRatio = selectedAspectRatio, imageUris = selectedImageUris.toList()) else WolfProjectStore.newProject(
             story = story,
             sourceUrl = "",
