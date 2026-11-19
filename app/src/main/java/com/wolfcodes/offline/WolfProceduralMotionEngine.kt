@@ -112,10 +112,9 @@ object WolfProceduralMotionEngine {
     }
 
     /**
-     * Draws the existing atmospheric and character effects in a shallow foreground
-     * depth plane. The scene compositor has already established the background,
-     * midground and foreground; this pass gives particles, spectral movement and
-     * environmental effects a separate, deterministic depth response.
+     * Draws atmospheric effects and entities in separate depth passes. Background
+     * haze, midground entities and foreground weather/glitch receive independent
+     * deterministic transforms instead of sharing one camera movement.
      */
     fun renderDepthAware(
         canvas: Canvas,
