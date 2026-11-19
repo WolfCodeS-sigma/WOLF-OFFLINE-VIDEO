@@ -141,6 +141,7 @@ object OfflineProductionEngine {
                 story, framesPerScene, fps, w, h, introFrames, enableHorrorTypography,
                 listOf(
                     includeWatermark.toString(),
+                    "depth-segmentation-v${WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION}",
                     audioUri?.toString().orEmpty(),
                     sceneShotUris.flatten().joinToString("|"),
                     sceneImageAssignments.entries.sortedBy { it.key }
