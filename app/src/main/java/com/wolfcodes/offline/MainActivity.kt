@@ -26,6 +26,7 @@ class MainActivity : Activity() {
     private var workingProject: WolfProject? = null
     private var voiceRecorder: WolfVoiceRecorder? = null
     private var voiceUri: String? = null
+    private var selectedAspectRatio: String = "9:16"
     private val selectedImageUris = mutableListOf<String>()
     private lateinit var progress: ProgressBar
 
@@ -58,6 +59,17 @@ class MainActivity : Activity() {
             gravity = Gravity.TOP
         }
         root.addView(storyField)
+        root.addView(label("مقاس الفيديو"))
+        val ratioRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        listOf("9:16", "16:9", "1:1", "4:5").forEach { ratio ->
+            val choice = button(ratio)
+            ratioRow.addView(choice, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            choice.setOnClickListener {
+                selectedAspectRatio = ratio
+                status.text = "تم اختيار مقاس " + ratio
+            }
+        }
+        root.addView(ratioRow)
         root.addView(label("مدة الفيلم بالثواني (5 إلى 1800)"))
         durationField = field("مثال: 300").apply { setText("60") }
         root.addView(durationField)
@@ -94,6 +106,7 @@ class MainActivity : Activity() {
                 voiceUri = item.audioUri
                 selectedImageUris.clear()
                 selectedImageUris.addAll(item.imageUris)
+                selectedAspectRatio = item.aspectRatio.substringBefore(" ")
                 status.text = "تم فتح المشروع: " + item.title
             }
             root.addView(projectItem)
@@ -134,10 +147,10 @@ class MainActivity : Activity() {
         require(story.length >= 20) { "اكتب قصة أطول قليلًا حتى يمكن تقسيمها إلى مشاهد" }
         require(duration in 5..1800) { "المدة يجب أن تكون بين 5 ثوانٍ و30 دقيقة" }
         val existing = workingProject
-        val base = if (existing != null && existing.story == story && existing.title == title) existing.copy(durationSeconds = duration, audioUri = voiceUri) else WolfProjectStore.newProject(
+        val base = if (existing != null && existing.story == story && existing.title == title) existing.copy(durationSeconds = duration, audioUri = voiceUri, aspectRatio = selectedAspectRatio, imageUris = selectedImageUris.toList()) else WolfProjectStore.newProject(
             story = story,
             sourceUrl = "",
-            aspectRatio = "9:16 رأسي",
+            aspectRatio = selectedAspectRatio,
             durationSeconds = duration,
             visualStyle = "رعب سينمائي مظلم",
             horrorType = "رعب نفسي وخارق للطبيعة",
