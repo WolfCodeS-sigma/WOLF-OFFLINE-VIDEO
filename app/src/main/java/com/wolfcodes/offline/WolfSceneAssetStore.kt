@@ -11,6 +11,7 @@ object WolfSceneAssetStore {
     const val MAX_SCENES = 12
     const val SHOTS_PER_SCENE = 3
     const val MAX_IMAGE_SLOTS = MAX_SCENES * SHOTS_PER_SCENE
+    const val DEPTH_SEGMENTATION_VERSION = 1
 
     private const val FILE_NAME = "wolf_scene_assets.json"
     private const val BACKUP_NAME = "wolf_scene_assets.json.bak"
