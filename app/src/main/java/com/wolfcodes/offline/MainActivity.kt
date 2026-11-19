@@ -627,6 +627,8 @@ class MainActivity : Activity() {
                     voiceSession?.voiceApproved == true &&
                         voiceSession.scriptApproved &&
                         voiceSession.finalStory == project.story &&
+                        voiceSession.recordingStoryHash ==
+                            WolfStoryVoiceStateMachine.storyFingerprint(project.story) &&
                         !storedPath.isNullOrBlank() &&
                         !approvedPath.isNullOrBlank() &&
                         runCatching {
