@@ -209,14 +209,18 @@ object WolfImageDepthSegmenter {
         }
 
         val totalAssigned = midMask.count { it } + frontMask.count { it }
-        val confidence = (min(1f, foregroundRatio / 0.12f) *
-            min(1f, (1f - foregroundRatio) / 0.18f)).coerceIn(0f, 1f)
+        val borderConsistency = (1f - noise / 100f).coerceIn(0f, 1f)
+        val confidence = (
+            min(1f, foregroundRatio / 0.12f) *
+                min(1f, (1f - foregroundRatio) / 0.18f) *
+                borderConsistency
+            ).coerceIn(0f, 1f)
         return MaskResult(
             foregroundMask = foregroundMask,
             midgroundMask = midMask,
             foregroundPlaneMask = frontMask,
             confidence = if (totalAssigned == 0) 0f else confidence,
-            separated = totalAssigned > 0
+            separated = totalAssigned > 0 && confidence >= 0.30f
         )
     }
 
