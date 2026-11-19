@@ -14,6 +14,7 @@ class WolfStoryVoiceTest {
         scriptApproved = false,
         voiceFilePath = null,
         audioDurationMs = 0L,
+        recordingStoryHash = null,
         voiceApproved = false,
         takeNumber = 0,
         updatedAt = 1L
@@ -58,6 +59,28 @@ class WolfStoryVoiceTest {
         assertFalse(invalidated.voiceApproved)
         assertEquals(null, invalidated.voiceFilePath)
         assertEquals(0L, invalidated.audioDurationMs)
+    }
+
+    @Test
+    fun approvingTextCannotReattachTakeRecordedForAnotherStoryRevision() {
+        val approvedScript = WolfStoryVoiceStateMachine.approveScript(session(), "القصة القديمة", 2L)
+        val take = WolfStoryVoiceStateMachine.saveRecording(
+            approvedScript, "/private/old-take.m4a", 12000L, 3L
+        )
+        val approvedTake = WolfStoryVoiceStateMachine.approveRecording(take, true, 4096L, 4L)
+
+        // Reproduce a stale persisted session where text was changed without clearing
+        // the recording metadata. The take fingerprint must still prevent re-approval.
+        val staleSession = approvedTake.copy(finalStory = "القصة الجديدة")
+        val reapprovedText = WolfStoryVoiceStateMachine.approveScript(
+            staleSession, "القصة الجديدة", 5L
+        )
+
+        assertTrue(reapprovedText.scriptApproved)
+        assertFalse(reapprovedText.voiceApproved)
+        assertEquals(null, reapprovedText.voiceFilePath)
+        assertEquals(null, reapprovedText.recordingStoryHash)
+        assertEquals(0L, reapprovedText.audioDurationMs)
     }
 
     @Test(expected = IllegalArgumentException::class)
