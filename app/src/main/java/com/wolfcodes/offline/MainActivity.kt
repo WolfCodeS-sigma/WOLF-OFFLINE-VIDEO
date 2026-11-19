@@ -190,6 +190,7 @@ class MainActivity : Activity() {
             ?: throw IllegalArgumentException("اكتب مدة صحيحة بالثواني")
         require(title.isNotBlank()) { "اكتب اسم الفيلم" }
         require(story.length >= 20) { "اكتب قصة أطول قليلًا حتى يمكن تقسيمها إلى مشاهد" }
+        require(story.length <= 60000) { "القصة أطول من الحد المدعوم (60,000 حرف)" }
         require(duration in 5..1800) { "المدة يجب أن تكون بين 5 ثوانٍ و30 دقيقة" }
 
         val existing = workingProject
