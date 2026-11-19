@@ -250,10 +250,16 @@ class MainActivity : Activity() {
         status.text = "جارٍ تجهيز محرك الإنتاج المحلي"
         worker.execute {
             try {
+                val voiceSession = WolfStoryVoiceStore.read(this, project.id)
+                val approvedVoice = voiceSession?.voiceApproved == true
+                val effectiveDuration = if (approvedVoice) {
+                    (WolfStoryVoiceStateMachine.durationSecondsCeil(voiceSession!!.audioDurationMs) +
+                        if (project.includeIntro) 3 else 0).coerceIn(5, 1800)
+                } else project.durationSeconds
                 val result = OfflineProductionEngine.render(
                     context = this,
                     story = project.story,
-                    seconds = project.durationSeconds,
+                    seconds = effectiveDuration,
                     imageUris = project.imageUris.mapNotNull { value -> runCatching { android.net.Uri.parse(value) }.getOrNull() },
                     audioUri = project.audioUri?.let { android.net.Uri.parse(it) },
                     aspectRatio = project.aspectRatio,
@@ -261,6 +267,8 @@ class MainActivity : Activity() {
                     includeWatermark = project.includeWatermark,
                     includeIntro = project.includeIntro,
                     projectId = project.id,
+                    audioDurationIsAuthoritative = approvedVoice,
+                    audioDurationMs = voiceSession?.audioDurationMs,
                     onSceneProgress = { current, total ->
                         runOnUiThread {
                             progress.progress = (current * 95 / total.coerceAtLeast(1)).coerceIn(0, 95)
