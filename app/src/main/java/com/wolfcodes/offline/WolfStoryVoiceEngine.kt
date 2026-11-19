@@ -55,13 +55,7 @@ object WolfStoryVoiceStateMachine {
         val normalized = finalStory.trim()
         require(normalized.isNotBlank()) { "لا يمكن اعتماد قصة فارغة" }
         val edited = edit(session, session.draftStory, normalized, now)
-        return edited.copy(
-            scriptApproved = true,
-            voiceFilePath = if (normalized == session.finalStory) session.voiceFilePath else null,
-            audioDurationMs = if (normalized == session.finalStory) session.audioDurationMs else 0L,
-            voiceApproved = if (normalized == session.finalStory) session.voiceApproved else false,
-            updatedAt = now
-        )
+        return edited.copy(scriptApproved = true, updatedAt = now)
     }
 
     fun saveRecording(session: WolfStoryVoiceSession, path: String, durationMs: Long, now: Long): WolfStoryVoiceSession {
@@ -105,6 +99,7 @@ object WolfStoryVoiceStateMachine {
             scriptApproved = false,
             voiceFilePath = null,
             audioDurationMs = 0L,
+            recordingStoryHash = null,
             voiceApproved = false,
             updatedAt = now
         )
@@ -132,7 +127,7 @@ object WolfStoryVoiceStore {
             require(validProjectId(projectId)) { "معرّف المشروع غير صالح" }
             readUnlocked(context, projectId) ?: WolfStoryVoiceSession(
                 projectId, sourceStory.take(MAX_TEXT_CHARS), sourceStory.take(MAX_TEXT_CHARS),
-                sourceStory.trim().take(MAX_TEXT_CHARS), false, null, 0L, false, 0,
+                sourceStory.trim().take(MAX_TEXT_CHARS), false, null, 0L, null, false, 0,
                 System.currentTimeMillis()
             ).also { writeUnlocked(context, it) }
         }
