@@ -95,7 +95,7 @@ class WolfOfflineVideoExporter(private val context: Context) {
                 }
             }
             encoder.signalEndOfInputStream()
-            drain(encoder, muxer, info, track) { outputFormat ->
+            drain(encoder, activeMuxer, info, track) { outputFormat ->
                 if (!muxerStarted) {
                     track[0] = activeMuxer.addTrack(outputFormat)
                     activeMuxer.start()
