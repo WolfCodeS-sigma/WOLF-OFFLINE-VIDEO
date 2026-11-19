@@ -120,6 +120,9 @@ class MainActivity : Activity() {
         root.addView(button("معاينة التسجيل الصوتي").apply {
             setOnClickListener { playVoicePreview() }
         })
+        root.addView(button("اعتماد التسجيل بعد الاستماع إليه").apply {
+            setOnClickListener { approveVoiceTake() }
+        })
         root.addView(button("إيقاف معاينة الصوت").apply {
             setOnClickListener { stopVoicePreview() }
         })
@@ -361,13 +364,14 @@ class MainActivity : Activity() {
             override fun onSaved(file: File, durationMs: Long, automaticStop: Boolean) {
                 runOnUiThread {
                     runCatching {
-                        WolfStoryVoiceStore.saveRecording(this@MainActivity, project.id, file, durationMs)
-                        val approved = WolfStoryVoiceStore.approveRecording(this@MainActivity, project.id)
-                            ?: throw IllegalStateException("تعذر اعتماد التسجيل الصوتي")
+                        val savedTake = WolfStoryVoiceStore.saveRecording(
+                            this@MainActivity, project.id, file, durationMs
+                        )
                         voiceUri = Uri.fromFile(file).toString()
                         workingProject = project.copy(audioUri = voiceUri)
                         WolfProjectStore.save(this@MainActivity, workingProject!!)
-                        status.text = "تم حفظ واعتماد التسجيل — " + (approved.audioDurationMs / 1000) + " ثانية"
+                        status.text = "تم حفظ التسجيل للمراجعة — " +
+                            (savedTake.audioDurationMs / 1000) + " ثانية. استمع إليه ثم اعتمده."
                         refreshVoiceStatus()
                         refreshProjectList()
                     }.onFailure { showError(it) }
@@ -383,6 +387,33 @@ class MainActivity : Activity() {
         } else {
             status.text = "بدأ تسجيل الراوي"
         }
+    }
+
+    private fun approveVoiceTake() {
+        val project = workingProject ?: runCatching { currentProject() }.getOrElse {
+            showError(it)
+            return
+        }
+        val session = WolfStoryVoiceStore.read(this, project.id)
+        if (session?.scriptApproved != true || session.finalStory != project.story) {
+            status.text = "اعتمد نص القصة النهائي أولًا"
+            return
+        }
+        val approved = WolfStoryVoiceStore.approveRecording(this, project.id)
+        if (approved == null) {
+            status.text = "لا يوجد تسجيل صالح للاعتماد. استمع إليه أو أعد تسجيله."
+            return
+        }
+        val path = approved.voiceFilePath ?: run {
+            status.text = "ملف التسجيل غير موجود"
+            return
+        }
+        voiceUri = Uri.fromFile(File(path)).toString()
+        workingProject = project.copy(audioUri = voiceUri)
+        WolfProjectStore.save(this, workingProject!!)
+        status.text = "تم اعتماد التعليق الصوتي — " + (approved.audioDurationMs / 1000) + " ثانية"
+        refreshVoiceStatus()
+        refreshProjectList()
     }
 
     private fun requestVoiceRepeat() {
