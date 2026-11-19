@@ -20,11 +20,9 @@ class MainActivity : Activity() {
     private lateinit var durationField: EditText
     private lateinit var status: TextView
     private lateinit var progress: ProgressBar
-    private lateinit var store: WolfProjectStore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        store = WolfProjectStore(this)
         createScreen()
     }
 
@@ -69,7 +67,7 @@ class MainActivity : Activity() {
         status = label("جاهز للعمل محليًا دون اتصال بالإنترنت").apply { gravity = Gravity.CENTER }
         root.addView(status)
         root.addView(label("المشاريع المحفوظة"))
-        store.loadAll().take(15).forEach { item ->
+        WolfProjectStore.list(this).take(15).forEach { item ->
             root.addView(label(item.title + " — " + item.durationSeconds + " ثانية"))
         }
         setContentView(scroll)
@@ -107,12 +105,24 @@ class MainActivity : Activity() {
         require(title.isNotBlank()) { "اكتب اسم الفيلم" }
         require(story.length >= 20) { "اكتب قصة أطول قليلًا حتى يمكن تقسيمها إلى مشاهد" }
         require(duration in 5..1800) { "المدة يجب أن تكون بين 5 ثوانٍ و30 دقيقة" }
-        return WolfProject(title = title, story = story, durationSeconds = duration)
+        return WolfProjectStore.newProject(
+            story = story,
+            sourceUrl = "",
+            aspectRatio = "9:16 رأسي",
+            durationSeconds = duration,
+            visualStyle = "رعب سينمائي مظلم",
+            horrorType = "رعب نفسي وخارق للطبيعة",
+            soundEffectsEnabled = true,
+            imageUris = emptyList(),
+            audioUri = null,
+            includeIntro = true,
+            includeWatermark = true
+        )
     }
 
     private fun saveProject() {
         try {
-            store.save(currentProject())
+            WolfProjectStore.save(this, currentProject())
             status.text = "تم حفظ المشروع على الهاتف"
             Toast.makeText(this, "تم حفظ المشروع", Toast.LENGTH_SHORT).show()
         } catch (error: Exception) {
