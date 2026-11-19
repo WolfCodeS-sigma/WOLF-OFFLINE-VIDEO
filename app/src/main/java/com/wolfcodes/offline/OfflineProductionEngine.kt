@@ -562,15 +562,19 @@ object OfflineProductionEngine {
                     val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
-                    val imageLayers = try {
-                        image?.let { WolfImageDepthSegmenter.segment(it) }
-                    } catch (segmentationError: Exception) {
-                        if (image != null && !image.isRecycled) image.recycle()
-                        throw IllegalStateException(
-                            "تعذر فصل عناصر الصورة إلى طبقات عمق: ${segmentationError.message ?: segmentationError.javaClass.simpleName}",
-                            segmentationError
-                        )
-                    }
+                    val imageLayers = WolfImageDepthSegmenter.attemptSegmentation(
+                        operation = { image?.let { WolfImageDepthSegmenter.segment(it) } },
+                        onFailure = { segmentationError ->
+                            WolfDiagnostics.record(
+                                context,
+                                "استعادة فصل الصور",
+                                "WOLF IMAGE INTELLIGENCE",
+                                "WARNING",
+                                "تعذر فصل الصورة؛ سيُستخدم الأصل كما هو مع استمرار الحركة الإجرائية للعناصر والمؤثرات الأخرى",
+                                segmentationError.javaClass.simpleName
+                            )
+                        }
+                    )
                     try {
                         for (f in 0 until shotFrames) {
                             if (f % (fps * 5) == 0) WolfResourceGuard.ensureSafeToContinue(context)
