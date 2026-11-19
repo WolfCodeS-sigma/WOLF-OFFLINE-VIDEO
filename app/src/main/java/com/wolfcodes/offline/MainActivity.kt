@@ -5,9 +5,6 @@ import android.os.Bundle
 import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.widget.Toast
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -151,8 +148,8 @@ class MainActivity : Activity() {
     }
 
     private fun startVoiceRecording() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 741)
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 741)
             return
         }
         val project = try { currentProject() } catch (error: Exception) {
