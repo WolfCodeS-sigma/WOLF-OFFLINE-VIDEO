@@ -71,6 +71,29 @@ object WolfStoryVoiceStateMachine {
         return session.copy(voiceApproved = true, updatedAt = now)
     }
 
+    /**
+     * Invalidates every approval and take when the owning project's story changes.
+     * This is intentionally unconditional: project text and session.finalStory can drift
+     * independently after interrupted saves or edits made in another screen.
+     */
+    fun invalidateForStoryChange(
+        session: WolfStoryVoiceSession,
+        newStory: String,
+        now: Long
+    ): WolfStoryVoiceSession {
+        val normalized = newStory.trim().take(60000)
+        require(normalized.isNotBlank()) { "لا يمكن ربط جلسة الراوي بقصة فارغة" }
+        return session.copy(
+            draftStory = normalized,
+            finalStory = normalized,
+            scriptApproved = false,
+            voiceFilePath = null,
+            audioDurationMs = 0L,
+            voiceApproved = false,
+            updatedAt = now
+        )
+    }
+
     fun requestRepeat(session: WolfStoryVoiceSession, now: Long): WolfStoryVoiceSession {
         require(session.scriptApproved) { "اعتمد القصة أولًا" }
         return session.copy(voiceFilePath = null, audioDurationMs = 0L, voiceApproved = false, updatedAt = now)
@@ -146,6 +169,26 @@ object WolfStoryVoiceStore {
                 current, file?.isFile == true, file?.length() ?: 0L, System.currentTimeMillis()
             )
         }.getOrNull() ?: return@synchronized null
+        writeUnlocked(context, updated)
+        updated
+    }
+
+    fun invalidateForStoryChange(
+        context: Context,
+        projectId: String,
+        newStory: String
+    ): WolfStoryVoiceSession = synchronized(lock) {
+        require(validProjectId(projectId)) { "معرّف المشروع غير صالح" }
+        val current = readUnlocked(context, projectId)
+            ?: WolfStoryVoiceSession(
+                projectId, newStory.take(MAX_TEXT_CHARS), newStory.take(MAX_TEXT_CHARS),
+                newStory.trim().take(MAX_TEXT_CHARS), false, null, 0L, false, 0,
+                System.currentTimeMillis()
+            )
+        val updated = WolfStoryVoiceStateMachine.invalidateForStoryChange(
+            current, newStory, System.currentTimeMillis()
+        )
+        current.voiceFilePath?.let { File(it).delete() }
         writeUnlocked(context, updated)
         updated
     }
