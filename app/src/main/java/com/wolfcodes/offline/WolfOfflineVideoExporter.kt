@@ -56,7 +56,8 @@ class WolfOfflineVideoExporter(private val context: Context) {
             encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             surface = encoder.createInputSurface()
             encoder.start()
-            muxer = MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val activeMuxer = MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            muxer = activeMuxer
             val totalFrames = frameCounts.sum()
             var frameNumber = 0
             var nextFrameNanos = System.nanoTime()
@@ -72,10 +73,10 @@ class WolfOfflineVideoExporter(private val context: Context) {
                     } finally {
                         surface.unlockCanvasAndPost(canvas)
                     }
-                    drain(encoder, muxer, info, track) { outputFormat ->
+                    drain(encoder, activeMuxer, info, track) { outputFormat ->
                         if (!muxerStarted) {
-                            track[0] = muxer.addTrack(outputFormat)
-                            muxer.start()
+                            track[0] = activeMuxer.addTrack(outputFormat)
+                            activeMuxer.start()
                             muxerStarted = true
                         }
                     }
@@ -96,8 +97,8 @@ class WolfOfflineVideoExporter(private val context: Context) {
             encoder.signalEndOfInputStream()
             drain(encoder, muxer, info, track) { outputFormat ->
                 if (!muxerStarted) {
-                    track[0] = muxer.addTrack(outputFormat)
-                    muxer.start()
+                    track[0] = activeMuxer.addTrack(outputFormat)
+                    activeMuxer.start()
                     muxerStarted = true
                 }
             }
