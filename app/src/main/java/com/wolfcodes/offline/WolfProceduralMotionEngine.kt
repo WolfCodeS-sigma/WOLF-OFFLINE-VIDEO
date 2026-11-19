@@ -111,6 +111,35 @@ object WolfProceduralMotionEngine {
         }
     }
 
+    /**
+     * Draws the existing atmospheric and character effects in a shallow foreground
+     * depth plane. The scene compositor has already established the background,
+     * midground and foreground; this pass gives particles, spectral movement and
+     * environmental effects a separate, deterministic depth response.
+     */
+    fun renderDepthAware(
+        canvas: Canvas,
+        width: Int,
+        height: Int,
+        caption: String,
+        sceneIndex: Int,
+        shotIndex: Int,
+        progress: Float
+    ) {
+        if (width <= 0 || height <= 0) return
+        val t = progress.coerceIn(0f, 1f)
+        val saved = canvas.save()
+        val phase = sceneIndex * 0.73f + t * 6.2831853f
+        val driftX = sin(phase.toDouble()).toFloat() * width * 0.006f
+        val driftY = cos((phase * 0.67f).toDouble()).toFloat() * height * 0.003f
+        val scale = 1.006f + 0.008f * t
+        canvas.translate(width * 0.5f + driftX, height * 0.5f + driftY)
+        canvas.scale(scale, scale)
+        canvas.translate(-width * 0.5f, -height * 0.5f)
+        render(canvas, width, height, caption, sceneIndex, shotIndex, t)
+        canvas.restoreToCount(saved)
+    }
+
     fun featuresFor(caption: String): SceneFeatures {
         val text = caption.lowercase(java.util.Locale.ROOT)
         fun containsAny(vararg terms: String): Boolean = terms.any(text::contains)
