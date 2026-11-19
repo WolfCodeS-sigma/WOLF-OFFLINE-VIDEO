@@ -173,7 +173,7 @@ object WolfProceduralMotionEngine {
         canvas.translate(width * 0.5f + driftX, height * 0.5f + driftY)
         canvas.scale(scale, scale)
         canvas.translate(-width * 0.5f, -height * 0.5f)
-        canvas.draw()
+        draw.invoke(canvas)
         canvas.restoreToCount(saved)
     }
 
