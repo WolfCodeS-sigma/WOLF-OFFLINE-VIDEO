@@ -705,12 +705,15 @@ object OfflineProductionEngine {
                 p.alpha = 255
                 if (imageLayers != null && imageLayers.separated) {
                     val layerScale = imageLayers.sourceScale
-                    val layerSource = Rect(
-                        (source.left * layerScale).toInt().coerceIn(0, imageLayers.background.width - 1),
-                        (source.top * layerScale).toInt().coerceIn(0, imageLayers.background.height - 1),
-                        (source.right * layerScale).toInt().coerceIn(1, imageLayers.background.width),
-                        (source.bottom * layerScale).toInt().coerceIn(1, imageLayers.background.height)
-                    )
+                    val layerLeft = (source.left * layerScale).toInt()
+                        .coerceIn(0, imageLayers.background.width - 1)
+                    val layerTop = (source.top * layerScale).toInt()
+                        .coerceIn(0, imageLayers.background.height - 1)
+                    val layerRight = (source.right * layerScale).toInt()
+                        .coerceIn(layerLeft + 1, imageLayers.background.width)
+                    val layerBottom = (source.bottom * layerScale).toInt()
+                        .coerceIn(layerTop + 1, imageLayers.background.height)
+                    val layerSource = Rect(layerLeft, layerTop, layerRight, layerBottom)
                     WolfSceneDepthComposer.renderImageLayers(
                         canvas = c,
                         width = w,
