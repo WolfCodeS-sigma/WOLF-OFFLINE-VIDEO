@@ -128,15 +128,53 @@ object WolfProceduralMotionEngine {
     ) {
         if (width <= 0 || height <= 0) return
         val t = progress.coerceIn(0f, 1f)
+        val features = featuresFor(caption)
+
+        drawAtDepth(canvas, width, height, sceneIndex, t, 0.16f) {
+            drawAtmosphere(this, width, height, sceneIndex, t)
+            if (features.hasReveal || features.hasChase) {
+                drawEnvironmentalPulse(this, width, height, sceneIndex, t, features.hasChase)
+            }
+        }
+
+        drawAtDepth(canvas, width, height, sceneIndex, t, 0.54f) {
+            drawFloatingParticles(this, width, height, sceneIndex, t, features.hasChase)
+            if (features.hasForest) {
+                drawWindDrivenBranches(this, width, height, sceneIndex, t)
+            }
+            if (features.hasGhost) {
+                drawGhost(this, width, height, sceneIndex, shotIndex, t)
+            }
+        }
+
+        drawAtDepth(canvas, width, height, sceneIndex, t, 1.0f) {
+            if (features.hasRain) {
+                drawRain(this, width, height, sceneIndex, t)
+            }
+            if (features.hasGlitch) {
+                drawSignalDistortion(this, width, height, sceneIndex, t)
+            }
+        }
+    }
+
+    private inline fun drawAtDepth(
+        canvas: Canvas,
+        width: Int,
+        height: Int,
+        sceneIndex: Int,
+        progress: Float,
+        factor: Float,
+        draw: Canvas.() -> Unit
+    ) {
+        val phase = sceneIndex * 0.73f + progress * 6.2831853f
+        val driftX = sin(phase.toDouble()).toFloat() * width * 0.018f * factor
+        val driftY = cos((phase * 0.61f + 1.2f).toDouble()).toFloat() * height * 0.009f * factor
+        val scale = 1.012f + 0.019f * factor * progress
         val saved = canvas.save()
-        val phase = sceneIndex * 0.73f + t * 6.2831853f
-        val driftX = sin(phase.toDouble()).toFloat() * width * 0.006f
-        val driftY = cos((phase * 0.67f).toDouble()).toFloat() * height * 0.003f
-        val scale = 1.006f + 0.008f * t
         canvas.translate(width * 0.5f + driftX, height * 0.5f + driftY)
         canvas.scale(scale, scale)
         canvas.translate(-width * 0.5f, -height * 0.5f)
-        render(canvas, width, height, caption, sceneIndex, shotIndex, t)
+        canvas.draw()
         canvas.restoreToCount(saved)
     }
 
