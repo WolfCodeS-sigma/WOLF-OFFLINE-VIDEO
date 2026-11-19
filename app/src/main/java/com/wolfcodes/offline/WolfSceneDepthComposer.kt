@@ -22,7 +22,13 @@ object WolfSceneDepthComposer {
     }
 
     private val compositePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private var cachedWidth = 0
+    private var cachedHeight = 0
+    private var backgroundLayer: Bitmap? = null
+    private var midgroundLayer: Bitmap? = null
+    private var foregroundLayer: Bitmap? = null
 
+    @Synchronized
     fun render(
         canvas: Canvas,
         width: Int,
@@ -36,11 +42,12 @@ object WolfSceneDepthComposer {
         if (width <= 0 || height <= 0) return
 
         val safeProgress = progress.coerceIn(0f, 1f)
-        val background = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val midground = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val foreground = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        ensureLayerBitmaps(width, height)
+        val background = requireNotNull(backgroundLayer)
+        val midground = requireNotNull(midgroundLayer)
+        val foreground = requireNotNull(foregroundLayer)
 
-        try {
+        run {
             val backgroundCanvas = Canvas(background)
             val midgroundCanvas = Canvas(midground)
             val foregroundCanvas = Canvas(foreground)
@@ -59,11 +66,22 @@ object WolfSceneDepthComposer {
             compositePlane(canvas, midground, width, height, sceneIndex, safeProgress, Plane.MIDGROUND)
             compositePlane(canvas, foreground, width, height, sceneIndex, safeProgress, Plane.FOREGROUND)
             canvas.restore()
-        } finally {
-            background.recycle()
-            midground.recycle()
-            foreground.recycle()
         }
+    }
+
+    private fun ensureLayerBitmaps(width: Int, height: Int) {
+        if (cachedWidth == width && cachedHeight == height &&
+            backgroundLayer != null && midgroundLayer != null && foregroundLayer != null
+        ) return
+
+        backgroundLayer?.recycle()
+        midgroundLayer?.recycle()
+        foregroundLayer?.recycle()
+        cachedWidth = width
+        cachedHeight = height
+        backgroundLayer = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        midgroundLayer = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        foregroundLayer = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     }
 
     private fun compositePlane(
