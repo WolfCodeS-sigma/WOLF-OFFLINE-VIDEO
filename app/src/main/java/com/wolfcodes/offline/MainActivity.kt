@@ -2,6 +2,12 @@ package com.wolfcodes.offline
 
 import android.app.Activity
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.widget.Toast
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
@@ -12,6 +18,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import java.util.concurrent.Executors
+import java.io.File
 
 class MainActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
@@ -19,6 +26,9 @@ class MainActivity : Activity() {
     private lateinit var storyField: EditText
     private lateinit var durationField: EditText
     private lateinit var status: TextView
+    private var workingProject: WolfProject? = null
+    private var voiceRecorder: WolfVoiceRecorder? = null
+    private var voiceUri: String? = null
     private lateinit var progress: ProgressBar
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,6 +66,12 @@ class MainActivity : Activity() {
         val save = button("حفظ المشروع")
         root.addView(save)
         save.setOnClickListener { saveProject() }
+        val voice = button("تسجيل التعليق الصوتي")
+        root.addView(voice)
+        voice.setOnClickListener { startVoiceRecording() }
+        val stopVoice = button("إيقاف التسجيل")
+        root.addView(stopVoice)
+        stopVoice.setOnClickListener { voiceRecorder?.stopByUser() }
         val export = button("إنتاج فيديو أوفلاين")
         root.addView(export)
         export.setOnClickListener { produce() }
@@ -105,7 +121,8 @@ class MainActivity : Activity() {
         require(title.isNotBlank()) { "اكتب اسم الفيلم" }
         require(story.length >= 20) { "اكتب قصة أطول قليلًا حتى يمكن تقسيمها إلى مشاهد" }
         require(duration in 5..1800) { "المدة يجب أن تكون بين 5 ثوانٍ و30 دقيقة" }
-        return WolfProjectStore.newProject(
+        val existing = workingProject
+        val base = if (existing != null && existing.story == story && existing.title == title) existing.copy(durationSeconds = duration, audioUri = voiceUri) else WolfProjectStore.newProject(
             story = story,
             sourceUrl = "",
             aspectRatio = "9:16 رأسي",
@@ -114,19 +131,72 @@ class MainActivity : Activity() {
             horrorType = "رعب نفسي وخارق للطبيعة",
             soundEffectsEnabled = true,
             imageUris = emptyList(),
-            audioUri = null,
+            audioUri = voiceUri,
             includeIntro = true,
             includeWatermark = true
         ).copy(title = title)
+        workingProject = base
+        return base
     }
 
     private fun saveProject() {
         try {
-            WolfProjectStore.save(this, currentProject())
+            val project = currentProject()
+            WolfProjectStore.save(this, project)
             status.text = "تم حفظ المشروع على الهاتف"
             Toast.makeText(this, "تم حفظ المشروع", Toast.LENGTH_SHORT).show()
         } catch (error: Exception) {
             showError(error)
+        }
+    }
+
+    private fun startVoiceRecording() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 741)
+            return
+        }
+        val project = try { currentProject() } catch (error: Exception) {
+            showError(error)
+            return
+        }
+        WolfProjectStore.save(this, project)
+        WolfStoryVoiceStore.initialize(this, project.id, project.story)
+        WolfStoryVoiceStore.approveScript(this, project.id, project.story)
+        val destination = WolfStoryVoiceStore.recordingTarget(this, project.id)
+        voiceRecorder = WolfVoiceRecorder(this, object : WolfVoiceRecorder.Listener {
+            override fun onProgress(elapsedMs: Long, speechDetected: Boolean) {
+                runOnUiThread {
+                    status.text = "تسجيل الراوي: " + (elapsedMs / 1000) + " ثانية"
+                }
+            }
+            override fun onSaved(file: File, durationMs: Long, automaticStop: Boolean) {
+                runOnUiThread {
+                    runCatching {
+                        WolfStoryVoiceStore.saveRecording(this@MainActivity, project.id, file, durationMs)
+                        WolfStoryVoiceStore.approveRecording(this@MainActivity, project.id)
+                        voiceUri = Uri.fromFile(file).toString()
+                        workingProject = project.copy(audioUri = voiceUri)
+                        WolfProjectStore.save(this@MainActivity, workingProject!!)
+                        status.text = "تم حفظ التعليق الصوتي واعتماده للفيلم"
+                        Toast.makeText(this@MainActivity, "تم حفظ التسجيل الصوتي", Toast.LENGTH_LONG).show()
+                    }.onFailure { showError(it) }
+                }
+            }
+            override fun onError(message: String) {
+                runOnUiThread { showError(IllegalStateException(message)) }
+            }
+        })
+        if (voiceRecorder?.start(destination) != true) {
+            status.text = "تعذر بدء التسجيل الصوتي"
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 741 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            startVoiceRecording()
+        } else if (requestCode == 741) {
+            status.text = "يلزم السماح بالميكروفون لتسجيل الراوي"
         }
     }
 
@@ -186,6 +256,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        voiceRecorder?.cancel()
         worker.shutdown()
         super.onDestroy()
     }
