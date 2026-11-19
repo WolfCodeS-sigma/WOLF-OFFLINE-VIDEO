@@ -705,7 +705,7 @@ object OfflineProductionEngine {
             } else {
                 WolfSceneArtEngine.draw(c, w, h, caption, scene * WolfSceneAssetStore.SHOTS_PER_SCENE + shotIndex, t)
             }
-            WolfProceduralMotionEngine.render(
+            WolfProceduralMotionEngine.renderDepthAware(
                 canvas = c,
                 width = w,
                 height = h,
