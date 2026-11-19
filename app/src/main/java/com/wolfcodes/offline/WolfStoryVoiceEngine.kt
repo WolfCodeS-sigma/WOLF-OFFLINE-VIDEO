@@ -11,6 +11,7 @@ import android.system.Os
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
 
 data class WolfStoryVoiceSession(
     val projectId: String,
@@ -20,21 +21,32 @@ data class WolfStoryVoiceSession(
     val scriptApproved: Boolean,
     val voiceFilePath: String?,
     val audioDurationMs: Long,
+    val recordingStoryHash: String?,
     val voiceApproved: Boolean,
     val takeNumber: Int,
     val updatedAt: Long
 )
 
 object WolfStoryVoiceStateMachine {
+    fun storyFingerprint(story: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(story.trim().take(60000).toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+
     fun edit(session: WolfStoryVoiceSession, draftStory: String, finalStory: String, now: Long): WolfStoryVoiceSession {
-        val changed = finalStory.trim() != session.finalStory
+        val normalized = finalStory.trim().take(60000)
+        val changed = normalized != session.finalStory
+        val recordingMatches = session.recordingStoryHash != null &&
+            session.recordingStoryHash == storyFingerprint(normalized)
+        val invalidateTake = changed || (session.voiceFilePath != null && !recordingMatches)
         return session.copy(
             draftStory = draftStory.take(60000),
-            finalStory = finalStory.trim().take(60000),
+            finalStory = normalized,
             scriptApproved = if (changed) false else session.scriptApproved,
-            voiceFilePath = if (changed) null else session.voiceFilePath,
-            audioDurationMs = if (changed) 0L else session.audioDurationMs,
-            voiceApproved = if (changed) false else session.voiceApproved,
+            voiceFilePath = if (invalidateTake) null else session.voiceFilePath,
+            audioDurationMs = if (invalidateTake) 0L else session.audioDurationMs,
+            recordingStoryHash = if (invalidateTake) null else session.recordingStoryHash,
+            voiceApproved = if (invalidateTake) false else session.voiceApproved,
             updatedAt = now
         )
     }
@@ -57,8 +69,9 @@ object WolfStoryVoiceStateMachine {
         require(path.isNotBlank()) { "مسار التسجيل غير محدد" }
         require(durationMs in 1000L..1_800_000L) { "مدة التسجيل يجب أن تكون بين ثانية و30 دقيقة" }
         return session.copy(
-            voiceFilePath = path, audioDurationMs = durationMs, voiceApproved = false,
-            takeNumber = session.takeNumber + 1, updatedAt = now
+            voiceFilePath = path, audioDurationMs = durationMs,
+            recordingStoryHash = storyFingerprint(session.finalStory),
+            voiceApproved = false, takeNumber = session.takeNumber + 1, updatedAt = now
         )
     }
 
@@ -68,6 +81,9 @@ object WolfStoryVoiceStateMachine {
             "لا يوجد تسجيل صالح للمراجعة"
         }
         require(session.audioDurationMs in 1000L..1_800_000L) { "مدة التسجيل غير صالحة" }
+        require(session.recordingStoryHash == storyFingerprint(session.finalStory)) {
+            "هذا التسجيل لا يطابق نسخة القصة الحالية؛ أعد التسجيل"
+        }
         return session.copy(voiceApproved = true, updatedAt = now)
     }
 
@@ -96,7 +112,10 @@ object WolfStoryVoiceStateMachine {
 
     fun requestRepeat(session: WolfStoryVoiceSession, now: Long): WolfStoryVoiceSession {
         require(session.scriptApproved) { "اعتمد القصة أولًا" }
-        return session.copy(voiceFilePath = null, audioDurationMs = 0L, voiceApproved = false, updatedAt = now)
+        return session.copy(
+            voiceFilePath = null, audioDurationMs = 0L, recordingStoryHash = null,
+            voiceApproved = false, updatedAt = now
+        )
     }
 
     fun durationSecondsCeil(durationMs: Long): Int =
@@ -182,7 +201,7 @@ object WolfStoryVoiceStore {
         val current = readUnlocked(context, projectId)
             ?: WolfStoryVoiceSession(
                 projectId, newStory.take(MAX_TEXT_CHARS), newStory.take(MAX_TEXT_CHARS),
-                newStory.trim().take(MAX_TEXT_CHARS), false, null, 0L, false, 0,
+                newStory.trim().take(MAX_TEXT_CHARS), false, null, 0L, null, false, 0,
                 System.currentTimeMillis()
             )
         val updated = WolfStoryVoiceStateMachine.invalidateForStoryChange(
@@ -245,6 +264,7 @@ object WolfStoryVoiceStore {
             .put("scriptApproved", session.scriptApproved)
             .put("voiceFilePath", session.voiceFilePath ?: JSONObject.NULL)
             .put("audioDurationMs", session.audioDurationMs)
+            .put("recordingStoryHash", session.recordingStoryHash ?: JSONObject.NULL)
             .put("voiceApproved", session.voiceApproved)
             .put("takeNumber", session.takeNumber)
             .put("updatedAt", session.updatedAt)
@@ -281,7 +301,11 @@ object WolfStoryVoiceStore {
             json.optString("finalStory", "").take(MAX_TEXT_CHARS),
             json.optBoolean("scriptApproved", false), path,
             json.optLong("audioDurationMs", 0L).coerceAtLeast(0L),
-            json.optBoolean("voiceApproved", false) && path != null,
+            if (json.isNull("recordingStoryHash")) null else json.optString("recordingStoryHash").takeIf { it.matches(Regex("[a-f0-9]{64}")) },
+            json.optBoolean("voiceApproved", false) && path != null &&
+                json.optString("recordingStoryHash") == WolfStoryVoiceStateMachine.storyFingerprint(
+                    json.optString("finalStory", "")
+                ),
             json.optInt("takeNumber", 0).coerceAtLeast(0),
             json.optLong("updatedAt", 0L)
         )
