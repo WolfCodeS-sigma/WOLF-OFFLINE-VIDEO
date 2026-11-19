@@ -14,105 +14,95 @@ import android.graphics.Shader
  */
 object WolfSceneArtEngine {
     fun draw(canvas: Canvas, width: Int, height: Int, caption: String, scene: Int, progress: Float) {
+        if (width <= 0 || height <= 0) return
         val w = width.toFloat()
         val h = height.toFloat()
         val t = progress.coerceIn(0f, 1f)
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        val pulse = (wave((t * 6.2831853f) + scene * 0.83f) * 0.5f + 0.5f)
-        val movement = OfflineMotionEngine.profile(caption).movement
-        val cameraStyle = ((scene % 4) + 4) % 4
-        val direction = if (cameraStyle % 2 == 0) 1f else -1f
-        val cameraWave = wave(t * 6.2831853f + scene * 0.91f)
-        val zoom = when (movement) {
-            OfflineMotionEngine.Movement.CHASE -> 1.0f + 0.12f * t
-            OfflineMotionEngine.Movement.REVEAL -> 1.0f + 0.10f * t
-            OfflineMotionEngine.Movement.SUSPENSE -> when (cameraStyle) {
-                0 -> 1.0f + 0.075f * t
-                1 -> 1.075f - 0.065f * t
-                2 -> 1.035f + 0.025f * cameraWave
-                else -> 1.0f + 0.055f * t
-            }
-        }
-        val panX = when (cameraStyle) {
-            0 -> cameraWave * w * 0.024f
-            1 -> direction * (t - 0.5f) * w * 0.055f
-            2 -> wave(t * 3.1415926f + scene) * w * 0.030f
-            else -> -cameraWave * w * 0.018f
-        } + if (movement == OfflineMotionEngine.Movement.CHASE) {
-            wave(t * 31.4159f + scene) * w * 0.006f
-        } else 0f
-        val panY = wave(t * 3.1415926f + scene * 0.67f) * h * 0.012f
-        canvas.save()
-        canvas.clipRect(0f, 0f, w, h)
-        canvas.translate(w * 0.5f + panX, h * 0.5f + panY)
-        canvas.scale(zoom, zoom)
-        canvas.translate(-w * 0.5f, -h * 0.5f)
+        val pulse = wave((t * 6.2831853f) + scene * 0.83f) * 0.5f + 0.5f
 
-        p.shader = LinearGradient(
-            0f, 0f, 0f, h,
-            intArrayOf(Color.rgb(5, 4, 11), Color.rgb(22, 7, 18), Color.rgb(3, 4, 9)),
-            floatArrayOf(0f, 0.58f, 1f),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawRect(0f, 0f, w, h, p)
-        p.shader = null
-
-        // A restrained blood moon and sparse night lights establish the horror palette.
-        val moonX = w * (0.76f - t * 0.035f)
-        val moonY = h * 0.22f
-        val moonRadius = minOf(w, h) * 0.105f
-        p.color = Color.argb(24, 235, 22, 43)
-        canvas.drawCircle(moonX, moonY, moonRadius * 1.9f, p)
-        p.color = Color.rgb(105, 13, 29)
-        canvas.drawCircle(moonX, moonY, moonRadius, p)
-        p.color = Color.argb(70, 13, 4, 12)
-        canvas.drawCircle(moonX + moonRadius * 0.34f, moonY - moonRadius * 0.12f, moonRadius * 0.82f, p)
-
-        p.color = Color.argb(95, 220, 200, 190)
-        for (i in 0 until 22) {
-            val x = ((i * 97 + scene * 41) % 997) / 997f * w
-            val y = ((i * 53 + scene * 29) % 421) / 421f * h * 0.55f
-            canvas.drawCircle(x, y, if (i % 5 == 0) 2.2f else 1.1f, p)
-        }
-
-        val lower = h * 0.72f
         val forest = has(caption, "غابة", "شجرة", "أشجار", "الغابة", "forest", "trees")
         val corridor = has(caption, "ممر", "طرقة", "ممرًا", "الممر", "hallway", "corridor")
         val window = has(caption, "نافذة", "شباك", "النافذة", "زجاج", "window")
         val door = has(caption, "باب", "الباب", "أبواب", "مدخل", "door")
         val cemetery = has(caption, "قبر", "مقبرة", "قبور", "مقابر", "cemetery", "grave")
         val room = has(caption, "غرفة", "المنزل", "بيت", "منزل", "حجرة", "room", "house")
-
-        when {
-            forest -> drawForest(canvas, p, w, h, t, scene)
-            corridor -> drawCorridor(canvas, p, w, h, t)
-            cemetery -> drawCemetery(canvas, p, w, h, t, scene)
-            window -> drawWindow(canvas, p, w, h, t)
-            door -> drawDoor(canvas, p, w, h, t, pulse)
-            room -> drawRoom(canvas, p, w, h, t)
-            else -> drawHauntedHouse(canvas, p, w, h, t)
-        }
-
-        // Low fog drifts slowly across the foreground.
-        p.style = Paint.Style.FILL
-        p.color = Color.argb(22 + (pulse * 12f).toInt(), 175, 173, 184)
-        val fogShift = wave(t * 6.2831853f + scene) * w * 0.025f
-        canvas.drawOval(RectF(-w * 0.12f + fogShift, lower - h * 0.06f, w * 0.62f + fogShift, h * 0.88f), p)
-        canvas.drawOval(RectF(w * 0.35f - fogShift, lower - h * 0.02f, w * 1.12f - fogShift, h * 0.91f), p)
-
         val hauntedPresence = has(caption, "ظل", "شبح", "امرأة", "شخص", "كائن", "وحش", "ظهر", "وقف", "ghost", "shadow", "creature")
-        if (hauntedPresence || scene % 3 == 1) drawSilhouette(canvas, p, w, h, t, scene)
 
-        // Dark edge treatment keeps the frame readable on small phone screens.
-        p.shader = LinearGradient(
-            0f, 0f, 0f, h,
-            intArrayOf(Color.argb(65, 0, 0, 0), Color.TRANSPARENT, Color.argb(100, 0, 0, 0)),
-            floatArrayOf(0f, 0.48f, 1f),
-            Shader.TileMode.CLAMP
+        WolfSceneDepthComposer.render(
+            canvas = canvas,
+            width = width,
+            height = height,
+            sceneIndex = scene,
+            progress = t,
+            drawBackground = { layer ->
+                p.shader = LinearGradient(
+                    0f, 0f, 0f, h,
+                    intArrayOf(Color.rgb(3, 4, 10), Color.rgb(13, 5, 14), Color.rgb(2, 3, 8)),
+                    floatArrayOf(0f, 0.58f, 1f),
+                    Shader.TileMode.CLAMP
+                )
+                layer.drawRect(0f, 0f, w, h, p)
+                p.shader = null
+
+                val moonX = w * (0.76f - t * 0.035f)
+                val moonY = h * 0.22f
+                val moonRadius = minOf(w, h) * 0.105f
+                p.color = Color.argb(32, 235, 22, 43)
+                layer.drawCircle(moonX, moonY, moonRadius * 2.0f, p)
+                p.color = Color.rgb(105, 13, 29)
+                layer.drawCircle(moonX, moonY, moonRadius, p)
+                p.color = Color.argb(78, 13, 4, 12)
+                layer.drawCircle(moonX + moonRadius * 0.34f, moonY - moonRadius * 0.12f, moonRadius * 0.82f, p)
+
+                p.color = Color.argb(110, 220, 200, 190)
+                for (i in 0 until 30) {
+                    val x = ((i * 97 + scene * 41) % 997) / 997f * w
+                    val y = ((i * 53 + scene * 29) % 421) / 421f * h * 0.55f
+                    layer.drawCircle(x, y, if (i % 5 == 0) 2.2f else 1.1f, p)
+                }
+            },
+            drawMidground = { layer ->
+                when {
+                    forest -> drawForest(layer, p, w, h, t, scene)
+                    corridor -> drawCorridor(layer, p, w, h, t)
+                    cemetery -> drawCemetery(layer, p, w, h, t, scene)
+                    window -> drawWindow(layer, p, w, h, t)
+                    door -> drawDoor(layer, p, w, h, t, pulse)
+                    room -> drawRoom(layer, p, w, h, t)
+                    else -> drawHauntedHouse(layer, p, w, h, t)
+                }
+            },
+            drawForeground = { layer ->
+                val lower = h * 0.72f
+                p.style = Paint.Style.FILL
+                p.color = Color.argb(24 + (pulse * 16f).toInt(), 175, 173, 184)
+                val fogShift = wave(t * 6.2831853f + scene) * w * 0.035f
+                layer.drawOval(
+                    RectF(-w * 0.16f + fogShift, lower - h * 0.07f, w * 0.66f + fogShift, h * 0.91f),
+                    p
+                )
+                layer.drawOval(
+                    RectF(w * 0.31f - fogShift, lower - h * 0.035f, w * 1.16f - fogShift, h * 0.94f),
+                    p
+                )
+
+                if (hauntedPresence || scene % 3 == 1) {
+                    drawSilhouette(layer, p, w, h, t, scene)
+                }
+
+                p.shader = LinearGradient(
+                    0f, 0f, 0f, h,
+                    intArrayOf(Color.argb(55, 0, 0, 0), Color.TRANSPARENT, Color.argb(118, 0, 0, 0)),
+                    floatArrayOf(0f, 0.48f, 1f),
+                    Shader.TileMode.CLAMP
+                )
+                layer.drawRect(0f, 0f, w, h, p)
+                p.shader = null
+            }
         )
-        canvas.drawRect(0f, 0f, w, h, p)
-        p.shader = null
-        canvas.restore()
+
+        p.style = Paint.Style.FILL
         p.color = Color.argb(90, 190, 8, 28)
         canvas.drawRect(0f, 0f, w * (0.15f + t * 0.7f), maxOf(2f, h * 0.004f), p)
     }
