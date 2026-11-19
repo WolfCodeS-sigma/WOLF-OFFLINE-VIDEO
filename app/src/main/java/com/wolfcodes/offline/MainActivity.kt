@@ -117,7 +117,7 @@ class MainActivity : Activity() {
             audioUri = null,
             includeIntro = true,
             includeWatermark = true
-        )
+        ).copy(title = title)
     }
 
     private fun saveProject() {
@@ -131,7 +131,7 @@ class MainActivity : Activity() {
     }
 
     private fun produce() {
-        val project = try { store.save(currentProject()) } catch (error: Exception) {
+        val project = try { currentProject().also { WolfProjectStore.save(this, it) } } catch (error: Exception) {
             showError(error)
             return
         }
@@ -140,15 +140,34 @@ class MainActivity : Activity() {
         status.text = "جارٍ تجهيز محرك الإنتاج المحلي"
         worker.execute {
             try {
-                val result = WolfOfflineVideoExporter(this).export(project) { value, message ->
-                    runOnUiThread {
-                        progress.progress = value
-                        status.text = message
+                val result = OfflineProductionEngine.render(
+                    context = this,
+                    story = project.story,
+                    seconds = project.durationSeconds,
+                    imageUris = project.imageUris.mapNotNull { value -> runCatching { android.net.Uri.parse(value) }.getOrNull() },
+                    audioUri = project.audioUri?.let { android.net.Uri.parse(it) },
+                    aspectRatio = project.aspectRatio,
+                    generateSoundEffects = project.soundEffectsEnabled,
+                    includeWatermark = project.includeWatermark,
+                    includeIntro = project.includeIntro,
+                    projectId = project.id,
+                    onSceneProgress = { current, total ->
+                        runOnUiThread {
+                            progress.progress = (current * 95 / total.coerceAtLeast(1)).coerceIn(0, 95)
+                            status.text = "إنتاج المشهد " + current + " من " + total
+                        }
+                    },
+                    onChapterProgress = { current, total, message ->
+                        runOnUiThread {
+                            progress.progress = (current * 95 / total.coerceAtLeast(1)).coerceIn(0, 95)
+                            status.text = message
+                        }
                     }
-                }
+                )
                 runOnUiThread {
+                    progress.progress = 100
                     progress.visibility = View.GONE
-                    status.text = "تم حفظ الفيديو: " + result.displayName
+                    status.text = "تم حفظ الفيديو: " + result.savedLocation
                     Toast.makeText(this, "تم حفظ الفيديو في Movies/WOLF CODE S", Toast.LENGTH_LONG).show()
                 }
             } catch (error: Exception) {
