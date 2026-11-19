@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PorterDuff
+import android.graphics.Rect
+import android.graphics.RectF
 import kotlin.math.sin
 
 /**
@@ -68,6 +70,52 @@ object WolfSceneDepthComposer {
             compositePlane(canvas, foreground, width, height, sceneIndex, safeProgress, Plane.FOREGROUND)
             canvas.restore()
         }
+    }
+
+    /**
+     * Draws a user's segmented still as three independently projected depth planes.
+     * Source coordinates refer to the downscaled segmentation bitmaps.
+     */
+    fun renderImageLayers(
+        canvas: Canvas,
+        width: Int,
+        height: Int,
+        sceneIndex: Int,
+        progress: Float,
+        layers: WolfImageDepthSegmenter.Layers,
+        source: Rect,
+        destination: RectF,
+        rotationDegrees: Float
+    ) {
+        if (width <= 0 || height <= 0) return
+        if (layers.background.isRecycled || layers.midground.isRecycled || layers.foreground.isRecycled) return
+        canvas.drawColor(Color.BLACK)
+        drawImagePlane(canvas, width, height, sceneIndex, progress, layers.background, source, destination, rotationDegrees, Plane.BACKGROUND)
+        drawImagePlane(canvas, width, height, sceneIndex, progress, layers.midground, source, destination, rotationDegrees, Plane.MIDGROUND)
+        drawImagePlane(canvas, width, height, sceneIndex, progress, layers.foreground, source, destination, rotationDegrees, Plane.FOREGROUND)
+    }
+
+    private fun drawImagePlane(
+        canvas: Canvas,
+        width: Int,
+        height: Int,
+        sceneIndex: Int,
+        progress: Float,
+        bitmap: Bitmap,
+        source: Rect,
+        destination: RectF,
+        rotationDegrees: Float,
+        plane: Plane
+    ) {
+        val offset = depthOffset(width, height, progress, sceneIndex, plane)
+        val scale = depthScale(progress, plane)
+        val saved = canvas.save()
+        canvas.translate(width * 0.5f + offset.first, height * 0.5f + offset.second)
+        canvas.scale(scale, scale)
+        canvas.rotate(rotationDegrees, 0f, 0f)
+        canvas.translate(-width * 0.5f, -height * 0.5f)
+        canvas.drawBitmap(bitmap, source, destination, compositePaint)
+        canvas.restoreToCount(saved)
     }
 
     private fun ensureLayerBitmaps(width: Int, height: Int) {
