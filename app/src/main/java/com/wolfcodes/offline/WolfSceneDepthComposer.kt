@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PorterDuff
 import kotlin.math.sin
 
 /**
@@ -52,9 +53,9 @@ object WolfSceneDepthComposer {
             val midgroundCanvas = Canvas(midground)
             val foregroundCanvas = Canvas(foreground)
 
-            backgroundCanvas.drawColor(Color.TRANSPARENT)
-            midgroundCanvas.drawColor(Color.TRANSPARENT)
-            foregroundCanvas.drawColor(Color.TRANSPARENT)
+            backgroundCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+            midgroundCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+            foregroundCanvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
 
             drawBackground(backgroundCanvas)
             drawMidground(midgroundCanvas)
