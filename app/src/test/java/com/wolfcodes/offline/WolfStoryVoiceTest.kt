@@ -41,6 +41,25 @@ class WolfStoryVoiceTest {
         assertEquals(0L, edited.audioDurationMs)
     }
 
+    @Test
+    fun projectStoryChangeAlwaysInvalidatesApprovedTakeEvenWhenSessionTextAlreadyMatches() {
+        val script = WolfStoryVoiceStateMachine.approveScript(session(), "النص الجديد", 2L)
+        val take = WolfStoryVoiceStateMachine.saveRecording(script, "/private/old-take.m4a", 12000L, 3L)
+        val approved = WolfStoryVoiceStateMachine.approveRecording(take, true, 4096L, 4L)
+
+        // Simulates a project record whose story changed independently while the voice
+        // session already contains the new text. Invalidation must not rely on text diff.
+        val invalidated = WolfStoryVoiceStateMachine.invalidateForStoryChange(
+            approved, "النص الجديد", 5L
+        )
+
+        assertEquals("النص الجديد", invalidated.finalStory)
+        assertFalse(invalidated.scriptApproved)
+        assertFalse(invalidated.voiceApproved)
+        assertEquals(null, invalidated.voiceFilePath)
+        assertEquals(0L, invalidated.audioDurationMs)
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun voiceCannotBeRecordedBeforeScriptApproval() {
         WolfStoryVoiceStateMachine.saveRecording(session(), "/private/voice.m4a", 5000L, 2L)
