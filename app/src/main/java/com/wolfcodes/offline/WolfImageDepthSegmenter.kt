@@ -14,6 +14,23 @@ import kotlin.math.min
  */
 object WolfImageDepthSegmenter {
 
+    /**
+     * Runs image segmentation without allowing a segmentation-only failure to abort film rendering.
+     * A null result tells the caller to keep and render the untouched source image while
+     * the rest of the scene's procedural animation continues.
+     */
+    internal fun <T> attemptSegmentation(
+        operation: () -> T,
+        onFailure: (Exception) -> Unit = {}
+    ): T? {
+        return try {
+            operation()
+        } catch (failure: Exception) {
+            runCatching { onFailure(failure) }
+            null
+        }
+    }
+
     private const val MAX_ANALYSIS_DIMENSION = 960
     private const val MIN_COMPONENT_PIXELS = 64
 
