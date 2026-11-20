@@ -496,7 +496,8 @@ class MainActivity : Activity() {
                         storyField.isEnabled = true
                         mergedResult.onSuccess { (merged, savedTake) ->
                             voiceUri = Uri.fromFile(merged.file).toString()
-                            workingProject = project.copy(audioUri = voiceUri)
+                            val latestProject = runCatching { currentProject() }.getOrElse { project }
+                            workingProject = latestProject.copy(audioUri = voiceUri)
                             WolfProjectStore.save(this@MainActivity, workingProject!!)
                             status.text = "تم حفظ الجزء ${merged.segmentCount} ودمجه مع التسجيل السابق — " +
                                 (savedTake.audioDurationMs / 1000) + " ثانية إجمالًا. استمع إليه ثم اعتمده."
