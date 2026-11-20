@@ -330,9 +330,10 @@ object WolfVoiceSegmentStore {
                     ?.startsWith("audio/") == true
             } ?: return 0L
             val format = extractor.getTrackFormat(track)
-            if (format.containsKey(MediaFormat.KEY_DURATION)) {
-                return (format.getLong(MediaFormat.KEY_DURATION) / 1000L).coerceAtLeast(0L)
-            }
+            val formatDurationMs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                (format.getLong(MediaFormat.KEY_DURATION) / 1000L).coerceAtLeast(0L)
+            } else 0L
+            if (formatDurationMs > 0L) return formatDurationMs
             extractor.selectTrack(track)
             var lastSampleUs = -1L
             while (extractor.sampleTime >= 0L) {
