@@ -5,6 +5,8 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.text.InputFilter
 import android.view.Gravity
 import android.widget.Button
@@ -24,6 +26,7 @@ class WolfOfflineStoryAiActivity : Activity() {
     private val model = WolfOfflineStoryAiEngine.LocalModel()
     private lateinit var status: TextView
     private lateinit var planView: TextView
+    private lateinit var structureView: TextView
     private lateinit var titleField: EditText
     private lateinit var premiseField: EditText
     private lateinit var genreField: EditText
@@ -122,6 +125,9 @@ class WolfOfflineStoryAiActivity : Activity() {
         root.addView(label("المخطط"))
         planView = label("لم يتم إنشاء مخطط بعد")
         root.addView(planView)
+        root.addView(label("تقرير الطول والبنية — WOLF STORY LENGTH & STRUCTURE"))
+        structureView = label("سيظهر توزيع الكلمات وإيقاع الفصول هنا")
+        root.addView(structureView)
         root.addView(label("النص النهائي — يمكنك مراجعته وتعديله قبل الاعتماد"))
         storyField = field("ستظهر الفصول هنا بالتتابع", WolfOfflineStoryAiEngine.MAX_STORY_CHARS).apply {
             minLines = 12
@@ -129,6 +135,11 @@ class WolfOfflineStoryAiActivity : Activity() {
             isEnabled = false
         }
         root.addView(storyField)
+        storyField.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) { updateStructureReport() }
+        })
         root.addView(button("اعتماد القصة النهائية وحفظها في مكتبة المعرفة").apply {
             setOnClickListener { approveAndSave() }
         })
@@ -373,6 +384,28 @@ class WolfOfflineStoryAiActivity : Activity() {
             "عنوان المرجع: ${entry.title}\nنوع المصدر: ${entry.sourceType}\nملخص: ${entry.summary}\nمقتطف: ${text.take(1_200)}"
         }
     }
+    private fun updateStructureReport() {
+        if (!::structureView.isInitialized || !::storyField.isInitialized) return
+        val current = session
+        if (current == null) {
+            structureView.text = "أنشئ مخططًا لعرض أهداف الكلمات."
+            return
+        }
+        val displayedText = storyField.text.toString()
+        val report = if (current.isComplete && displayedText.isNotBlank() &&
+            displayedText != formatChapters(current)
+        ) {
+            WolfStoryLengthStructureEngine.analyzeText(
+                current.brief.targetWords, displayedText, current.plan.chapterTitles.size
+            )
+        } else {
+            WolfStoryLengthStructureEngine.analyzeChapters(
+                current.brief.targetWords, current.chapters, current.plan.chapterTitles
+            )
+        }
+        structureView.text = WolfStoryLengthStructureEngine.formatReport(report)
+    }
+
     private fun formatPlan(value: WolfOfflineStoryAiEngine.Session) = buildString {
         appendLine("المخطط — ${value.brief.title}")
         appendLine(value.plan.logline)
@@ -380,6 +413,8 @@ class WolfOfflineStoryAiActivity : Activity() {
         appendLine("\nالأسرار وقواعد العالم:\n${value.plan.secrets}")
         appendLine("\nالنهاية المخططة:\n${value.plan.ending}")
         value.plan.chapterTitles.forEachIndexed { i, title -> appendLine("\n${i + 1}. $title") }
+        appendLine()
+        appendLine(WolfStoryLengthStructureEngine.planGuidance(value.brief.targetWords, value.plan.chapterTitles))
     }
 
     private fun formatChapters(value: WolfOfflineStoryAiEngine.Session) = buildString {
@@ -404,6 +439,7 @@ class WolfOfflineStoryAiActivity : Activity() {
         planView.text = formatPlan(value)
         storyField.setText(value.finalText.ifBlank { formatChapters(value) })
         storyField.isEnabled = value.isComplete
+        updateStructureReport()
         status.text = "تم استعادة جلسة محفوظة: ${value.chapters.size} / ${value.plan.chapterTitles.size} فصل"
     }
 
