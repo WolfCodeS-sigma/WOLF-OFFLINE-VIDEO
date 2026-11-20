@@ -706,9 +706,22 @@ class MainActivity : Activity() {
                 recovered.onSuccess { merged ->
                     if (merged != null && workingProject?.id == item.id) {
                         val existing = WolfStoryVoiceStore.read(this, item.id)
-                        if (existing?.voiceFilePath != merged.file.absolutePath ||
-                            existing.voiceApproved != true
-                        ) {
+                        val approvedStillMatches =
+                            existing?.voiceApproved == true &&
+                                existing.scriptApproved &&
+                                existing.finalStory == item.story &&
+                                existing.recordingStoryHash ==
+                                    WolfStoryVoiceStateMachine.storyFingerprint(item.story) &&
+                                existing.voiceFilePath == merged.file.absolutePath
+                        if (approvedStillMatches) {
+                            // The combined file may have been rebuilt after an interruption;
+                            // keep its approval but restore the project URI.
+                            voiceUri = Uri.fromFile(merged.file).toString()
+                            workingProject = item.copy(audioUri = voiceUri)
+                            WolfProjectStore.save(this, workingProject!!)
+                            refreshVoiceStatus()
+                            refreshProjectList()
+                        } else {
                             val restored = WolfStoryVoiceStore.restoreMergedSegments(
                                 this, item.id, merged.file, merged.durationMs
                             )
@@ -722,8 +735,6 @@ class MainActivity : Activity() {
                             } else {
                                 refreshVoiceStatus()
                             }
-                        } else {
-                            refreshVoiceStatus()
                         }
                     } else if (merged == null && workingProject?.id == item.id) {
                         refreshVoiceStatus()
