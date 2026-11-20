@@ -124,9 +124,14 @@ object WolfLongFilmEngine {
         introFrames: Int = 0,
         maxChapterSeconds: Int = DEFAULT_CHAPTER_SECONDS
     ): List<ChapterPlan> {
-        val fps = framesPerSecond.coerceIn(1, 60)
-        val chapterLimit = maxChapterSeconds.coerceAtLeast(1) * fps
-        val safeIntro = introFrames.coerceIn(0, (chapterLimit - 1).coerceAtLeast(0))
+        require(framesPerSecond in 1..60) { "معدل الإطارات غير صالح" }
+        require(maxChapterSeconds in 1..DEFAULT_CHAPTER_SECONDS) { "مدة فصل الإنتاج غير صالحة" }
+        val fps = framesPerSecond
+        val chapterLimit = maxChapterSeconds * fps
+        require(introFrames >= 0 && introFrames < chapterLimit) {
+            "يجب أن تكون المقدمة أقصر من فصل الإنتاج الأول"
+        }
+        val safeIntro = introFrames
         if (framesPerScene.none { it > 0 }) return emptyList()
 
         val slicesByChapter = mutableListOf<MutableList<SceneSlice>>()
@@ -153,6 +158,16 @@ object WolfLongFilmEngine {
                     val capacity = if (currentIndex == 0) chapterLimit - safeIntro else chapterLimit
                     val available = capacity - bodyFramesByChapter[currentIndex]
                     if (available <= 0) {
+                        beginChapter()
+                        continue
+                    }
+                    // Preserve a whole shot at a chapter boundary whenever it fits in a
+                    // fresh chapter. Split only shots that are themselves longer than a chapter,
+                    // or the first shot when the opening intro leaves insufficient first-chapter room.
+                    val currentChapterHasSlices = slicesByChapter[currentIndex].isNotEmpty()
+                    if (shotOffset == 0 && shotTotal <= chapterLimit &&
+                        shotTotal > available && currentChapterHasSlices
+                    ) {
                         beginChapter()
                         continue
                     }
