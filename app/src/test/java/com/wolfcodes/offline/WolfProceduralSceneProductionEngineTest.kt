@@ -61,7 +61,7 @@ class WolfProceduralSceneProductionEngineTest {
         assertTrue(shots.all { it.scale in 1.0f..1.24f })
         assertTrue(shots.all { it.offsetX in -0.03f..0.03f })
         assertTrue(shots.all { it.offsetY in -0.02f..0.02f })
-        assertTrue(shots.all { it.rotationDegrees in -0.2f..0.2f })
+        assertTrue(shots.all { it.rotationDegrees == 0f })
         assertTrue(shots.all { it.focusX in 0.40f..0.60f })
         assertTrue(shots.all { it.focusY in 0.40f..0.60f })
         assertNotEquals(shots[0].focusX, shots[1].focusX)
