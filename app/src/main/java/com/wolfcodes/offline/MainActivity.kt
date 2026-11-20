@@ -626,7 +626,7 @@ class MainActivity : Activity() {
     }
 
     private fun openProject(item: WolfProject) {
-        if (producing) return
+        if (producing || voiceMergePending || voiceRecorder?.isRecording == true) return
         stopVoicePreview()
         workingProject = item
         titleField.setText(item.title)
@@ -679,8 +679,8 @@ class MainActivity : Activity() {
     }
 
     private fun deleteProject(item: WolfProject) {
-        if (producing) {
-            status.text = "لا يمكن حذف مشروع أثناء إنتاج الفيديو"
+        if (producing || voiceMergePending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف التسجيل أو انتظر انتهاء العملية الحالية قبل حذف المشروع"
             return
         }
         val deleted = WolfProjectStore.delete(this, item.id)
