@@ -35,35 +35,61 @@ dependencies {
 
 val verifyOfflineRuntime by tasks.registering {
     group = "verification"
-    description = "Rejects Android runtime permissions, APIs, endpoints, and direct dependencies that require network access."
+    description = "Rejects network permissions, merged network permissions, common network APIs, endpoints, and unapproved direct runtime dependencies."
 
     val productionSource = layout.projectDirectory.dir("src/main")
     val manifestFile = layout.projectDirectory.file("src/main/AndroidManifest.xml")
     val moduleBuildFile = layout.projectDirectory.file("build.gradle.kts")
+    val mergedManifestDirectory = layout.buildDirectory.dir("intermediates/merged_manifest/debug")
 
+    dependsOn("processDebugMainManifest")
     inputs.dir(productionSource)
     inputs.file(manifestFile)
     inputs.file(moduleBuildFile)
+    outputs.upToDateWhen { false }
 
     doLast {
-        val manifestText = manifestFile.asFile.readText(Charsets.UTF_8)
         val forbiddenManifestValues = listOf(
             "android.permission.INTERNET",
             "android.permission.ACCESS_NETWORK_STATE",
             "android:usesCleartextTraffic=\"true\"",
             "android:networkSecurityConfig"
         )
-        val manifestViolations = forbiddenManifestValues.filter { manifestText.contains(it, ignoreCase = true) }
-        check(manifestViolations.isEmpty()) {
-            "Offline runtime manifest violation(s): ${manifestViolations.joinToString()}"
+
+        val sourceManifestText = manifestFile.asFile.readText(Charsets.UTF_8)
+        val sourceManifestViolations = forbiddenManifestValues.filter {
+            sourceManifestText.contains(it, ignoreCase = true)
+        }
+        check(sourceManifestViolations.isEmpty()) {
+            "Offline runtime source manifest violation(s): ${sourceManifestViolations.joinToString()}"
+        }
+
+        val mergedManifestRoot = mergedManifestDirectory.get().asFile
+        val mergedManifests = if (mergedManifestRoot.exists()) {
+            fileTree(mergedManifestRoot) { include("**/AndroidManifest.xml") }.files
+        } else {
+            emptySet()
+        }
+        check(mergedManifests.isNotEmpty()) {
+            "The merged debug manifest was not found; the offline manifest contract cannot be verified."
+        }
+
+        val mergedManifestViolations = mergedManifests.flatMap { mergedManifest ->
+            val text = mergedManifest.readText(Charsets.UTF_8)
+            forbiddenManifestValues.filter { text.contains(it, ignoreCase = true) }.map {
+                "${mergedManifest.relativeTo(projectDir)}: $it"
+            }
+        }
+        check(mergedManifestViolations.isEmpty()) {
+            "Offline runtime merged manifest violation(s): ${mergedManifestViolations.joinToString()}"
         }
 
         val forbiddenSourcePatterns = listOf(
-            Regex("""\b(?:java|javax)\.net\."""),
-            Regex("""\b(?:okhttp3|retrofit2|io\.ktor\.client|com\.android\.volley|com\.google\.firebase)\."""),
-            Regex("""\bWebView\b"""),
-            Regex("""\b(?:HttpURLConnection|HttpsURLConnection|Socket|ServerSocket|DownloadManager)\b"""),
-            Regex("""android\.permission\.(?:INTERNET|ACCESS_NETWORK_STATE)\b""")
+            Regex("""\\b(?:java|javax)\\.net\\."""),
+            Regex("""\\b(?:okhttp3|retrofit2|io\\.ktor\\.client|com\\.android\\.volley|com\\.google\\.firebase)\\."""),
+            Regex("""\\bWebView\\b"""),
+            Regex("""\\b(?:HttpURLConnection|HttpsURLConnection|Socket|ServerSocket|DownloadManager)\\b"""),
+            Regex("""android\\.permission\\.(?:INTERNET|ACCESS_NETWORK_STATE)\\b""")
         )
         val endpointPattern = Regex("""["']https?://""")
         val productionFiles = fileTree(productionSource) {
@@ -82,23 +108,26 @@ val verifyOfflineRuntime by tasks.registering {
             }
         }
         check(sourceViolations.isEmpty()) {
-            "Offline runtime source violation(s):\n${sourceViolations.joinToString("\n")}"
+            "Offline runtime source violation(s):\\n${sourceViolations.joinToString("\\n")}"
         }
 
         val runtimeDependencyDeclarations = moduleBuildFile.asFile.readLines(Charsets.UTF_8)
-            .filter { Regex("""^\s*(implementation|api|runtimeOnly)\s*\(""").containsMatchIn(it) }
+            .filter { Regex("""^\\s*(implementation|api|runtimeOnly)\\s*\\(""").containsMatchIn(it) }
             .map { it.trim() }
         val allowedRuntimeDependencies = setOf(
             """implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")"""
         )
-        val unsupportedDependencies = runtimeDependencyDeclarations.filterNot { it in allowedRuntimeDependencies }
+        val unsupportedDependencies = runtimeDependencyDeclarations.filterNot {
+            it in allowedRuntimeDependencies
+        }
         check(unsupportedDependencies.isEmpty()) {
             "Unexpected direct runtime dependency declaration(s): ${unsupportedDependencies.joinToString()}"
         }
 
         logger.lifecycle(
-            "Offline runtime contract passed: no network permission, network API, hard-coded HTTP(S) endpoint, " +
-                "or unapproved direct runtime dependency was found in production sources."
+            "Offline runtime contract passed: source and merged manifests contain no network permission, " +
+                "production sources contain no detected common network API or hard-coded HTTP(S) endpoint, " +
+                "and direct runtime dependencies match the approved local runtime."
         )
     }
 }
