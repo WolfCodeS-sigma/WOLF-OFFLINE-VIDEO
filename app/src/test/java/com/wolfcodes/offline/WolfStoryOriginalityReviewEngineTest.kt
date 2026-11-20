@@ -301,7 +301,7 @@ class WolfStoryOriginalityReviewEngineTest {
 
             val restored = WolfStoryOriginalityReviewEngine.loadSources(root, sessionId)
 
-            assertEquals(listOf(source), restored)
+            assertEquals(listOf(source.copy(usages = listOf("المخطط"))), restored)
             assertTrue(target.isFile)
             assertFalse(backup.exists())
             assertFalse(File(root, "$sessionId.json.corrupt").exists())
