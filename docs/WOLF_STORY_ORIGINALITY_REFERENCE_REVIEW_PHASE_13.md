@@ -9,8 +9,8 @@ The feature is an editorial aid. It does not certify originality, decide copyrig
 ## User workflow
 
 1. The story studio loads only knowledge-library entries currently allowed for story references.
-2. When a plan or chapter is generated, the studio records the local source ID, title, source category, source label, SHA-256 content fingerprint, and the generation step that used it.
-3. The ledger stores source metadata and fingerprints only. It does not make a second copy of the source text.
+2. When a plan or chapter is generated, the studio records the local source ID, title, source category, source label, user-entered source date, SHA-256 content fingerprint, and the generation step that used it.
+3. The ledger stores source metadata and fingerprints only. It does not make a second copy of the source text. Source labels and dates are shown as entered in the local library; the app does not independently validate provenance or factual accuracy.
 4. After every chapter is complete, the user reviews or edits the final story and runs **فحص أصالة القصة والمراجع المحلية**.
 5. The reviewer compares the exact current final text with recorded source versions that are still present and still permitted. The user may additionally select up to three currently permitted entries in the existing reference selector for the current review.
 6. A missing, disallowed, or changed source version is reported as unavailable or changed; the reviewer does not silently compare it as though it were the same source.
