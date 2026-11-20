@@ -7,7 +7,8 @@ Complete the offline film's sound and approved WOLF CODE S identity as one coher
 - The approved story remains the source of truth. Each recording session is bound to the exact approved story revision by SHA-256; editing the story invalidates the take and its segment ledger.
 - Recording is saved as separate AAC/M4A parts in app-private storage. Stopping a part commits it; starting again records the next part rather than deleting previous parts.
 - The segment manifest is written durably before assembly. AAC parts are joined in order into one M4A file, with track-format validation, monotonic timestamps, a 30-minute total limit and a 256-part safety limit.
-- If the app is interrupted after a segment is committed, opening the project can rebuild the combined take from registered parts. Incomplete temporary recorder files are not treated as completed parts.
+- If the app is interrupted after a segment is committed, opening the project can rebuild the combined take from registered parts. It also detects a valid AAC segment renamed immediately before a process interruption but not yet entered in the manifest. Incomplete temporary recorder files are not treated as completed parts.
+- The manifest records the segment count and merged-file length; recovery rejects a stale combined file after a partially completed append and rebuilds it from the full segment list.
 - The combined take can be previewed and must be explicitly approved before film production uses it. Re-recording explicitly clears the old parts.
 - Existing single-take recordings are migrated into the segment ledger when the user continues recording.
 
