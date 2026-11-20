@@ -192,7 +192,7 @@ object WolfHorrorKnowledgeLibrary {
             val now = System.currentTimeMillis()
             val entry = entryFromDraft(
                 id = entryId,
-                draft = safeDraft.copy(sourceFileName = safeFileName(sourceFileName)),
+                draft = safeDraft.copy(sourceFileName = safeFileName(sourceFileName).ifBlank { safeDraft.sourceFileName }),
                 fingerprint = stats.fingerprint,
                 chars = stats.chars,
                 bytes = stats.bytes,
