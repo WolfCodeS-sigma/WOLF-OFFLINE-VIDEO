@@ -140,7 +140,7 @@ class MainActivity : Activity() {
         })
 
         root.addView(label("التعليق الصوتي"))
-        root.addView(button("تسجيل / إعادة تسجيل التعليق الصوتي").apply {
+        root.addView(button("تسجيل جزء جديد / استكمال التعليق الصوتي").apply {
             setOnClickListener { startVoiceRecording() }
         })
         root.addView(button("إيقاف التسجيل").apply {
@@ -424,11 +424,11 @@ class MainActivity : Activity() {
             return
         }
         stopVoicePreview()
-        WolfStoryVoiceStore.requestRepeat(this, project.id)
+        WolfStoryVoiceStore.beginAdditionalSegment(this, project.id)
         voiceUri = null
         workingProject = project.copy(audioUri = null)
         WolfProjectStore.save(this, workingProject!!)
-        val destination = WolfStoryVoiceStore.recordingTarget(this, project.id)
+        val destination = WolfVoiceSegmentStore.nextSegmentTarget(this, project.id)
         voiceRecorder = WolfVoiceRecorder(this, object : WolfVoiceRecorder.Listener {
             override fun onProgress(elapsedMs: Long, speechDetected: Boolean) {
                 runOnUiThread { status.text = "تسجيل الراوي: " + (elapsedMs / 1000) + " ثانية" }
@@ -437,14 +437,17 @@ class MainActivity : Activity() {
             override fun onSaved(file: File, durationMs: Long, automaticStop: Boolean) {
                 runOnUiThread {
                     runCatching {
-                        val savedTake = WolfStoryVoiceStore.saveRecording(
+                        val merged = WolfVoiceSegmentStore.appendAndMerge(
                             this@MainActivity, project.id, file, durationMs
                         )
-                        voiceUri = Uri.fromFile(file).toString()
+                        val savedTake = WolfStoryVoiceStore.saveRecording(
+                            this@MainActivity, project.id, merged.file, merged.durationMs
+                        )
+                        voiceUri = Uri.fromFile(merged.file).toString()
                         workingProject = project.copy(audioUri = voiceUri)
                         WolfProjectStore.save(this@MainActivity, workingProject!!)
-                        status.text = "تم حفظ التسجيل للمراجعة — " +
-                            (savedTake.audioDurationMs / 1000) + " ثانية. استمع إليه ثم اعتمده."
+                        status.text = "تم حفظ الجزء ${merged.segmentCount} ودمجه مع التسجيل السابق — " +
+                            (savedTake.audioDurationMs / 1000) + " ثانية إجمالًا. استمع إليه ثم اعتمده."
                         refreshVoiceStatus()
                         refreshProjectList()
                     }.onFailure { showError(it) }
@@ -507,7 +510,7 @@ class MainActivity : Activity() {
         voiceUri = null
         workingProject = project.copy(audioUri = null)
         WolfProjectStore.save(this, workingProject!!)
-        status.text = "تم إلغاء اعتماد التسجيل السابق. يمكنك التسجيل من جديد."
+        status.text = "تم حذف مقاطع التسجيل السابقة وإلغاء اعتمادها. يمكنك البدء من جديد."
         refreshVoiceStatus()
         refreshProjectList()
     }
@@ -605,6 +608,31 @@ class MainActivity : Activity() {
         status.text = "تم فتح المشروع: " + item.title
         refreshVoiceStatus()
         refreshChapterStatus()
+        worker.execute {
+            val recovered = runCatching { WolfVoiceSegmentStore.recover(this, item.id) }
+            runOnUiThread {
+                recovered.onSuccess { merged ->
+                    if (merged != null) {
+                        val existing = WolfStoryVoiceStore.read(this, item.id)
+                        if (existing?.voiceFilePath != merged.file.absolutePath ||
+                            existing.voiceApproved != true
+                        ) {
+                            val restored = WolfStoryVoiceStore.restoreMergedSegments(
+                                this, item.id, merged.file, merged.durationMs
+                            )
+                            if (restored != null) {
+                                voiceUri = Uri.fromFile(merged.file).toString()
+                                workingProject = item.copy(audioUri = voiceUri)
+                                WolfProjectStore.save(this, workingProject!!)
+                                status.text = "تم استعادة ${merged.segmentCount} مقطعًا محفوظًا للراوي؛ راجع التسجيل واعتمده."
+                                refreshVoiceStatus()
+                                refreshProjectList()
+                            }
+                        }
+                    }
+                }.onFailure { status.text = "تعذر استعادة مقاطع الراوي: " + (it.message ?: "خطأ غير معروف") }
+            }
+        }
     }
 
     private fun confirmDeleteProject(item: WolfProject) {
