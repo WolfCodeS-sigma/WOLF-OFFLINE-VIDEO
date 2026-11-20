@@ -120,7 +120,7 @@ object WolfNarrativePatternAudit {
 
         val warnings = ArrayList<String>()
         val structural = ArrayList<String>()
-        if (segments.size < 4) {
+        if (segmentEvents.size < 4) {
             structural += "تعذر تقسيم النص إلى أربعة مقاطع سردية واضحة على الأقل؛ قد تكون علامات الترقيم أو الفقرات غير كافية."
         }
         if (detectedSegments < 3) {
@@ -180,7 +180,7 @@ object WolfNarrativePatternAudit {
         while (offset < limitedText.length && segments.size < MAX_AUDIT_SEGMENTS) {
             val character = limitedText[offset]
             if (character == '.' || character == '!' || character == '?' ||
-                character == '؟' || character == '؛' || character == ';' || character == '\\n'
+                character == '؟' || character == '؛' || character == ';' || character == '\n'
             ) {
                 if (offset > start) {
                     val segment = limitedText.substring(start, offset).trim()
