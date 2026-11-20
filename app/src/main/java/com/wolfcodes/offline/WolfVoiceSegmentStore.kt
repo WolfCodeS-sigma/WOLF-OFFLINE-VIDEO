@@ -141,7 +141,8 @@ object WolfVoiceSegmentStore {
         val directory = voiceDirectory(context)
         readEntries(directory, projectId).forEach { File(directory, it.fileName).delete() }
         directory.listFiles()?.filter {
-            it.name.startsWith("$projectId-segment-") && it.name.endsWith(".m4a")
+            it.name.startsWith("$projectId-segment-") &&
+                (it.name.endsWith(".m4a") || it.name.endsWith(".importing"))
         }?.forEach { it.delete() }
         listOf(
             manifestFile(directory, projectId),
@@ -166,6 +167,16 @@ object WolfVoiceSegmentStore {
     ): Boolean = isValidAac && expectedSegmentCount > 0 &&
         mergedSegmentCount == expectedSegmentCount &&
         expectedFileLength > 1024L && expectedFileLength == actualFileLength
+
+    internal fun canAppendDurationMs(existing: List<Long>, candidate: Long): Boolean {
+        if (candidate !in 1L..MAX_DURATION_MS) return false
+        var total = 0L
+        for (duration in existing) {
+            if (duration !in 1L..MAX_DURATION_MS || total > MAX_DURATION_MS - duration) return false
+            total += duration
+        }
+        return total <= MAX_DURATION_MS - candidate
+    }
 
     internal fun totalDurationMs(durations: List<Long>): Long {
         require(durations.isNotEmpty() && durations.all { it in 1L..MAX_DURATION_MS }) {
@@ -195,7 +206,9 @@ object WolfVoiceSegmentStore {
             val candidate = File(directory, segmentFileName(projectId, result.size + 1))
             if (!candidate.isFile || !isValidAac(candidate)) break
             val duration = readDurationMs(candidate)
-            if (duration !in 1_000L..MAX_DURATION_MS) break
+            if (duration !in 1_000L..MAX_DURATION_MS ||
+                !canAppendDurationMs(result.map(Entry::durationMs), duration)
+            ) break
             result += Entry(candidate.name, duration)
         }
         return result
