@@ -266,6 +266,10 @@ class MainActivity : Activity() {
     }
 
     private fun chooseMultipleImages() {
+        if (producing || voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "انتظر انتهاء العملية الحالية قبل تعديل صور المشروع"
+            return
+        }
         pendingImageSlot = null
         val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(android.content.Intent.CATEGORY_OPENABLE)
@@ -276,6 +280,10 @@ class MainActivity : Activity() {
     }
 
     private fun chooseImageSlot() {
+        if (producing || voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "انتظر انتهاء العملية الحالية قبل تعديل صور المشروع"
+            return
+        }
         val labels = Array(WolfSceneAssetStore.MAX_IMAGE_SLOTS) { index ->
             val scene = index / WolfSceneAssetStore.SHOTS_PER_SCENE + 1
             val shot = index % WolfSceneAssetStore.SHOTS_PER_SCENE + 1
@@ -299,6 +307,10 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != 742 || resultCode != RESULT_OK || data == null) return
+        if (producing || voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "تم تجاهل اختيار الصور لأن المشروع مشغول بعملية أخرى"
+            return
+        }
         val slot = pendingImageSlot
         pendingImageSlot = null
         val picked = mutableListOf<Uri>()
