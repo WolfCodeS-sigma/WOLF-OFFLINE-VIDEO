@@ -247,7 +247,8 @@ object WolfAudioMixer {
 
     private fun writePcmSample(pcm: RandomAccessFile, sampleIndex: Long, sample: Double) {
         val offset = sampleIndex * 2L
-        if (pcm.length() < offset) pcm.setLength(offset)
+        // Sequential decoder output already points at this offset; avoid a file-length syscall
+        // for every PCM sample, which would be costly for long-form films.
         if (pcm.filePointer != offset) pcm.seek(offset)
         val value = (sample.coerceIn(-1.0, 1.0) * 32767.0).toInt()
         pcm.write(value and 0xff)
