@@ -30,17 +30,17 @@ class WolfFilmProductionCoordinatorTest {
 
     @Test fun keepsWholeShotsAtChapterBoundariesWhenTheyFitAChapter() {
         val plan = WolfFilmProductionCoordinator.createPlan(
-            framesPerScene = listOf(1_200),
+            framesPerScene = listOf(600),
             framesPerSecond = 1,
             introFrames = 0,
-            chapterSeconds = 700
+            chapterSeconds = 300
         )
 
         assertEquals(3, plan.chapters.size)
         plan.chapters.forEach { chapter ->
             assertEquals(1, chapter.slices.size)
             assertEquals(0, chapter.slices.single().shotStartFrame)
-            assertEquals(400, chapter.slices.single().frameCount)
+            assertEquals(200, chapter.slices.single().frameCount)
         }
     }
 
