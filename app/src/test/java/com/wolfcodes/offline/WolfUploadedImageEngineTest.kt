@@ -30,6 +30,20 @@ class WolfUploadedImageEngineTest {
     }
 
     @Test
+    fun consecutiveShotsUseDifferentCameraChoreographyForSameStoryBeat() {
+        val first = WolfUploadedImageEngine.planMotion("ظهر شبح في الممر", 2, 0, 0.2f)
+        val second = WolfUploadedImageEngine.planMotion("ظهر شبح في الممر", 2, 1, 0.5f)
+        val third = WolfUploadedImageEngine.planMotion("ظهر شبح في الممر", 2, 2, 0.8f)
+
+        assertEquals(WolfUploadedImageEngine.Atmosphere.GHOST, first.atmosphere)
+        assertEquals(first.atmosphere, second.atmosphere)
+        assertEquals(first.atmosphere, third.atmosphere)
+        assertTrue(first.cameraMove != second.cameraMove)
+        assertTrue(second.cameraMove != third.cameraMove)
+        assertTrue(first.cameraMove != third.cameraMove)
+    }
+
+    @Test
     fun shotMotionPlanIsDeterministicAndBounded() {
         val first = WolfUploadedImageEngine.planMotion("باب قديم يصدر صريرا", 4, 1, 0.35f)
         val repeated = WolfUploadedImageEngine.planMotion("باب قديم يصدر صريرا", 4, 1, 0.35f)
