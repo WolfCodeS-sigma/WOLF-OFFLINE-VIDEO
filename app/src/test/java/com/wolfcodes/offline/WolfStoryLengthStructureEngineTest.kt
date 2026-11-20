@@ -36,6 +36,15 @@ class WolfStoryLengthStructureEngineTest {
         assertFalse(runCatching { WolfStoryLengthStructureEngine.chapterTargets(500, listOf("الفصل"), 0.01) }.isSuccess)
     }
 
+    @Test fun singleChapterUsesACompressedCompleteStoryArc() {
+        val target = WolfStoryLengthStructureEngine.chapterTargets(500, listOf("قصة قصيرة")).single()
+        assertTrue(target.compactArc)
+        val guidance = WolfStoryLengthStructureEngine.chapterGuidance(target)
+        assertTrue(guidance.contains("خطاف"))
+        assertTrue(guidance.contains("ذروة"))
+        assertTrue(guidance.contains("خاتمة"))
+    }
+
     @Test fun planAndChapterGuidanceIncludeTargetsAndNarrativePurpose() {
         val titles = listOf("البداية", "التحول", "النهاية")
         val plan = WolfStoryLengthStructureEngine.planGuidance(2_400, titles)
