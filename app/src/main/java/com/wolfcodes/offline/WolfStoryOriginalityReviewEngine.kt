@@ -400,16 +400,26 @@ object WolfStoryOriginalityReviewEngine {
                 else -> finishToken()
             }
             if (result.size >= maximumWords && current.isNotEmpty()) {
-                truncated = offset < text.length
+                truncated = hasMoreWords(text, offset)
                 break
             }
             if (result.size >= maximumWords && offset < text.length) {
-                truncated = true
+                truncated = hasMoreWords(text, offset)
                 break
             }
         }
         if (!truncated) finishToken()
         return Tokenized(result, truncated)
+    }
+
+    private fun hasMoreWords(text: String, startOffset: Int): Boolean {
+        var offset = startOffset
+        while (offset < text.length) {
+            val codePoint = text.codePointAt(offset)
+            if (Character.isLetterOrDigit(codePoint)) return true
+            offset += Character.charCount(codePoint)
+        }
+        return false
     }
 
     private fun normalizeCodePoint(value: Int): Int {
@@ -561,7 +571,9 @@ object WolfStoryOriginalityReviewEngine {
         appendLine("تغطية العبارات المتطابقة من بصمات النص: ${report.overallOverlapPercent}%")
         appendLine("العبارات الطويلة المتكررة داخل القصة: ${report.internalRepeatedPhraseCount}")
 
-        if (report.findings.isEmpty()) {
+        if (report.checkedSources == 0) {
+            appendLine("لم تتم مقارنة أي مرجع صالح؛ لا يمكن استنتاج عدم وجود تطابق.")
+        } else if (report.findings.isEmpty()) {
             appendLine("لم يعثر الفحص على تطابقات لفظية مميزة ضمن المراجع التي تمت مقارنتها.")
         } else {
             appendLine()
