@@ -145,9 +145,9 @@ object WolfStoryVoiceStore {
         synchronized(lock) {
             val current = readUnlocked(context, projectId) ?: initialize(context, projectId, draftStory)
             val updated = WolfStoryVoiceStateMachine.edit(current, draftStory, finalStory, System.currentTimeMillis())
+            writeUnlocked(context, updated)
             if (updated.voiceFilePath == null && current.voiceFilePath != null) File(current.voiceFilePath).delete()
             if (updated.finalStory != current.finalStory) WolfVoiceSegmentStore.clearProject(context, projectId)
-            writeUnlocked(context, updated)
             updated
         }
 
@@ -155,9 +155,9 @@ object WolfStoryVoiceStore {
         synchronized(lock) {
             val current = readUnlocked(context, projectId) ?: throw IllegalStateException("مسودة القصة غير موجودة")
             val updated = WolfStoryVoiceStateMachine.approveScript(current, finalStory, System.currentTimeMillis())
+            writeUnlocked(context, updated)
             if (updated.voiceFilePath == null && current.voiceFilePath != null) File(current.voiceFilePath).delete()
             if (updated.finalStory != current.finalStory) WolfVoiceSegmentStore.clearProject(context, projectId)
-            writeUnlocked(context, updated)
             updated
         }
 
@@ -209,9 +209,9 @@ object WolfStoryVoiceStore {
         val updated = WolfStoryVoiceStateMachine.invalidateForStoryChange(
             current, newStory, System.currentTimeMillis()
         )
+        writeUnlocked(context, updated)
         current.voiceFilePath?.let { File(it).delete() }
         WolfVoiceSegmentStore.clearProject(context, projectId)
-        writeUnlocked(context, updated)
         updated
     }
 
@@ -255,9 +255,9 @@ object WolfStoryVoiceStore {
         val updated = runCatching {
             WolfStoryVoiceStateMachine.requestRepeat(current, System.currentTimeMillis())
         }.getOrNull() ?: return@synchronized null
+        writeUnlocked(context, updated)
         current.voiceFilePath?.let { File(it).delete() }
         WolfVoiceSegmentStore.clearProject(context, projectId)
-        writeUnlocked(context, updated)
         updated
     }
 
