@@ -424,6 +424,12 @@ class MainActivity : Activity() {
             return
         }
         stopVoicePreview()
+        val previousSession = WolfStoryVoiceStore.read(this, project.id)
+        WolfVoiceSegmentStore.importExistingTake(
+            this, project.id,
+            previousSession?.voiceFilePath?.let(::File),
+            previousSession?.audioDurationMs ?: 0L
+        )
         WolfStoryVoiceStore.beginAdditionalSegment(this, project.id)
         voiceUri = null
         workingProject = project.copy(audioUri = null)
@@ -612,7 +618,7 @@ class MainActivity : Activity() {
             val recovered = runCatching { WolfVoiceSegmentStore.recover(this, item.id) }
             runOnUiThread {
                 recovered.onSuccess { merged ->
-                    if (merged != null) {
+                    if (merged != null && workingProject?.id == item.id) {
                         val existing = WolfStoryVoiceStore.read(this, item.id)
                         if (existing?.voiceFilePath != merged.file.absolutePath ||
                             existing.voiceApproved != true
