@@ -125,7 +125,8 @@ object WolfProceduralMotionEngine {
         shotIndex: Int,
         progress: Float,
         plannedFeatures: SceneFeatures? = null,
-        environment: WolfProceduralSceneProductionEngine.Environment? = null
+        environment: WolfProceduralSceneProductionEngine.Environment? = null,
+        plannedLayers: List<WolfSceneLayerSystem.Element>? = null
     ) {
         if (width <= 0 || height <= 0) return
         val t = progress.coerceIn(0f, 1f)
@@ -160,7 +161,8 @@ object WolfProceduralMotionEngine {
         // Independent object layers are composed after atmosphere and before typography.
         val resolvedEnvironment = environment
             ?: WolfProceduralSceneProductionEngine.classifyEnvironment(caption)
-        val objectLayers = WolfSceneLayerSystem.plan(resolvedEnvironment, features, sceneIndex)
+        val objectLayers = plannedLayers
+            ?: WolfSceneLayerSystem.plan(resolvedEnvironment, features, sceneIndex)
         WolfSceneLayerSystem.render(canvas, width, height, objectLayers, t)
     }
 
