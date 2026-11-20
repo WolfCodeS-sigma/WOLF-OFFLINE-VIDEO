@@ -19,7 +19,7 @@ The dedicated GitHub Actions workflow `.github/workflows/phase-17-android-runtim
 4. Starts an Android 35 Google APIs x86_64 emulator.
 5. Invokes `.github/scripts/phase-17-android-runtime-smoke.sh` as one shell command. The helper owns its shell state and multi-line control flow; it is intentionally not expanded into multiple lines in the emulator action input.
 6. Installs the APK.
-7. Disables Wi-Fi and mobile data, enables airplane mode, and checks the emulator's airplane-mode and Wi-Fi state.
+7. Disables Wi-Fi and enables airplane mode. It disables mobile data when the emulator exposes a telephony service; Google APIs emulator images without a phone service have no mobile-data radio to disable. The test verifies airplane mode and Wi-Fi are off.
 8. Launches the application through `com.wolfcodes.offline/.MainActivity`.
 9. Confirms the app process remains alive and the UI hierarchy contains `WOLF OFFLINE VIDEO`.
 10. Captures a screenshot and uploads the APK plus successful emulator evidence as 30-day workflow artifacts.
