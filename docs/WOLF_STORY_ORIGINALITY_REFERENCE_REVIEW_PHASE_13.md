@@ -14,7 +14,7 @@ The feature is an editorial aid. It does not certify originality, decide copyrig
 4. After every chapter is complete, the user reviews or edits the final story and runs **فحص أصالة القصة والمراجع المحلية**.
 5. The reviewer compares the exact current final text with recorded source versions that are still present and still permitted. The user may additionally select up to three currently permitted entries in the existing reference selector for the current review.
 6. A missing, disallowed, or changed source version is reported as unavailable or changed; the reviewer does not silently compare it as though it were the same source.
-7. The approval action is blocked until the current text has a matching review result. Any subsequent edit invalidates that result and requires another review.
+7. The approval action is blocked until the current text has a matching review result. Any subsequent edit invalidates that result and requires another review. If the historical source-use ledger cannot be read or recovered, approval remains blocked so references that influenced generation are not silently omitted.
 8. The final confirmation displays the report and requires the user to acknowledge its limited scope before saving the story as approved.
 
 Older sessions created before Phase 13 have no source-use ledger. They can still be reviewed against references explicitly selected in the current screen, but the report warns when no usable sources are available.
