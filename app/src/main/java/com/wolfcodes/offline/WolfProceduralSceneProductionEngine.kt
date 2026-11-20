@@ -168,7 +168,8 @@ object WolfProceduralSceneProductionEngine {
             sceneIndex = plan.sceneIndex,
             shotIndex = safeShot,
             progress = t,
-            plannedFeatures = plan.features
+            plannedFeatures = plan.features,
+            environment = plan.environment
         )
     }
 }
