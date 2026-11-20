@@ -132,6 +132,7 @@ class WolfStoryOriginalityReviewEngineTest {
         assertEquals(1, report.checkedSources)
         assertEquals(1, report.findings.size)
         assertEquals(setOf("ref-one", "ref-two"), report.checkedSourceVersions.map { it.id }.toSet())
+        assertTrue(report.checkedSourceVersions.all { it.contentFingerprint == first.contentFingerprint })
     }
 
     @Test fun repeatedPhrasesInsideTheStoryAreReportedSeparately() {
