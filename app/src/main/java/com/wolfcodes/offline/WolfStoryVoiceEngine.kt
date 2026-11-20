@@ -146,6 +146,7 @@ object WolfStoryVoiceStore {
             val current = readUnlocked(context, projectId) ?: initialize(context, projectId, draftStory)
             val updated = WolfStoryVoiceStateMachine.edit(current, draftStory, finalStory, System.currentTimeMillis())
             if (updated.voiceFilePath == null && current.voiceFilePath != null) File(current.voiceFilePath).delete()
+            if (updated.finalStory != current.finalStory) WolfVoiceSegmentStore.clearProject(context, projectId)
             writeUnlocked(context, updated)
             updated
         }
@@ -155,6 +156,7 @@ object WolfStoryVoiceStore {
             val current = readUnlocked(context, projectId) ?: throw IllegalStateException("مسودة القصة غير موجودة")
             val updated = WolfStoryVoiceStateMachine.approveScript(current, finalStory, System.currentTimeMillis())
             if (updated.voiceFilePath == null && current.voiceFilePath != null) File(current.voiceFilePath).delete()
+            if (updated.finalStory != current.finalStory) WolfVoiceSegmentStore.clearProject(context, projectId)
             writeUnlocked(context, updated)
             updated
         }
