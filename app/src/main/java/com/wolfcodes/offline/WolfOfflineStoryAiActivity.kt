@@ -589,9 +589,6 @@ class WolfOfflineStoryAiActivity : Activity() {
             runOnUiThread {
                 reviewResult.onSuccess { (report, ledgerWarning) ->
                     if (storyTextRevision == capturedRevision && session?.id == current.id) {
-                        lastOriginalityReport = report
-                        lastOriginalityTextRevision = capturedRevision
-                        lastOriginalitySelection = selectedIds
                         originalityView.text = buildString {
                             append(WolfStoryOriginalityReviewEngine.formatReport(report))
                             if (ledgerWarning != null) {
@@ -600,7 +597,19 @@ class WolfOfflineStoryAiActivity : Activity() {
                                 append("تعذر قراءة سجل المراجع السابق: $ledgerWarning")
                             }
                         }
-                        setBusy(false, "اكتمل فحص الأصالة. راجع النتائج والأمثلة وحدود الفحص قبل الاعتماد.")
+                        if (ledgerWarning == null) {
+                            lastOriginalityReport = report
+                            lastOriginalityTextRevision = capturedRevision
+                            lastOriginalitySelection = selectedIds
+                            setBusy(false, "اكتمل فحص الأصالة. راجع النتائج والأمثلة وحدود الفحص قبل الاعتماد.")
+                        } else {
+                            // Never approve a story when historical source usage could not be read:
+                            // the report would otherwise omit references that influenced generation.
+                            lastOriginalityReport = null
+                            lastOriginalityTextRevision = -1L
+                            lastOriginalitySelection = emptySet()
+                            setBusy(false, "تعذر قراءة سجل المراجع السابق؛ لا يمكن اعتماد القصة قبل استعادة السجل وإعادة الفحص.")
+                        }
                     } else {
                         lastOriginalityReport = null
                         lastOriginalityTextRevision = -1L
