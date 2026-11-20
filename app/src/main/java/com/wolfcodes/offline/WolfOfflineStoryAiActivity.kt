@@ -546,7 +546,18 @@ class WolfOfflineStoryAiActivity : Activity() {
                     )
                 }
 
-                val referenceSequence = candidates.values.asSequence().map { (source, entry) ->
+                val contentCandidates = candidates.values.filter { (source, entry) ->
+                    if (source.contentFingerprint == entry.contentFingerprint) {
+                        true
+                    } else {
+                        unavailable += WolfStoryOriginalityReviewEngine.UnavailableSource(
+                            source,
+                            "تغيرت بصمة المرجع في المكتبة منذ استخدامه؛ لم تتم قراءة محتوى النسخة الجديدة على أنها النسخة القديمة"
+                        )
+                        false
+                    }
+                }
+                val referenceSequence = contentCandidates.asSequence().map { (source, entry) ->
                     WolfStoryOriginalityReviewEngine.ReferenceText(
                         source,
                         WolfHorrorKnowledgeLibrary.readContent(libraryRoot, entry.id).orEmpty()
