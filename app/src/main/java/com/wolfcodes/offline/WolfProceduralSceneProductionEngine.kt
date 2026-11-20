@@ -105,7 +105,7 @@ object WolfProceduralSceneProductionEngine {
                 scale = 1.10f,
                 offsetX = 0f,
                 offsetY = 0f,
-                rotationDegrees = -0.04f,
+                rotationDegrees = 0f,
                 focusX = 0.46f,
                 focusY = 0.48f
             )
@@ -113,7 +113,7 @@ object WolfProceduralSceneProductionEngine {
                 scale = 1.24f,
                 offsetX = 0f,
                 offsetY = 0f,
-                rotationDegrees = 0.06f,
+                rotationDegrees = 0f,
                 focusX = 0.56f,
                 focusY = 0.44f
             )
