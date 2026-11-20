@@ -207,16 +207,24 @@ class WolfHorrorKnowledgeLibraryTest {
     fun appAuthoredFinalStoryAutosaveCanBeDisabled() {
         assertTrue(WolfHorrorKnowledgeLibrary.autoSaveAppAuthoredStoriesEnabled(root))
         val saved = WolfHorrorKnowledgeLibrary.saveFinalAppAuthoredStory(
-            root, "قصة التطبيق", "A new fictional story begins at the abandoned house."
+            root, "قصة التطبيق", "A new fictional story begins at the abandoned house.",
+            isFinalApproved = true
         )
         assertNotNull(saved)
         assertEquals(WolfHorrorKnowledgeLibrary.SOURCE_APP_AUTHORED, saved!!.entry.sourceType)
         assertEquals("قصص من تأليف التطبيق", saved.entry.category)
+        assertNull(
+            WolfHorrorKnowledgeLibrary.saveFinalAppAuthoredStory(
+                root, "قصة غير معتمدة", "This draft was not approved yet.",
+                isFinalApproved = false
+            )
+        )
 
         WolfHorrorKnowledgeLibrary.setAutoSaveAppAuthoredStories(root, false)
         assertFalse(WolfHorrorKnowledgeLibrary.autoSaveAppAuthoredStoriesEnabled(root))
         val skipped = WolfHorrorKnowledgeLibrary.saveFinalAppAuthoredStory(
-            root, "قصة لن تحفظ", "A different approved story that must not be saved."
+            root, "قصة لن تحفظ", "A different approved story that must not be saved.",
+            isFinalApproved = true
         )
         assertNull(skipped)
         assertEquals(1, WolfHorrorKnowledgeLibrary.list(root).size)
