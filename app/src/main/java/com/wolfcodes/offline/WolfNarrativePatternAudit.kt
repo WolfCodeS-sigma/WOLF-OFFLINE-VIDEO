@@ -17,8 +17,16 @@ object WolfNarrativePatternAudit {
         val repeatedEventTypes: List<String>,
         val eventSequence: List<String>,
         val structuralWarnings: List<String>,
+        val analysisTruncated: Boolean,
         val warnings: List<String>
     )
+
+    private const val MAX_AUDIT_CHARS = 1_000_000
+    private const val MAX_AUDIT_SEGMENTS = 2_000
+    private const val MAX_AUDIT_WORDS = 100_000
+
+    private data class Segmentation(val values: List<String>, val truncated: Boolean)
+    private data class Tokenization(val words: Set<String>, val truncated: Boolean)
 
     private data class EventType(
         val label: String,
@@ -81,11 +89,24 @@ object WolfNarrativePatternAudit {
     private val resolutionTypes = setOf("كشف الحقيقة", "هروب ونجاة", "فقد أو اختفاء", "عودة أو حسم")
 
     fun analyze(story: String): Report {
-        val segments = splitSegments(story)
-        val segmentEvents = segments.map { segment ->
-            val tokens = normalizeTokens(segment)
-            eventTypes.filter { type -> type.keywords.any { normalizeToken(it) in tokens } }.map { it.label }
+        val segmentation = splitSegments(story)
+        val segmentEvents = ArrayList<List<String>>(segmentation.values.size)
+        var remainingWords = MAX_AUDIT_WORDS
+        var tokenLimitReached = false
+        for (segment in segmentation.values) {
+            if (remainingWords <= 0) {
+                tokenLimitReached = true
+                break
+            }
+            val tokenized = normalizeTokens(segment, remainingWords)
+            remainingWords -= tokenized.words.size
+            if (tokenized.truncated) tokenLimitReached = true
+            segmentEvents += eventTypes.filter { type ->
+                type.keywords.any { normalizeToken(it) in tokenized.words }
+            }.map { it.label }
+            if (tokenized.truncated) break
         }
+        val analysisTruncated = segmentation.truncated || tokenLimitReached
         val frequencies = linkedMapOf<String, Int>()
         segmentEvents.forEach { labels ->
             labels.forEach { label -> frequencies[label] = (frequencies[label] ?: 0) + 1 }
@@ -112,21 +133,22 @@ object WolfNarrativePatternAudit {
             structural += "تكررت عائلات الأحداث التالية ثلاث مرات أو أكثر: ${repeated.joinToString("، ")}؛ تحقق من أن كل تكرار يضيف تطورًا جديدًا."
         }
 
-        val middleStart = (segments.size * 0.25).toInt().coerceAtMost(segments.lastIndex)
-        val middleEnd = (segments.size * 0.80).toInt().coerceAtLeast(middleStart + 1)
-            .coerceAtMost(segments.size)
+        val analyzedSegmentCount = segmentEvents.size
+        val middleStart = (analyzedSegmentCount * 0.25).toInt().coerceAtMost((analyzedSegmentCount - 1).coerceAtLeast(0))
+        val middleEnd = (analyzedSegmentCount * 0.80).toInt().coerceAtLeast(middleStart + 1)
+            .coerceAtMost(analyzedSegmentCount)
         val middleHasEscalation = segmentEvents.subList(middleStart, middleEnd)
             .flatten().any { it in climaxTypes }
-        if (segments.size >= 5 && !middleHasEscalation) {
+        if (analyzedSegmentCount >= 5 && !middleHasEscalation) {
             structural += "لم تظهر قرائن تصاعد أو تهديد واضحة في منتصف القصة؛ تحقق من بناء التوتر تدريجيًا."
         }
 
-        val finalStart = (segments.size * 0.70).toInt().coerceAtMost(segments.lastIndex)
+        val finalStart = (analyzedSegmentCount * 0.70).toInt().coerceAtMost((analyzedSegmentCount - 1).coerceAtLeast(0))
         val endingEvents = segmentEvents.drop(finalStart).flatten().toSet()
-        if (segments.size >= 5 && endingEvents.none { it in climaxTypes }) {
+        if (analyzedSegmentCount >= 5 && endingEvents.none { it in climaxTypes }) {
             structural += "لم تُرصد مواجهة أو ذروة أو كشف واضح في الجزء الأخير؛ راجع وجود ذروة سردية."
         }
-        if (segments.size >= 5 && endingEvents.none { it in resolutionTypes }) {
+        if (analyzedSegmentCount >= 5 && endingEvents.none { it in resolutionTypes }) {
             structural += "لم تُرصد قرينة حسم أو نتيجة أو أثر نهائي في الخاتمة؛ تحقق من إغلاق القوس السردي أو تعمد تركه مفتوحًا."
         }
         if (structural.isEmpty()) {
@@ -134,6 +156,7 @@ object WolfNarrativePatternAudit {
         } else {
             warnings += "ملاحظات البنية السردية قرائن تحذيرية؛ قد يفوت القاموس مرادفات أو يسيء تصنيف بعض الجمل."
         }
+        if (analysisTruncated) warnings += "تم تقييد فحص الأحداث عند حد المليون حرف أو 2,000 مقطع أو 100,000 كلمة؛ لم يشمل التحليل بقية النص."
         warnings += "فحص الأحداث لا يفهم السياق أو النفي أو الدوافع أو العلاقات السببية فهمًا كاملًا، ولا يستطيع إثبات تكرار حبكة بالمعنى الدلالي."
 
         return Report(
@@ -144,26 +167,54 @@ object WolfNarrativePatternAudit {
             repeatedEventTypes = repeated,
             eventSequence = sequence,
             structuralWarnings = structural,
+            analysisTruncated = analysisTruncated,
             warnings = warnings
         )
     }
 
-    private fun splitSegments(text: String): List<String> {
-        val sentences = text.split(Regex("[.!?؟؛;\\n]+"))
-            .map(String::trim)
-            .filter(String::isNotBlank)
-        if (sentences.size >= 4) return sentences
-        val paragraphs = text.split(Regex("\\n\\s*\\n+"))
-            .map(String::trim)
-            .filter(String::isNotBlank)
-        if (paragraphs.size >= 4) return paragraphs
-        return if (sentences.isNotEmpty()) sentences else listOf(text)
+    private fun splitSegments(text: String): Segmentation {
+        val limitedText = text.take(MAX_AUDIT_CHARS)
+        val segments = ArrayList<String>()
+        var start = 0
+        var offset = 0
+        while (offset < limitedText.length && segments.size < MAX_AUDIT_SEGMENTS) {
+            val character = limitedText[offset]
+            if (character == '.' || character == '!' || character == '?' ||
+                character == '؟' || character == '؛' || character == ';' || character == '\\n'
+            ) {
+                if (offset > start) {
+                    val segment = limitedText.substring(start, offset).trim()
+                    if (segment.isNotBlank()) segments += segment
+                }
+                start = offset + 1
+            }
+            offset++
+        }
+        val hitSegmentLimit = segments.size >= MAX_AUDIT_SEGMENTS && offset < limitedText.length
+        if (!hitSegmentLimit && start < limitedText.length) {
+            val segment = limitedText.substring(start).trim()
+            if (segment.isNotBlank()) segments += segment
+        }
+        if (segments.isEmpty()) segments += limitedText
+        return Segmentation(
+            values = segments,
+            truncated = text.length > MAX_AUDIT_CHARS || hitSegmentLimit
+        )
     }
 
-    private fun normalizeTokens(text: String): Set<String> =
-        Regex("[\\p{L}\\p{N}]+").findAll(text)
-            .map { normalizeToken(it.value) }
-            .toSet()
+    private fun normalizeTokens(text: String, maximumWords: Int): Tokenization {
+        val words = HashSet<String>()
+        var truncated = false
+        val iterator = Regex("[\\p{L}\\p{N}]+").findAll(text).iterator()
+        while (iterator.hasNext()) {
+            if (words.size >= maximumWords) {
+                truncated = true
+                break
+            }
+            words += normalizeToken(iterator.next().value)
+        }
+        return Tokenization(words, truncated)
+    }
 
     private fun normalizeToken(value: String): String = value.lowercase(Locale.ROOT)
         .replace(Regex("\\p{M}+"), "")
