@@ -17,7 +17,7 @@ The implementation is local-only. It adds no network permission, API, account, c
 - Store summary separately from the original and current story text.
 - Maintain separate fields for characters, places, events, themes, and keywords. These fields are user-entered metadata; this phase does not claim AI extraction.
 - Edit story text and metadata, delete an entry, and view a bounded preview of the preserved original text.
-- Search title, content, source metadata, categories, folders, tags, summaries, and structured metadata.
+- Search title, content, source metadata, categories, folders, tags, summaries, and structured metadata. Story-body terms are held in a fingerprinted index; current catalog fields are matched against current metadata to prevent stale results after renaming or reclassification.
 - Exclude any entry from future story-reference retrieval without deleting it.
 - Turn automatic saving of final app-authored stories on or off.
 
@@ -57,7 +57,7 @@ JVM unit tests cover:
 
 1. Persisting imported story text and source metadata.
 2. Editing the working copy while preserving the original text.
-3. Metadata-only updates and index refresh.
+3. Metadata-only updates reflected in search without changing either story-text version.
 4. Duplicate detection on insert and edit.
 5. Reference opt-out behavior.
 6. Deletion and removal from search.
