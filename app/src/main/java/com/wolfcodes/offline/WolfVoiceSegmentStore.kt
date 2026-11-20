@@ -61,8 +61,24 @@ object WolfVoiceSegmentStore {
         if (duration !in 1_000L..MAX_DURATION_MS) return@synchronized
         val destination = File(directory, segmentFileName(projectId, 1))
         if (source != destination) {
-            if (destination.exists()) destination.delete()
-            Os.rename(source.absolutePath, destination.absolutePath)
+            // Preserve the existing approved take until the replacement merged file is fully
+            // assembled. A failed recorder start or interrupted merge must never destroy it.
+            val pending = File(directory, destination.name + ".importing")
+            pending.delete()
+            java.io.FileInputStream(source).use { input ->
+                java.io.FileOutputStream(pending).use { output ->
+                    input.copyTo(output)
+                    output.fd.sync()
+                }
+            }
+            require(pending.isFile && pending.length() == source.length()) {
+                "تعذر نسخ التسجيل السابق إلى مساحة المقاطع"
+            }
+            if (destination.exists() && !destination.delete()) {
+                pending.delete()
+                throw IllegalStateException("تعذر تجهيز مقطع التسجيل السابق")
+            }
+            Os.rename(pending.absolutePath, destination.absolutePath)
         }
         writeEntries(directory, projectId, listOf(Entry(destination.name, duration)))
     }
