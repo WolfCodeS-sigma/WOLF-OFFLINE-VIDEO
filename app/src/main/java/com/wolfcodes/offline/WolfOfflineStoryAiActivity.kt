@@ -572,12 +572,14 @@ class WolfOfflineStoryAiActivity : Activity() {
                         setBusy(false, "اكتمل فحص الأصالة. راجع النتائج والأمثلة وحدود الفحص قبل الاعتماد.")
                     } else {
                         lastOriginalityReport = null
-                lastOriginalityTextRevision = -1L
+                        lastOriginalityTextRevision = -1L
+                        lastOriginalitySelection = emptySet()
                         setBusy(false, "تغير النص أثناء الفحص؛ أعد تشغيل مراجعة الأصالة على النسخة الحالية.")
                     }
                 }.onFailure {
                     lastOriginalityReport = null
-                lastOriginalityTextRevision = -1L
+                    lastOriginalityTextRevision = -1L
+                    lastOriginalitySelection = emptySet()
                     originalityView.text = "تعذر إكمال فحص الأصالة: ${it.message}"
                     setBusy(false, "تعذر إكمال مراجعة الأصالة.")
                 }
