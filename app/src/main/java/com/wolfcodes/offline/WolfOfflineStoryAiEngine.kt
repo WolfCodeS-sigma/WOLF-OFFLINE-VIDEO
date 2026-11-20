@@ -77,7 +77,7 @@ object WolfOfflineStoryAiEngine {
                 maxOutputToken = 1536
             ))
             return try {
-                chat.sendMessage(prompt).toString().trim().also {
+                chat.sendMessage(prompt).text.trim().also {
                     require(it.isNotBlank()) { "النموذج لم يُنتج نصًا" }
                 }
             } finally {
