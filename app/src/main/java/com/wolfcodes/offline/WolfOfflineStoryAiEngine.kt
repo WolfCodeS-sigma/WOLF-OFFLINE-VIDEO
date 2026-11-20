@@ -111,22 +111,22 @@ object WolfOfflineStoryAiEngine {
         validateBrief(v)
         return """
             اكتب مخطط رواية رعب عربية أصلية قابلة للتنفيذ على فصول.
-            العنوان: §{v.title}
-            الفكرة: §{v.premise}
-            النوع: §{v.genre}
-            المكان والزمن: §{v.setting}
-            الشخصية المحورية: §{v.protagonist}
-            النبرة: §{v.tone}
-            شكل النهاية: §{v.ending}
-            الطول المستهدف: §{v.targetWords} كلمة تقريبًا.
-            عدد الفصول: §{chapterCount(v.targetWords)}.
+            العنوان: ${v.title}
+            الفكرة: ${v.premise}
+            النوع: ${v.genre}
+            المكان والزمن: ${v.setting}
+            الشخصية المحورية: ${v.protagonist}
+            النبرة: ${v.tone}
+            شكل النهاية: ${v.ending}
+            الطول المستهدف: ${v.targetWords} كلمة تقريبًا.
+            عدد الفصول: ${chapterCount(v.targetWords)}.
             ابدأ بخطاف قوي وتصاعد تدريجي وأحداث منطقية وأسرار تكشف تدريجيًا ونهاية مؤثرة.
             لا تكتب الرواية الآن. أخرج JSON صالحًا فقط بالمفاتيح:
             logline, characters, secrets, ending, continuity_summary, chapter_titles (array).
-            يجب أن يحتوي chapter_titles على §{chapterCount(v.targetWords)} عنوانًا بالضبط.
+            يجب أن يحتوي chapter_titles على ${chapterCount(v.targetWords)} عنوانًا بالضبط.
             اكتب عملًا أصليًا ولا تنسخ أي مرجع.
             المراجع السياقية:
-            §{refs.joinToString("\n---\n").ifBlank { "لا توجد مراجع مختارة." }}
+            ${refs.joinToString("\n---\n").ifBlank { "لا توجد مراجع مختارة." }}
         """.trimIndent()
     }
 
@@ -154,22 +154,22 @@ object WolfOfflineStoryAiEngine {
         require(i in s.plan.chapterTitles.indices) { "اكتملت فصول الرواية" }
         val target = (s.brief.targetWords / s.plan.chapterTitles.size).coerceAtLeast(500)
         return """
-            اكتب الفصل §{i + 1} من §{s.plan.chapterTitles.size} بعنوان:
-            §{s.plan.chapterTitles[i]}
+            اكتب الفصل ${i + 1} من ${s.plan.chapterTitles.size} بعنوان:
+            ${s.plan.chapterTitles[i]}
             اكتب بالعربية الفصحى السلسة وحوار طبيعي مميز لكل شخصية.
-            الفكرة: §{s.brief.premise}
-            النوع والنبرة: §{s.brief.genre} — §{s.brief.tone}
-            المكان: §{s.brief.setting}
-            الشخصيات: §{s.plan.characters}
-            الأسرار وقواعد العالم: §{s.plan.secrets}
-            مسار النهاية: §{s.plan.ending}
-            ملخص الاستمرارية: §{s.continuitySummary.take(3_000)}
+            الفكرة: ${s.brief.premise}
+            النوع والنبرة: ${s.brief.genre} — ${s.brief.tone}
+            المكان: ${s.brief.setting}
+            الشخصيات: ${s.plan.characters}
+            الأسرار وقواعد العالم: ${s.plan.secrets}
+            مسار النهاية: ${s.plan.ending}
+            ملخص الاستمرارية: ${s.continuitySummary.take(3_000)}
             آخر النص السابق (للاتساق فقط، لا تعِد كتابته):
-            §{s.chapters.lastOrNull()?.takeLast(1_500).orEmpty()}
+            ${s.chapters.lastOrNull()?.takeLast(1_500).orEmpty()}
             مراجع سياقية ممنوع النسخ منها:
-            §{refs.joinToString("\n---\n").ifBlank { "لا توجد مراجع." }}
+            ${refs.joinToString("\n---\n").ifBlank { "لا توجد مراجع." }}
             اكتب هذا الفصل فقط بمشاهد حية وتفاصيل حسية وتشويق متصاعد.
-            استهدف نحو §{target} كلمة ولا تلخص الأحداث ولا تكتب ملاحظات خارج الرواية.
+            استهدف نحو ${target} كلمة ولا تلخص الأحداث ولا تكتب ملاحظات خارج الرواية.
         """.trimIndent()
     }
 
@@ -199,9 +199,9 @@ object WolfOfflineStoryAiEngine {
         require(s.id.matches(Regex("[A-Za-z0-9-]{8,64}")))
         require(s.chapters.size <= s.plan.chapterTitles.size && s.chapters.all { it.length <= 100_000 })
         if (!root.exists() && !root.mkdirs()) error("تعذر إنشاء مجلد جلسات التأليف")
-        val target = File(root, "§{s.id}.json")
-        val pending = File(root, "§{s.id}.json.pending")
-        val backup = File(root, "§{s.id}.json.backup")
+        val target = File(root, "${s.id}.json")
+        val pending = File(root, "${s.id}.json.pending")
+        val backup = File(root, "${s.id}.json.backup")
         val json = JSONObject().put("id", s.id).put("brief", briefJson(s.brief))
             .put("plan", planJson(s.plan)).put("chapters", JSONArray(s.chapters))
             .put("continuitySummary", s.continuitySummary).put("approved", s.approved)
