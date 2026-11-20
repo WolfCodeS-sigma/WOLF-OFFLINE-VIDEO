@@ -13,6 +13,7 @@ object WolfOfflineStoryAiEngine {
     const val MIN_TARGET_WORDS = 500
     const val MAX_TARGET_WORDS = 50_000
     const val MAX_CHAPTERS = 64
+    const val MAX_STORY_CHARS = 4_000_000
     const val MODEL_EXTENSION = ".litertlm"
     const val MODEL_DIRECTORY = "wolf_story_ai"
     const val SESSION_DIRECTORY = "wolf_story_ai/sessions"
@@ -104,10 +105,15 @@ object WolfOfflineStoryAiEngine {
     }
 
     fun validateBrief(v: Brief) {
-        require(v.title.isNotBlank()) { "اكتب عنوان القصة" }
-        require(v.premise.trim().length >= 20) { "اكتب فكرة أوضح للقصة (20 حرفًا على الأقل)" }
+        require(v.title.isNotBlank() && v.title.length <= 180) { "العنوان مطلوب وبحد أقصى 180 حرفًا" }
+        require(v.premise.trim().length in 20..4_000) { "الفكرة يجب أن تكون بين 20 و4,000 حرف" }
         require(v.targetWords in MIN_TARGET_WORDS..MAX_TARGET_WORDS) { "عدد الكلمات يجب أن يكون بين 500 و50,000" }
-        require(v.genre.isNotBlank() && v.tone.isNotBlank()) { "حدد نوع الرعب والنبرة" }
+        require(v.genre.isNotBlank() && v.genre.length <= 80 && v.tone.isNotBlank() && v.tone.length <= 500) {
+            "نوع الرعب بحد أقصى 80 حرفًا والنبرة بحد أقصى 500 حرف"
+        }
+        require(v.setting.length <= 500 && v.protagonist.length <= 500 && v.ending.length <= 500) {
+            "المكان والشخصية والنهاية يجب ألا يتجاوز كل منها 500 حرف"
+        }
     }
 
     fun buildPlanPrompt(v: Brief, refs: List<String>): String {
@@ -144,10 +150,11 @@ object WolfOfflineStoryAiEngine {
             ?.map { it.trim().take(120) }?.filter { it.isNotBlank() }.orEmpty()
         val safeTitles = if (titles.size == expected) titles else (1..expected).map { "الفصل $it" }
         return Plan(
-            json?.optString("logline").orEmpty().ifBlank { raw.take(2_000) },
-            json?.optString("characters").orEmpty(), json?.optString("secrets").orEmpty(),
-            json?.optString("ending").orEmpty().ifBlank { brief.ending },
-            json?.optString("continuity_summary").orEmpty().ifBlank { raw.take(2_000) },
+            json?.optString("logline").orEmpty().take(2_000).ifBlank { raw.take(2_000) },
+            json?.optString("characters").orEmpty().take(6_000),
+            json?.optString("secrets").orEmpty().take(6_000),
+            json?.optString("ending").orEmpty().take(4_000).ifBlank { brief.ending },
+            json?.optString("continuity_summary").orEmpty().take(2_000).ifBlank { raw.take(2_000) },
             safeTitles, raw.take(30_000)
         )
     }
@@ -190,6 +197,9 @@ object WolfOfflineStoryAiEngine {
         val clean = chapter.trim()
         require(clean.length >= 80) { "الفصل الناتج قصير جدًا؛ أعد المحاولة قبل حفظه" }
         require(clean.length <= 100_000) { "الفصل تجاوز الحد الآمن للحفظ" }
+        require(s.chapters.sumOf { it.length.toLong() } + clean.length <= MAX_STORY_CHARS) {
+            "وصل النص إلى الحد المحلي الآمن البالغ 4 ملايين حرف"
+        }
         return s.copy(
             chapters = s.chapters + clean,
             continuitySummary = updateContinuity(s.continuitySummary, clean),
@@ -201,7 +211,13 @@ object WolfOfflineStoryAiEngine {
 
     fun saveSession(root: File, s: Session) {
         require(s.id.matches(Regex("[A-Za-z0-9-]{8,64}")))
+        validateBrief(s.brief)
+        require(s.plan.chapterTitles.size == chapterCount(s.brief.targetWords))
+        require(s.plan.chapterTitles.all { it.isNotBlank() && it.length <= 120 })
         require(s.chapters.size <= s.plan.chapterTitles.size && s.chapters.all { it.length <= 100_000 })
+        require(s.chapters.sumOf { it.length.toLong() } <= MAX_STORY_CHARS)
+        require(s.finalText.length <= MAX_STORY_CHARS) { "النص النهائي يتجاوز الحد المحلي الآمن البالغ 4 ملايين حرف" }
+        require(s.continuitySummary.length <= 3_000)
         if (!root.exists() && !root.mkdirs()) error("تعذر إنشاء مجلد جلسات التأليف")
         val target = File(root, "${s.id}.json")
         val pending = File(root, "${s.id}.json.pending")
@@ -266,6 +282,8 @@ object WolfOfflineStoryAiEngine {
         require(titles.isNotEmpty() && titles.size <= MAX_CHAPTERS)
         val chapters = (0 until a.length()).map { a.getString(it) }
         require(chapters.size <= titles.size && chapters.all { it.length <= 100_000 })
+        require(chapters.sumOf { it.length.toLong() } <= MAX_STORY_CHARS)
+        require(j.optString("finalText").length <= MAX_STORY_CHARS)
         val plan = Plan(p.optString("logline"), p.optString("characters"), p.optString("secrets"),
             p.optString("ending"), p.optString("continuitySummary"), titles, p.optString("raw"))
         return Session(j.getString("id"), brief, plan, chapters, j.optString("continuitySummary"),
