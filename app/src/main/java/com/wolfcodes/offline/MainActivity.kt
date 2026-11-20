@@ -91,9 +91,24 @@ class MainActivity : Activity() {
         }
         root.addView(ratioRow)
 
-        root.addView(label("مدة الفيلم بالثواني (5 إلى 1800)"))
-        durationField = field("مثال: 300").apply { setText("60") }
+        root.addView(label("مدة الفيلم — مدد جاهزة من 5 إلى 30 دقيقة، أو مدة مخصصة بالثواني"))
+        durationField = field("المدة بالثواني — مثال: 300").apply { setText("300") }
         root.addView(durationField)
+        WolfFilmProductionCoordinator.durationPresetsMinutes.chunked(3).forEach { minutesRow ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            minutesRow.forEach { minutes ->
+                val choice = button("$minutes دقائق")
+                row.addView(
+                    choice,
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                )
+                choice.setOnClickListener {
+                    durationField.setText((minutes * 60).toString())
+                    status.text = "تم اختيار مدة فيلم $minutes دقائق"
+                }
+            }
+            root.addView(row)
+        }
 
         introToggle = checkBox("إضافة مقدمة بصمة الذئب السينمائية", true)
         watermarkToggle = checkBox("إضافة العلامة المائية WOLF CODE S", true)
@@ -205,7 +220,7 @@ class MainActivity : Activity() {
         require(title.isNotBlank()) { "اكتب اسم الفيلم" }
         require(story.length >= 20) { "اكتب قصة أطول قليلًا حتى يمكن تقسيمها إلى مشاهد" }
         require(story.length <= 60000) { "القصة أطول من الحد المدعوم (60,000 حرف)" }
-        require(duration in 5..1800) { "المدة يجب أن تكون بين 5 ثوانٍ و30 دقيقة" }
+        require(duration in 5..1800) { "المدة المخصصة يجب أن تكون بين 5 ثوانٍ و30 دقيقة" }
 
         val existing = workingProject
         val storyChanged = existing != null && existing.story != story
@@ -727,12 +742,12 @@ class MainActivity : Activity() {
                     onSceneProgress = { current, total ->
                         runOnUiThread {
                             progress.progress = (current * 95 / total.coerceAtLeast(1)).coerceIn(0, 95)
-                            status.text = "إنتاج المشهد $current من $total"
+                            status.text = "تقدم الإنتاج $current من $total"
                         }
                     },
                     onChapterProgress = { current, total, message ->
                         runOnUiThread {
-                            progress.progress = (current * 95 / total.coerceAtLeast(1)).coerceIn(0, 95)
+                            // Shot progress is more granular and monotonic; chapter callbacks update text only.
                             status.text = "الفصل $current من $total — $message"
                         }
                     }

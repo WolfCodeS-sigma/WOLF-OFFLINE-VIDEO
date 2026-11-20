@@ -25,11 +25,11 @@ class OfflineStorageEstimateTest {
     }
 
     @Test
-    fun longFilmEstimateIncludesThePersistentChapterIntermediates() {
+    fun longFilmEstimateIncludesShotChapterAndExportIntermediates() {
         val belowChapterLimit = OfflineProductionEngine.estimatePeakStorageBytes(300, false)
         val aboveChapterLimit = OfflineProductionEngine.estimatePeakStorageBytes(301, false)
         val expectedDifference =
-            (301L * 1_600_000L / 8L) * 3L - (300L * 1_600_000L / 8L) * 2L
+            (301L * 1_600_000L / 8L) * 4L - (300L * 1_600_000L / 8L) * 2L
         assertEquals(expectedDifference, aboveChapterLimit - belowChapterLimit)
     }
 
