@@ -576,7 +576,8 @@ object OfflineProductionEngine {
                 val baseShotFrames = sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE
                 val extraShotFrames = sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE
                 val shotSlice = shotSlices?.getOrNull(s)
-                var sceneFrameOffset = shotSlice?.startFrame ?: 0
+                // Typography cues are clipped to this slice, so their frame clock restarts here.
+                var sceneFrameOffset = 0
                 val shotIndices = if (shotSlice != null) {
                     listOf(shotSlice.shotIndex)
                 } else {
