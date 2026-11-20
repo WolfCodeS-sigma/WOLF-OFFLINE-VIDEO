@@ -41,6 +41,7 @@ class MainActivity : Activity() {
     private val selectedImageUris = mutableListOf<String>()
     private var pendingImageSlot: Int? = null
     private var producing = false
+    private var voiceMergePending = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -408,6 +409,14 @@ class MainActivity : Activity() {
     }
 
     private fun startVoiceRecording() {
+        if (producing || voiceMergePending) {
+            status.text = "انتظر انتهاء العملية الحالية قبل بدء مقطع صوتي جديد"
+            return
+        }
+        if (voiceRecorder?.isRecording == true) {
+            status.text = "التسجيل يعمل بالفعل؛ أوقف المقطع الحالي أولًا"
+            return
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 741)
             return
@@ -441,22 +450,33 @@ class MainActivity : Activity() {
             }
 
             override fun onSaved(file: File, durationMs: Long, automaticStop: Boolean) {
-                runOnUiThread {
-                    runCatching {
+                voiceMergePending = true
+                runOnUiThread { status.text = "تم حفظ المقطع؛ جارٍ دمجه مع المقاطع السابقة..." }
+                worker.execute {
+                    val mergedResult = runCatching {
                         val merged = WolfVoiceSegmentStore.appendAndMerge(
                             this@MainActivity, project.id, file, durationMs
                         )
                         val savedTake = WolfStoryVoiceStore.saveRecording(
                             this@MainActivity, project.id, merged.file, merged.durationMs
                         )
-                        voiceUri = Uri.fromFile(merged.file).toString()
-                        workingProject = project.copy(audioUri = voiceUri)
-                        WolfProjectStore.save(this@MainActivity, workingProject!!)
-                        status.text = "تم حفظ الجزء ${merged.segmentCount} ودمجه مع التسجيل السابق — " +
-                            (savedTake.audioDurationMs / 1000) + " ثانية إجمالًا. استمع إليه ثم اعتمده."
-                        refreshVoiceStatus()
-                        refreshProjectList()
-                    }.onFailure { showError(it) }
+                        merged to savedTake
+                    }
+                    runOnUiThread {
+                        voiceMergePending = false
+                        mergedResult.onSuccess { (merged, savedTake) ->
+                            voiceUri = Uri.fromFile(merged.file).toString()
+                            workingProject = project.copy(audioUri = voiceUri)
+                            WolfProjectStore.save(this@MainActivity, workingProject!!)
+                            status.text = "تم حفظ الجزء ${merged.segmentCount} ودمجه مع التسجيل السابق — " +
+                                (savedTake.audioDurationMs / 1000) + " ثانية إجمالًا. استمع إليه ثم اعتمده."
+                            refreshVoiceStatus()
+                            refreshProjectList()
+                        }.onFailure {
+                            showError(it)
+                            status.text = "حُفظ المقطع محليًا؛ تعذر دمجه الآن. افتح المشروع لاستعادة المقاطع أو أعد المحاولة."
+                        }
+                    }
                 }
             }
 
@@ -472,6 +492,10 @@ class MainActivity : Activity() {
     }
 
     private fun approveVoiceTake() {
+        if (voiceMergePending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف التسجيل وانتظر اكتمال دمج المقاطع قبل الاعتماد"
+            return
+        }
         val project = try {
             currentProject().also { WolfProjectStore.save(this, it) }
         } catch (error: Exception) {
@@ -501,6 +525,10 @@ class MainActivity : Activity() {
     }
 
     private fun requestVoiceRepeat() {
+        if (voiceMergePending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف التسجيل وانتظر اكتمال دمج المقاطع أولًا"
+            return
+        }
         val project = try {
             currentProject().also { WolfProjectStore.save(this, it) }
         } catch (error: Exception) {
@@ -716,6 +744,10 @@ class MainActivity : Activity() {
     }
 
     private fun produce() {
+        if (voiceMergePending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف تسجيل الراوي وانتظر اكتمال حفظ المقاطع قبل إنتاج الفيلم"
+            return
+        }
         if (producing) {
             status.text = "يوجد إنتاج قيد التشغيل بالفعل"
             return
