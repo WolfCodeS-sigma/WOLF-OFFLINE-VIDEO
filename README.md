@@ -10,6 +10,7 @@ WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected
 
 - `MainActivity.kt`: independent offline project and production interface.
 - `WolfProjectStore.kt`: durable local project records with atomic file replacement.
+- `WolfHorrorKnowledgeLibrary.kt` and `WolfHorrorKnowledgeLibraryActivity.kt`: private on-device TXT library, categorized/foldered/tagged entries, per-entry local search indexes, source metadata, duplicate detection, original-text preservation, and reference opt-out.
 - `StoryDirectorEngine.kt` and `OfflineSupportEngines.kt`: deterministic story segmentation, shot planning, pacing, and local visual helpers.
 - `WolfSceneArtEngine.kt`, `WolfSceneAssetStore.kt`, and `WolfProceduralMotionEngine.kt`: scene artwork, optional image slots, procedural character/environment motion, fog, particles, rain, spectral silhouettes, and visual effects.
 - `OfflineProductionEngine.kt`: local frame rendering, H.264 MP4 encoding, audio integration, long-film chapter handling, checkpoint support, recovery paths, and export quality inspection.
@@ -33,7 +34,7 @@ The continuous-integration workflow is intentionally limited to Android lint and
 
 ## Privacy and connectivity
 
-Project records, narration recordings, rendering, and exported media are stored locally. The offline production path does not require an account, API key, paid service, remote controller, or cloud backup. User-selected image URIs are retained as local document references.
+Project records, narration recordings, horror knowledge TXT entries, their indexes, rendering, and exported media are stored locally. The offline production path does not require an account, API key, paid service, remote controller, or cloud backup. User-selected image URIs are retained as local document references.
 
 ## Output
 
