@@ -82,7 +82,7 @@ class WolfHorrorKnowledgeLibraryTest {
     }
 
     @Test
-    fun metadataOnlyEditReindexesFieldsWithoutReadingOrChangingStory() {
+    fun metadataOnlyEditUpdatesSearchableFieldsWithoutChangingStory() {
         val text = "A witness saw a pale figure standing beside the station."
         val created = WolfHorrorKnowledgeLibrary.createFromText(root, draft("الشاهد"), text)
         val changed = WolfHorrorKnowledgeLibrary.updateMetadata(
@@ -95,6 +95,7 @@ class WolfHorrorKnowledgeLibraryTest {
         assertEquals(text, WolfHorrorKnowledgeLibrary.readContent(root, created.entry.id))
         assertEquals(text, WolfHorrorKnowledgeLibrary.readOriginal(root, created.entry.id))
         assertTrue(WolfHorrorKnowledgeLibrary.search(root, "platform").any { it.id == changed.id })
+        assertTrue(WolfHorrorKnowledgeLibrary.search(root, "الشاهد").none { it.id == changed.id })
         assertTrue(WolfHorrorKnowledgeLibrary.search(root, "station").any { it.id == changed.id })
         assertEquals("شهادات", changed.folder)
     }
