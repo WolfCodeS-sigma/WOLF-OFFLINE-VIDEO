@@ -280,13 +280,16 @@ object WolfStoryOriginalityReviewEngine {
                 )
                 continue
             }
-            checkedSourceVersions += reference.source
-            if (!seenContentFingerprints.add(actualFingerprint)) continue
+            if (!seenContentFingerprints.add(actualFingerprint)) {
+                checkedSourceVersions += reference.source
+                continue
+            }
             val remainingWords = MAX_TOTAL_REFERENCE_WORDS - referenceWordCount
             if (remainingWords <= 0) {
                 sourceLimitReached = true
                 break
             }
+            checkedSourceVersions += reference.source
 
             val limitedText = reference.text.take(MAX_REFERENCE_CHARS)
             val sourceTokenized = tokenize(limitedText, minOf(MAX_REVIEW_WORDS, remainingWords))
