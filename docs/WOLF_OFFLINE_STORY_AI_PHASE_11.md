@@ -7,7 +7,7 @@ A standalone Arabic horror-story authoring studio using an on-device language mo
 - Uses Google's LiteRT-LM Android Kotlin runtime, pinned to version 0.18.0. The project Kotlin Gradle plugin is aligned to 2.3.21 because this runtime publishes Kotlin 2.4 metadata; the selected compiler/runtime combination is checked by CI.
 - The user imports a compatible .litertlm model file. The app copies it to app-private storage; model weights are never bundled in the APK and are never downloaded by the app.
 - Inference is on-device. No Internet permission, API key, account, cloud endpoint, paid API, remote model call, or background service is added.
-- Engine initialization and generation run on a single background executor. One owner controls the engine and conversation and closes them in dependency order.
+- Engine initialization and generation run on a single background executor. Each prompt uses a fresh conversation that is closed immediately after the response, preventing multi-chapter context accumulation; the single owner closes the engine after all requests.
 - CPU is the default backend. GPU/NPU are not forced because hardware support varies.
 - Renaming a GGUF or another model file to .litertlm does not convert it. Only a genuinely compatible LiteRT-LM model can load.
 
@@ -20,7 +20,7 @@ A standalone Arabic horror-story authoring studio using an on-device language mo
 6. Only the approved final text is passed to Phase 10's saveFinalAppAuthoredStory API. The existing library auto-save preference is respected.
 
 ## Horror coverage and originality
-The UI supports psychological horror, supernatural horror, mystery/investigation, hallucination/perception, realistic personal-account style, and folklore. Prompts require original writing, gradual escalation, coherent motivations, a planned ending and no copying from references. Reference retrieval uses only Phase 10 entries whose reference opt-in is enabled; up to three contextual excerpts are supplied. This is lexical retrieval, not embedding search. It does not guarantee plagiarism detection or factual verification. Personal accounts and fiction must not be presented as verified facts.
+The UI supports psychological horror, supernatural horror, mystery/investigation, hallucination/perception, realistic personal-account style, and folklore. Prompts require original writing, gradual escalation, coherent motivations, a planned ending and no copying from references. Reference retrieval uses only Phase 10 entries whose reference opt-in is enabled. Users can explicitly select up to three entries, or leave the selection empty for automatic lexical retrieval; up to three contextual excerpts are supplied. This is lexical retrieval, not embedding search. It does not guarantee plagiarism detection or factual verification. Personal accounts and fiction must not be presented as verified facts.
 
 ## Long-story behavior and resource limits
 - The target is divided into roughly 800-word chapters (1–63 chapters across the supported range).
