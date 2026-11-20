@@ -4,7 +4,7 @@
 Adds a deterministic, offline character-and-prop animation pass for uploaded-image shots. The pass runs after the existing scene backend and before horror typography and the watermark.
 
 ## Motion channels
-- A lightweight articulated figure/ghost rig with independent head/body and arm motion.
+- A lightweight figure/ghost rig with body sway/bob and independently swinging arms.
 - Door-panel hinge rotation, curtain sway, and wind-driven branch movement.
 - A restrained moving ground shadow.
 - Caption cues select only the relevant overlays; ordinary captions do not receive invented props.
