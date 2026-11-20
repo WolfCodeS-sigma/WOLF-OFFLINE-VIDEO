@@ -322,32 +322,38 @@ class MainActivity : Activity() {
         val title = titleField.text.toString().trim().ifBlank {
             story.lineSequence().firstOrNull { it.isNotBlank() }?.take(48) ?: "قصة مستخدم"
         }
-        runCatching {
-            WolfHorrorKnowledgeLibrary.createFromText(
-                File(filesDir, "wolf_horror_knowledge_library"),
-                WolfHorrorKnowledgeLibrary.Draft(
-                    title = title,
-                    category = "قصص المستخدم",
-                    folder = "قصصي المضافة",
-                    tags = listOf("من محرر الفيلم"),
-                    sourceType = WolfHorrorKnowledgeLibrary.SOURCE_USER_SUBMITTED,
-                    sourceLabel = "أضيفت من محرر WOLF OFFLINE VIDEO",
-                    includeInStoryReferences = true
-                ),
-                story
-            )
-        }.onSuccess { result ->
-            status.text = if (result.duplicateOfExisting) {
-                "هذه القصة موجودة بالفعل في المكتبة: " + result.entry.title
-            } else {
-                "تم حفظ نسخة مستقلة من القصة داخل WOLF HORROR KNOWLEDGE LIBRARY"
+        status.text = "جارٍ حفظ نسخة من القصة في مكتبة المعرفة..."
+        worker.execute {
+            val result = runCatching {
+                WolfHorrorKnowledgeLibrary.createFromText(
+                    File(filesDir, "wolf_horror_knowledge_library"),
+                    WolfHorrorKnowledgeLibrary.Draft(
+                        title = title,
+                        category = "قصص المستخدم",
+                        folder = "قصصي المضافة",
+                        tags = listOf("من محرر الفيلم"),
+                        sourceType = WolfHorrorKnowledgeLibrary.SOURCE_USER_SUBMITTED,
+                        sourceLabel = "أضيفت من محرر WOLF OFFLINE VIDEO",
+                        includeInStoryReferences = true
+                    ),
+                    story
+                )
             }
-            Toast.makeText(
-                this,
-                if (result.duplicateOfExisting) "القصة موجودة بالفعل" else "تمت إضافة القصة إلى المكتبة",
-                Toast.LENGTH_LONG
-            ).show()
-        }.onFailure { showError(it) }
+            runOnUiThread {
+                result.onSuccess { saved ->
+                    status.text = if (saved.duplicateOfExisting) {
+                        "هذه القصة موجودة بالفعل في المكتبة: " + saved.entry.title
+                    } else {
+                        "تم حفظ نسخة مستقلة من القصة داخل WOLF HORROR KNOWLEDGE LIBRARY"
+                    }
+                    Toast.makeText(
+                        this,
+                        if (saved.duplicateOfExisting) "القصة موجودة بالفعل" else "تمت إضافة القصة إلى المكتبة",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }.onFailure { showError(it) }
+            }
+        }
     }
 
     private fun saveProject() {
