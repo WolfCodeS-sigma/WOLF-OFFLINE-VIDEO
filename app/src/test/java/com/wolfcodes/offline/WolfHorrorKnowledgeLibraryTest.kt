@@ -1,5 +1,6 @@
 package com.wolfcodes.offline
 
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.Reader
 import java.io.StringReader
@@ -7,7 +8,6 @@ import java.nio.file.Files
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -144,6 +144,38 @@ class WolfHorrorKnowledgeLibraryTest {
         assertTrue(references.any { it.id == allowed.entry.id })
         assertFalse(references.any { it.id == excluded.entry.id })
         assertTrue(WolfHorrorKnowledgeLibrary.search(root, "tunnel").any { it.id == excluded.entry.id })
+    }
+
+    @Test
+    fun explicitReferenceSelectionSupportsSubsetAndAllPermittedEntries() {
+        val first = WolfHorrorKnowledgeLibrary.createFromText(
+            root, draft("مرجع أول", include = true).copy(relatedStories = listOf("مرجع ثانٍ")),
+            "A witness heard footsteps in the attic."
+        )
+        val second = WolfHorrorKnowledgeLibrary.createFromText(
+            root, draft("مرجع ثانٍ", include = true), "A locked room contained a wet footprint."
+        )
+        WolfHorrorKnowledgeLibrary.createFromText(
+            root, draft("مستبعد", include = false), "The basement door opened by itself."
+        )
+
+        val all = WolfHorrorKnowledgeLibrary.selectedStoryReferences(root)
+        val selected = WolfHorrorKnowledgeLibrary.selectedStoryReferences(root, setOf(second.entry.id))
+        assertEquals(2, all.size)
+        assertEquals(listOf(second.entry.id), selected.map { it.id })
+        assertEquals(listOf("مرجع ثانٍ"), first.entry.relatedStories)
+    }
+
+    @Test
+    fun invalidUtf8ImportIsRejectedWithoutCreatingAnEntry() {
+        val invalid = ByteArrayInputStream(byteArrayOf(0xC3.toByte(), 0x28))
+        val reader = WolfHorrorKnowledgeLibrary.strictUtf8Reader(invalid)
+        runCatching {
+            WolfHorrorKnowledgeLibrary.create(root, draft("ترميز غير صالح"), reader, "invalid.txt")
+        }.onSuccess { throw AssertionError("Invalid UTF-8 must be rejected") }
+
+        assertTrue(WolfHorrorKnowledgeLibrary.list(root).isEmpty())
+        assertTrue(File(root, "entries").listFiles()?.none { it.name.startsWith(".staging-") } != false)
     }
 
     @Test
