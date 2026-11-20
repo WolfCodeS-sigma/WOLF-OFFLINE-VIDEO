@@ -52,7 +52,8 @@ object WolfAudioMixer {
         maxDurationUs: Long,
         narrationGain: Double = 0.92,
         effectsGain: Double = 0.30,
-        narrationOffsetUs: Long = 0L
+        narrationOffsetUs: Long = 0L,
+        narrationLimitUs: Long? = null
     ): File {
         require(narrationUri != null || effectsFile != null) { "لا يوجد مصدر صوت للدمج" }
         require(narrationOffsetUs >= 0L && narrationOffsetUs < maxDurationUs.coerceAtLeast(1L)) {
@@ -69,7 +70,10 @@ object WolfAudioMixer {
         var success = false
         try {
             if (narrationUri != null) {
-                decodeToPcm(context, narrationUri, null, narrationPcm, maxDurationUs, narrationOffsetUs)
+                decodeToPcm(
+                    context, narrationUri, null, narrationPcm, maxDurationUs,
+                    narrationOffsetUs, narrationLimitUs ?: maxDurationUs
+                )
             } else {
                 narrationPcm.writeBytes(ByteArray(0))
             }
@@ -97,7 +101,8 @@ object WolfAudioMixer {
         sourceFile: File?,
         output: File,
         maxDurationUs: Long,
-        startOffsetUs: Long = 0L
+        startOffsetUs: Long = 0L,
+        sourceDurationLimitUs: Long = maxDurationUs
     ) {
         val extractor = MediaExtractor()
         var descriptor: ParcelFileDescriptor? = null
@@ -151,7 +156,7 @@ object WolfAudioMixer {
                                 ?: throw IllegalStateException("تعذر تجهيز مدخل فك ترميز الصوت")
                             input.clear()
                             val pts = extractor.sampleTime
-                            val size = if (pts >= 0L && pts < maxDurationUs) extractor.readSampleData(input, 0) else -1
+                            val size = if (pts >= 0L && pts < sourceDurationLimitUs) extractor.readSampleData(input, 0) else -1
                             if (size < 0) {
                                 decoder.queueInputBuffer(inputIndex, 0, 0, lastInputPts, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                                 inputEnded = true
