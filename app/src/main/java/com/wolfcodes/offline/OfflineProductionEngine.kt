@@ -105,10 +105,12 @@ object OfflineProductionEngine {
             1, WolfLongFilmEngine.DEFAULT_CHAPTER_SECONDS
         )
         val chapterPlans = if (totalVideoSeconds > safeChapterDuration) {
-            WolfLongFilmEngine.planChapters(
-                framesPerScene, fps, introFrames,
-                maxChapterSeconds = safeChapterDuration
-            )
+            WolfFilmProductionCoordinator.createPlan(
+                framesPerScene = framesPerScene,
+                framesPerSecond = fps,
+                introFrames = introFrames,
+                chapterSeconds = safeChapterDuration
+            ).chapters
         } else emptyList()
         val narrationLimitUs = if (useNarrationTiming) {
             (audioDurationMs ?: 1000L).coerceIn(1000L, 1_800_000L) * 1000L
@@ -140,6 +142,7 @@ object OfflineProductionEngine {
                 story, framesPerScene, fps, w, h, introFrames, enableHorrorTypography,
                 listOf(
                     includeWatermark.toString(),
+                    WolfFilmProductionCoordinator.PLAN_VERSION,
                     "depth-segmentation-v${WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION}",
                     audioUri?.toString().orEmpty(),
                     sceneShotUris.flatten().joinToString("|"),
@@ -396,7 +399,8 @@ object OfflineProductionEngine {
                             totalSlices
                         )
                     },
-                    bitRate
+                    bitRate,
+                    shotSlices = chapter.slices
                 )
                 WolfLongFilmCheckpointStore.markCompleted(
                     context, projectId, chapter.number, chapterFile
@@ -419,11 +423,21 @@ object OfflineProductionEngine {
         if (chapterFiles.size != chapters.size) {
             throw IllegalStateException("بعض فصول الفيلم غير متوفرة للتجميع")
         }
-        mergeChapterVideos(chapterFiles, outputFile, fps)
+        mergeChapterVideos(
+            chapterFiles,
+            outputFile,
+            fps,
+            chapters.sumOf { it.totalFrameCount.toLong() }
+        )
     }
 
     /** Repackages chapter H.264 streams into one continuous video timeline without re-encoding. */
-    private fun mergeChapterVideos(chapters: List<File>, outputFile: File, fps: Int) {
+    private fun mergeChapterVideos(
+        chapters: List<File>,
+        outputFile: File,
+        fps: Int,
+        expectedFrameCount: Long
+    ) {
         require(chapters.isNotEmpty()) { "لا توجد فصول للتجميع" }
         outputFile.parentFile?.mkdirs()
         outputFile.delete()
@@ -491,6 +505,11 @@ object OfflineProductionEngine {
                 }
             }
             if (globalFrameIndex <= 0L) throw IllegalStateException("لا توجد إطارات فيديو لدمجها")
+            if (globalFrameIndex != expectedFrameCount) {
+                throw IllegalStateException(
+                    "عدد إطارات الفصول لا يطابق الخطة؛ المتوقع $expectedFrameCount إطارًا وتم العثور على $globalFrameIndex"
+                )
+            }
             muxer.stop()
             muxerStarted = false
             succeeded = true
@@ -519,7 +538,8 @@ object OfflineProductionEngine {
     private fun encode(context: Context, file: File, scenes: List<String>, w: Int, h: Int, fps: Int,
         framesPerScene: List<Int>, sceneImageUris: List<List<Uri?>>, includeWatermark: Boolean,
         typographyCues: List<WolfHorrorTypographyEngine.Cue?>,
-        introSeconds: Int, onSceneProgress: ((Int, Int) -> Unit)?, bitRate: Int) {
+        introSeconds: Int, onSceneProgress: ((Int, Int) -> Unit)?, bitRate: Int,
+        shotSlices: List<WolfLongFilmEngine.SceneSlice>? = null) {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, 0x7F000789)
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate.coerceIn(400_000, 2_500_000))
@@ -555,9 +575,19 @@ object OfflineProductionEngine {
                 val sceneFrames = framesPerScene[s]
                 val baseShotFrames = sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE
                 val extraShotFrames = sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE
-                var sceneFrameOffset = 0
-                for (shotIndex in 0 until WolfSceneAssetStore.SHOTS_PER_SCENE) {
-                    val shotFrames = baseShotFrames + if (shotIndex < extraShotFrames) 1 else 0
+                val shotSlice = shotSlices?.getOrNull(s)
+                var sceneFrameOffset = shotSlice?.startFrame ?: 0
+                val shotIndices = if (shotSlice != null) {
+                    listOf(shotSlice.shotIndex)
+                } else {
+                    (0 until WolfSceneAssetStore.SHOTS_PER_SCENE).toList()
+                }
+                for (shotIndex in shotIndices) {
+                    val shotFrames = if (shotSlice != null) {
+                        sceneFrames
+                    } else {
+                        baseShotFrames + if (shotIndex < extraShotFrames) 1 else 0
+                    }
                     val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
@@ -578,7 +608,12 @@ object OfflineProductionEngine {
                     try {
                         for (f in 0 until shotFrames) {
                             if (f % (fps * 5) == 0) WolfResourceGuard.ensureSafeToContinue(context)
-                            val shotProgress = f.toFloat() / max(1, shotFrames - 1)
+                            val shotProgress = if (shotSlice != null) {
+                                (shotSlice.shotStartFrame + f).toFloat() /
+                                    max(1, shotSlice.shotTotalFrames - 1)
+                            } else {
+                                f.toFloat() / max(1, shotFrames - 1)
+                            }
                             draw(
                                 context,
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
