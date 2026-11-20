@@ -356,7 +356,13 @@ object WolfVoiceSegmentStore {
     }
 
     private fun writeManifest(directory: File, projectId: String, json: JSONObject) {
-        writeManifest(directory, projectId, json)
+        val target = manifestFile(directory, projectId)
+        val temporary = File(directory, "$projectId-segments.json.tmp")
+        java.io.FileOutputStream(temporary).use { stream ->
+            stream.write(json.toString().toByteArray(Charsets.UTF_8))
+            stream.fd.sync()
+        }
+        Os.rename(temporary.absolutePath, target.absolutePath)
     }
 
     private fun formatInt(format: MediaFormat, key: String): Int =
