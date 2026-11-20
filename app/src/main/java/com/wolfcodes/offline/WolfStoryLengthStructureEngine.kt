@@ -31,7 +31,8 @@ object WolfStoryLengthStructureEngine {
         val beat: Beat,
         val targetWords: Int,
         val minimumWords: Int,
-        val maximumWords: Int
+        val maximumWords: Int,
+        val compactArc: Boolean = false
     )
 
     data class Report(
@@ -116,7 +117,8 @@ object WolfStoryLengthStructureEngine {
                 beat = beats[index],
                 targetWords = amount,
                 minimumWords = (amount * (1.0 - tolerance)).roundToInt().coerceAtLeast(1),
-                maximumWords = (amount * (1.0 + tolerance)).roundToInt().coerceAtLeast(1)
+                maximumWords = (amount * (1.0 + tolerance)).roundToInt().coerceAtLeast(1),
+                compactArc = chapterTitles.size == 1
             )
         }
     }
@@ -146,7 +148,7 @@ object WolfStoryLengthStructureEngine {
                 appendLine(
                     "الفصل ${it.index + 1} — ${it.title}: ${it.beat.label}؛ " +
                         "هدف ${it.targetWords} كلمة (نطاق ${it.minimumWords}–${it.maximumWords}). " +
-                        it.beat.guidance
+                        if (it.compactArc) compactArcGuidance() else it.beat.guidance
                 )
             }
             appendLine("حافظ على السببية واستمرارية الشخصيات، ومهّد للتحولات قبل كشفها.")
@@ -157,10 +159,13 @@ object WolfStoryLengthStructureEngine {
 
     fun chapterGuidance(target: ChapterTarget): String = buildString {
         appendLine("دور هذا الفصل: ${target.beat.label}.")
-        appendLine(target.beat.guidance)
+        appendLine(if (target.compactArc) compactArcGuidance() else target.beat.guidance)
         appendLine("استهدف ${target.targetWords} كلمة، ضمن ${target.minimumWords}–${target.maximumWords} كلمة تقريبًا.")
         appendLine("لا تلخص الفصل السابق ولا تقفز إلى دور الفصل التالي. اختم بتغير أو سؤال يدفع القارئ للمتابعة.")
     }.trim()
+
+    private fun compactArcGuidance(): String =
+        "في هذا الفصل القصير اجمع بإيجاز بين خطاف مقلق وتأسيس سريع وحدث محفّز وتصاعد وذروة وخاتمة واضحة؛ لا تؤجل الحل ولا تحوّل القصة إلى ملخص جاف."
 
     fun analyzeText(targetWords: Int, text: String, expectedChapters: Int): Report {
         require(targetWords in MIN_TARGET_WORDS..MAX_TARGET_WORDS)
