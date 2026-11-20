@@ -36,7 +36,8 @@ object OfflineProductionEngine {
     ): Long {
         val safeDuration = durationSeconds.coerceIn(1, 1803).toLong()
         val oneVideoCopy = safeDuration * VIDEO_BITRATE_BPS / 8L
-        val videoCopies = if (usesChapteredRendering) 3L else 2L
+        // Shot segments, chapter files, merged intermediate, and final export can overlap.
+        val videoCopies = if (usesChapteredRendering) 4L else 2L
         val audioAllowance = if (hasAudio) safeDuration * CONSERVATIVE_AUDIO_BITRATE_BPS / 8L else 0L
         return oneVideoCopy * videoCopies + audioAllowance + EXPORT_SAFETY_MARGIN_BYTES
     }
