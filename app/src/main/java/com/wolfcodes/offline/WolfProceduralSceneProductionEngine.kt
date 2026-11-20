@@ -1,7 +1,6 @@
 package com.wolfcodes.offline
 
 import android.graphics.Canvas
-import kotlin.math.abs
 
 /**
  * Primary self-contained visual production path for scenes without supplied images.
