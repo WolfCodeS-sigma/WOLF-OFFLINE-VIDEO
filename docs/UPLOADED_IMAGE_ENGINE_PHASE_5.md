@@ -18,6 +18,7 @@
 ## Isolation and safety
 - No network, external model, image download, or new dependency.
 - No image-processing failure is allowed to propagate from `prepare` or `render` into the procedural renderer.
+- The image path uses a private image-only depth compositor; it does not share the procedural scene depth compositor or its cached frame buffers.
 - The engine has no reference to procedural engine classes.
 - The existing procedural engine remains the fallback for scenes with no decoded user image; it is not used to process uploaded images.
 - Existing atmosphere/typography/watermark and export stages remain outside this isolated image component.
