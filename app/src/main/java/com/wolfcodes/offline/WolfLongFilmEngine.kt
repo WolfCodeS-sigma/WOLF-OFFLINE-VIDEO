@@ -282,6 +282,27 @@ object WolfLongFilmCheckpointStore {
         return File(directory, "chapter_${safeFingerprint}_${chapterNumber.toString().padStart(3, '0')}.mp4")
     }
 
+    /** One independently retryable rendered shot segment inside a chapter. */
+    fun shotFile(
+        context: Context,
+        projectId: String,
+        fingerprint: String,
+        chapterNumber: Int,
+        sliceIndex: Int
+    ): File {
+        require(validProjectId(projectId))
+        require(chapterNumber > 0 && sliceIndex >= 0)
+        val directory = chapterDirectory(context, projectId)
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw IllegalStateException("تعذر إنشاء مجلد مقاطع اللقطات")
+        }
+        val safeFingerprint = fingerprint.filter { it.isLetterOrDigit() }.take(20)
+        return File(
+            directory,
+            "shot_${safeFingerprint}_c${chapterNumber.toString().padStart(3, '0')}_s${sliceIndex.toString().padStart(2, '0')}.mp4"
+        )
+    }
+
     fun markRunning(context: Context, projectId: String, chapterNumber: Int) = update(context, projectId) { session ->
         val index = session.chapters.indexOfFirst { it.plan.number == chapterNumber }
         require(index >= 0) { "الفصل غير موجود" }
