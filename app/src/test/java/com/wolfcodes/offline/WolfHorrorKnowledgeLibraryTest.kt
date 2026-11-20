@@ -1,5 +1,6 @@
 package com.wolfcodes.offline
 
+import java.io.File
 import java.io.Reader
 import java.io.StringReader
 import java.nio.file.Files
