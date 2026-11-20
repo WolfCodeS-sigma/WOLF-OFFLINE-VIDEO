@@ -123,11 +123,12 @@ object WolfProceduralMotionEngine {
         caption: String,
         sceneIndex: Int,
         shotIndex: Int,
-        progress: Float
+        progress: Float,
+        plannedFeatures: SceneFeatures? = null
     ) {
         if (width <= 0 || height <= 0) return
         val t = progress.coerceIn(0f, 1f)
-        val features = featuresFor(caption)
+        val features = plannedFeatures ?: featuresFor(caption)
 
         drawAtDepth(canvas, width, height, sceneIndex, t, 0.16f) {
             drawAtmosphere(this, width, height, sceneIndex, t)
