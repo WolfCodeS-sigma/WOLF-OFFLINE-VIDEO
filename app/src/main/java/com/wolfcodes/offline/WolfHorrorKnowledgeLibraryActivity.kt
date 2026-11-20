@@ -8,6 +8,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.view.Gravity
+import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.Button
@@ -45,6 +46,7 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
     private lateinit var categoryFilterField: AutoCompleteTextView
     private lateinit var folderFilterField: AutoCompleteTextView
     private lateinit var entriesContainer: LinearLayout
+    private lateinit var loadMoreButton: Button
     private lateinit var saveButton: Button
 
     private var activeEntryId: String? = null
@@ -53,6 +55,8 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
     private var lastCategoryFilter: String? = null
     private var lastFolderFilter: String? = null
     private var importing = false
+    private var currentEntries: List<WolfHorrorKnowledgeLibrary.Entry> = emptyList()
+    private var visibleEntryCount = PAGE_SIZE
 
     private val libraryRoot: File
         get() = File(filesDir, "wolf_horror_knowledge_library")
@@ -170,6 +174,10 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
         root.addView(label("محتويات المكتبة"))
         entriesContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(entriesContainer)
+        loadMoreButton = button("عرض المزيد")
+        loadMoreButton.visibility = View.GONE
+        loadMoreButton.setOnClickListener { showMoreEntries() }
+        root.addView(loadMoreButton)
         root.addView(button("العودة إلى WOLF OFFLINE VIDEO").apply { setOnClickListener { finish() } })
 
         setContentView(scroll)
@@ -369,12 +377,25 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
     }
 
     private fun renderEntries(entries: List<WolfHorrorKnowledgeLibrary.Entry>) {
+        currentEntries = entries
+        visibleEntryCount = minOf(PAGE_SIZE, entries.size)
+        renderVisibleEntries()
+    }
+
+    private fun showMoreEntries() {
+        visibleEntryCount = minOf(currentEntries.size, visibleEntryCount + PAGE_SIZE)
+        renderVisibleEntries()
+    }
+
+    private fun renderVisibleEntries() {
         entriesContainer.removeAllViews()
-        if (entries.isEmpty()) {
+        if (currentEntries.isEmpty()) {
             entriesContainer.addView(label("لا توجد قصص مطابقة. أضف قصة أو استورد ملف TXT."))
+            loadMoreButton.visibility = View.GONE
+            status.text = "لا توجد نتائج"
             return
         }
-        entries.forEach { entry ->
+        currentEntries.take(visibleEntryCount).forEach { entry ->
             val details = buildString {
                 append(entry.category)
                 if (entry.folder.isNotBlank()) append("  •  المجلد: ").append(entry.folder)
@@ -399,7 +420,9 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
             }, weightedParams())
             entriesContainer.addView(actions)
         }
-        status.text = "عدد النتائج: ${entries.size}"
+        loadMoreButton.visibility = if (visibleEntryCount < currentEntries.size) View.VISIBLE else View.GONE
+        loadMoreButton.text = "عرض المزيد (${(currentEntries.size - visibleEntryCount).coerceAtLeast(0)} متبقية)"
+        status.text = "المعروض $visibleEntryCount من إجمالي ${currentEntries.size} نتيجة"
     }
 
     private fun openEntry(id: String) {
@@ -589,5 +612,6 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
         private const val REQUEST_IMPORT_TXT = 861
         private const val EDITABLE_PREVIEW_CHARS = 250_000
         private const val ORIGINAL_PREVIEW_CHARS = 40_000
+        private const val PAGE_SIZE = 50
     }
 }
