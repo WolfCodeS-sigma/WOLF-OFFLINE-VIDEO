@@ -410,7 +410,7 @@ class MainActivity : Activity() {
     }
 
     private fun approveStory() {
-        if (voiceMergePending || voiceRecorder?.isRecording == true) {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
             status.text = "أوقف التسجيل وانتظر اكتمال حفظ مقاطعه قبل اعتماد نص جديد"
             return
         }
@@ -522,7 +522,7 @@ class MainActivity : Activity() {
     }
 
     private fun approveVoiceTake() {
-        if (voiceMergePending || voiceRecorder?.isRecording == true) {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
             status.text = "أوقف التسجيل وانتظر اكتمال دمج المقاطع قبل الاعتماد"
             return
         }
@@ -555,7 +555,7 @@ class MainActivity : Activity() {
     }
 
     private fun requestVoiceRepeat() {
-        if (voiceMergePending || voiceRecorder?.isRecording == true) {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
             status.text = "أوقف التسجيل وانتظر اكتمال دمج المقاطع أولًا"
             return
         }
@@ -777,7 +777,7 @@ class MainActivity : Activity() {
     }
 
     private fun produce() {
-        if (voiceMergePending || voiceRecorder?.isRecording == true) {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
             status.text = "أوقف تسجيل الراوي وانتظر اكتمال حفظ المقاطع قبل إنتاج الفيلم"
             return
         }
