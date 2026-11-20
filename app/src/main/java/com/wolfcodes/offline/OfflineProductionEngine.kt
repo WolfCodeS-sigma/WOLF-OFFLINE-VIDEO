@@ -646,6 +646,7 @@ object OfflineProductionEngine {
                 val baseShotFrames = sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE
                 val extraShotFrames = sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE
                 val shotSlice = shotSlices?.getOrNull(s)
+                val renderSceneIndex = shotSlice?.sceneIndex ?: s
                 // Typography cues are clipped to this slice, so their frame clock restarts here.
                 var sceneFrameOffset = 0
                 val shotIndices = if (shotSlice != null) {
@@ -664,7 +665,7 @@ object OfflineProductionEngine {
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
                     val preparedShot = WolfSceneRenderPipeline.prepare(
                         caption = scenes[s],
-                        sceneIndex = s,
+                        sceneIndex = renderSceneIndex,
                         source = image
                     ) { reason ->
                         WolfDiagnostics.record(
@@ -688,7 +689,7 @@ object OfflineProductionEngine {
                             draw(
                                 context,
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
-                                w, h, scenes[s], s, shotIndex, shotProgress, preparedShot, includeWatermark,
+                                w, h, scenes[s], renderSceneIndex, shotIndex, shotProgress, preparedShot, includeWatermark,
                                 typographyCues.getOrNull(s), sceneFrameOffset + f, fps
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
