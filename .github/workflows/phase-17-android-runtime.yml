@@ -1,13 +1,19 @@
 name: Phase 17 Android runtime validation
 
 on:
-  push:
-    branches:
-      - test/phase-17-android-runtime
   pull_request:
     branches:
       - feature/phase-16-offline-runtime-closure
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   workflow_dispatch:
+
+concurrency:
+  group: phase-17-android-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -16,7 +22,7 @@ jobs:
   android-runtime:
     name: Build APK and launch on offline Android emulator
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Check out Phase 17 test branch
         uses: actions/checkout@v4
@@ -42,12 +48,16 @@ jobs:
 
       - name: Install and launch with emulator networking disabled
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ANDROID_I_WANT_MY_TCG: "yes"
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
           profile: pixel_2
           disable-animations: true
+          disable-linux-hw-accel: true
+          emulator-boot-timeout: 900
           script: |
             set -euo pipefail
             APK="app/build/outputs/apk/debug/app-debug.apk"
@@ -58,8 +68,9 @@ jobs:
             adb shell settings put global airplane_mode_on 1
             adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true
             test "$(adb shell settings get global airplane_mode_on | tr -d '\r')" = "1"
+            test "$(adb shell settings get global wifi_on | tr -d '\r')" = "0"
             adb shell am force-stop com.wolfcodes.offline
-            adb shell monkey -p com.wolfcodes.offline -c android.intent.category.LAUNCHER 1
+            adb shell am start -W -n com.wolfcodes.offline/.MainActivity
             for attempt in $(seq 1 30); do
               if adb shell pidof com.wolfcodes.offline >/dev/null 2>&1; then
                 break
@@ -81,13 +92,21 @@ jobs:
             adb pull /sdcard/wolf-phase17.png wolf-phase17.png
             test -s wolf-phase17.png
 
-      - name: Upload debug APK and emulator evidence
+      - name: Upload debug APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wolf-offline-video-phase17-android-evidence
+          name: wolf-offline-video-phase17-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload successful emulator evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolf-offline-video-phase17-emulator-evidence
           path: |
-            app/build/outputs/apk/debug/app-debug.apk
             wolf-window.xml
             wolf-phase17.png
           if-no-files-found: error
