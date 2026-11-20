@@ -160,9 +160,9 @@ object WolfUploadedImageEngine {
         return try {
             val t = progress.coerceIn(0f, 1f)
             val plan = planMotion(caption, sceneIndex, shotIndex, t)
-            renderImage(canvas, width, height, sceneIndex, shotIndex, t, plan, prepared)
+            val renderedWithDepth = renderImage(canvas, width, height, sceneIndex, shotIndex, t, plan, prepared)
             drawAtmosphere(canvas, width, height, sceneIndex, shotIndex, t, plan)
-            if (prepared.layers != null) Result.DEPTH_LAYERS else Result.ORIGINAL_IMAGE
+            if (renderedWithDepth) Result.DEPTH_LAYERS else Result.ORIGINAL_IMAGE
         } catch (_: OutOfMemoryError) {
             try {
                 canvas.drawColor(Color.BLACK)
@@ -192,14 +192,14 @@ object WolfUploadedImageEngine {
     private fun renderImage(
         canvas: Canvas, width: Int, height: Int, sceneIndex: Int, shotIndex: Int,
         progress: Float, plan: MotionPlan, prepared: PreparedImage
-    ) {
+    ): Boolean {
         val layers = prepared.layers
         if (layers == null || layers.background.isRecycled ||
             layers.midground.isRecycled || layers.foreground.isRecycled
         ) {
             canvas.drawColor(Color.BLACK)
             drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, plan)
-            return
+            return false
         }
         val crop = cropForAspect(prepared.source.width, prepared.source.height, width, height)
         val scale = layers.sourceScale
@@ -212,16 +212,25 @@ object WolfUploadedImageEngine {
         if (layerSource.width() <= 0 || layerSource.height() <= 0) {
             canvas.drawColor(Color.BLACK)
             drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, plan)
-            return
+            return false
         }
-        canvas.drawColor(Color.BLACK)
-        val destination = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        drawDepthPlane(canvas, width, height, sceneIndex, shotIndex, progress, plan,
-            layers.background, layerSource, destination, 0.16f, 1.0f)
-        drawDepthPlane(canvas, width, height, sceneIndex, shotIndex, progress, plan,
-            layers.midground, layerSource, destination, 0.56f, 1.018f)
-        drawDepthPlane(canvas, width, height, sceneIndex, shotIndex, progress, plan,
-            layers.foreground, layerSource, destination, 1.0f, 1.038f)
+        val rendered = Wolf25DCinematicImageEngine.render(
+            canvas = canvas,
+            width = width,
+            height = height,
+            sceneIndex = sceneIndex,
+            shotIndex = shotIndex,
+            progress = progress,
+            plan = plan,
+            layers = layers,
+            source = layerSource
+        )
+        if (!rendered) {
+            canvas.drawColor(Color.BLACK)
+            drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, plan)
+            return false
+        }
+        return true
     }
 
     private fun drawOriginal(
