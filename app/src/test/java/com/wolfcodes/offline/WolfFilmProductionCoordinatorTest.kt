@@ -33,7 +33,7 @@ class WolfFilmProductionCoordinatorTest {
     }
 
     @Test fun chaptersRemainSequentialAndIntroAppearsOnlyInFirstChapter() {
-        val plan = WolfFilmProductionCoordinator.createPlan(listOf(7_200, 7_200, 7_200), 12, 36)
+        val plan = WolfFilmProductionCoordinator.createPlan(listOf(7_188, 7_188, 7_188), 12, 36)
 
         assertEquals((1..plan.chapterCount).toList(), plan.chapters.map { it.number })
         assertEquals(36, plan.chapters.sumOf { it.introFrameCount })
