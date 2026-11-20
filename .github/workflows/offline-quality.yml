@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   offline-quality:
-    name: Android lint and JVM unit tests
+    name: Offline contract, Android lint and JVM unit tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -40,5 +40,5 @@ jobs:
         with:
           gradle-version: "8.13"
 
-      - name: Run Android lint and local unit tests only
-        run: gradle --no-daemon lintDebug testDebugUnitTest
+      - name: Verify offline runtime contract, Android lint and local unit tests
+        run: gradle --no-daemon :app:verifyOfflineRuntime lintDebug testDebugUnitTest
