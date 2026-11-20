@@ -103,10 +103,10 @@ object Wolf25DCinematicImageEngine {
         plan: WolfUploadedImageEngine.MotionPlan,
         layers: WolfImageDepthSegmenter.Layers,
         source: Rect
-    ) {
-        if (width <= 0 || height <= 0) return
+    ): Boolean {
+        if (width <= 0 || height <= 0) return false
         val bitmaps = listOf(layers.background, layers.midground, layers.foreground)
-        if (bitmaps.any { it.isRecycled }) return
+        if (bitmaps.any { it.isRecycled }) return false
         val depths = floatArrayOf(0.12f, 0.55f, 1.0f)
         val overscan = floatArrayOf(1.012f, 1.032f, 1.058f)
         val destination = RectF(0f, 0f, width.toFloat(), height.toFloat())
