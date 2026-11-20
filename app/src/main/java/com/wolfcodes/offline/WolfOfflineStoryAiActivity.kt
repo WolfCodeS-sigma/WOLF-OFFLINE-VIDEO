@@ -193,6 +193,8 @@ class WolfOfflineStoryAiActivity : Activity() {
                 if (!target.exists() && backup.exists()) backup.renameTo(target)
                 else if (target.exists() && backup.exists()) backup.delete()
                 model.close()
+                // The LiteRT runtime cache belongs to the previous model; never reuse it after replacement.
+                File(parent, "runtime_cache").deleteRecursively()
                 pending.delete()
                 contentResolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(pending).use { output ->
