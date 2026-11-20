@@ -403,7 +403,7 @@ class WolfOfflineStoryAiActivity : Activity() {
             .toSet()
 
     private fun refreshReferenceChoices() {
-        if (!::referenceChoicesContainer.isInitialized) return
+        if (busy || !::referenceChoicesContainer.isInitialized) return
         worker.execute {
             val root = File(filesDir, "wolf_horror_knowledge_library")
             val allAllowed = WolfHorrorKnowledgeLibrary.selectedStoryReferences(root)
@@ -721,10 +721,14 @@ class WolfOfflineStoryAiActivity : Activity() {
             return
         }
         val reviewConfirmation = buildString {
-            append(WolfStoryOriginalityReviewEngine.formatReport(review))
+            appendLine("نتيجة فحص الأصالة: ${review.overallSeverity.label}")
+            appendLine("نسبة نوافذ العبارات المميزة المتطابقة: ${review.overallOverlapPercent}%")
+            appendLine("عدد المراجع التي قورنت فعليًا: ${review.checkedSources}")
+            appendLine("عدد المراجع غير المتاحة: ${review.unavailableSources.size}")
+            appendLine("عدد التحذيرات وحدود الفحص: ${review.warnings.size}")
             appendLine()
-            appendLine()
-            append("أؤكد أنني راجعت النتائج وأفهم أن الفحص محلي ومحدود بالمراجع المتاحة، ولا يثبت الأصالة بشكل قاطع. هل تريد اعتماد هذه النسخة وحفظها؟")
+            appendLine("التقرير الكامل والأمثلة ظاهرة في قسم مراجعة الأصالة على الشاشة.")
+            append("أؤكد أنني راجعت التقرير وأفهم أن الفحص محلي ومحدود بالمراجع المتاحة، ولا يثبت الأصالة بشكل قاطع. هل تريد اعتماد هذه النسخة وحفظها؟")
         }
         AlertDialog.Builder(this)
             .setTitle("مراجعة الأصالة ثم اعتماد القصة")
