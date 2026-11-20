@@ -233,7 +233,7 @@ class WolfHorrorKnowledgeLibraryTest {
     @Test
     fun arabicSearchNormalizesHamzaFormsAndDiacritics() {
         val created = WolfHorrorKnowledgeLibrary.createFromText(
-            root, draft("إشارة في الظلام"), "كانت الإِشارة تظهر فوق الباب كل ليلة."
+            root, draft("إشارة في الظلام"), "كانت الإِشـارة تظهر فوق الباب كل ليلة."
         )
 
         assertTrue(WolfHorrorKnowledgeLibrary.search(root, "الاشارة").any { it.id == created.entry.id })
