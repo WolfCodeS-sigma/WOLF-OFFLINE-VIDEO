@@ -69,10 +69,26 @@ object WolfUploadedImageEngine {
             else -> Atmosphere.QUIET
         }
         val move = when (atmosphere) {
-            Atmosphere.CHASE -> if (shotIndex % 2 == 0) CameraMove.LEFT_TRACK else CameraMove.RIGHT_TRACK
-            Atmosphere.DOOR, Atmosphere.GHOST, Atmosphere.MIRROR -> CameraMove.REVEAL
-            Atmosphere.CEMETERY, Atmosphere.FOREST -> CameraMove.SLOW_PULL
-            Atmosphere.RAIN, Atmosphere.CORRIDOR -> CameraMove.SLOW_PUSH
+            Atmosphere.CHASE -> when (Math.floorMod(shotIndex, 3)) {
+                0 -> CameraMove.LEFT_TRACK
+                1 -> CameraMove.HANDHELD
+                else -> CameraMove.RIGHT_TRACK
+            }
+            Atmosphere.DOOR, Atmosphere.GHOST, Atmosphere.MIRROR -> when (Math.floorMod(shotIndex, 3)) {
+                0 -> CameraMove.REVEAL
+                1 -> CameraMove.SLOW_PUSH
+                else -> if (sceneIndex % 2 == 0) CameraMove.LEFT_TRACK else CameraMove.RIGHT_TRACK
+            }
+            Atmosphere.CEMETERY, Atmosphere.FOREST -> when (Math.floorMod(shotIndex, 3)) {
+                0 -> CameraMove.SLOW_PULL
+                1 -> CameraMove.LEFT_TRACK
+                else -> CameraMove.SLOW_PUSH
+            }
+            Atmosphere.RAIN, Atmosphere.CORRIDOR -> when (Math.floorMod(shotIndex, 3)) {
+                0 -> CameraMove.SLOW_PUSH
+                1 -> CameraMove.RIGHT_TRACK
+                else -> CameraMove.SLOW_PULL
+            }
             Atmosphere.QUIET -> when (Math.floorMod(sceneIndex + shotIndex, 4)) {
                 0 -> CameraMove.SLOW_PUSH
                 1 -> CameraMove.LEFT_TRACK
@@ -148,7 +164,15 @@ object WolfUploadedImageEngine {
             drawAtmosphere(canvas, width, height, sceneIndex, shotIndex, t, plan)
             if (prepared.layers != null) Result.DEPTH_LAYERS else Result.ORIGINAL_IMAGE
         } catch (_: OutOfMemoryError) {
-            safeFrame(canvas, width, height)
+            try {
+                canvas.drawColor(Color.BLACK)
+                val t = progress.coerceIn(0f, 1f)
+                val plan = planMotion(caption, sceneIndex, shotIndex, t)
+                drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, t, plan)
+                Result.ORIGINAL_IMAGE
+            } catch (_: Throwable) {
+                safeFrame(canvas, width, height)
+            }
         } catch (_: Exception) {
             try {
                 canvas.drawColor(Color.BLACK)
