@@ -441,17 +441,22 @@ class MainActivity : Activity() {
             return
         }
         stopVoicePreview()
-        val previousSession = WolfStoryVoiceStore.read(this, project.id)
-        WolfVoiceSegmentStore.importExistingTake(
-            this, project.id,
-            previousSession?.voiceFilePath?.let(::File),
-            previousSession?.audioDurationMs ?: 0L
-        )
-        WolfStoryVoiceStore.beginAdditionalSegment(this, project.id)
+        val destination = try {
+            val previousSession = WolfStoryVoiceStore.read(this, project.id)
+            WolfVoiceSegmentStore.importExistingTake(
+                this, project.id,
+                previousSession?.voiceFilePath?.let(::File),
+                previousSession?.audioDurationMs ?: 0L
+            )
+            WolfStoryVoiceStore.beginAdditionalSegment(this, project.id)
+            WolfVoiceSegmentStore.nextSegmentTarget(this, project.id)
+        } catch (error: Exception) {
+            showError(error)
+            return
+        }
         voiceUri = null
         workingProject = project.copy(audioUri = null)
         WolfProjectStore.save(this, workingProject!!)
-        val destination = WolfVoiceSegmentStore.nextSegmentTarget(this, project.id)
         voiceRecorder = WolfVoiceRecorder(this, object : WolfVoiceRecorder.Listener {
             override fun onProgress(elapsedMs: Long, speechDetected: Boolean) {
                 runOnUiThread { status.text = "تسجيل الراوي: " + (elapsedMs / 1000) + " ثانية" }
