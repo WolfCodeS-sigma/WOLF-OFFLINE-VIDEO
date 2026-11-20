@@ -125,7 +125,7 @@ object WolfUploadedImageEngine {
             }
         } else {
             canvas.drawColor(Color.BLACK)
-            drawOriginal(canvas, width, height, source, shotIndex, progress, caption)
+            drawOriginal(canvas, width, height, source, sceneIndex, shotIndex, progress, caption)
         }
     }
 
