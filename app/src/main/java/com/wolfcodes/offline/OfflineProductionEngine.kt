@@ -552,8 +552,6 @@ object OfflineProductionEngine {
             }
             for (s in scenes.indices) {
                 WolfResourceGuard.ensureSafeToContinue(context)
-                // Build procedural scene state only if a shot has no usable uploaded image.
-                var proceduralPlan: WolfProceduralSceneProductionEngine.ScenePlan? = null
                 val sceneFrames = framesPerScene[s]
                 val baseShotFrames = sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE
                 val extraShotFrames = sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE
@@ -563,37 +561,36 @@ object OfflineProductionEngine {
                     val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
-                    val shotProceduralPlan = if (image == null) {
-                        proceduralPlan ?: WolfProceduralSceneProductionEngine.plan(scenes[s], s)
-                            .also { proceduralPlan = it }
-                    } else null
-                    val preparedImage = image?.let { sourceImage ->
-                        WolfUploadedImageEngine.prepare(sourceImage) { segmentationError ->
-                            WolfDiagnostics.record(
-                                context,
-                                "استعادة فصل الصور",
-                                "WOLF UPLOADED IMAGE ENGINE",
-                                "WARNING",
-                                "تعذر تحليل الصورة؛ سيُستخدم الأصل دون فصل طبقات مع استمرار بقية إنتاج الفيلم",
-                                segmentationError.javaClass.simpleName
-                            )
-                        }
+                    val preparedShot = WolfSceneRenderPipeline.prepare(
+                        caption = scenes[s],
+                        sceneIndex = s,
+                        source = image
+                    ) { reason ->
+                        WolfDiagnostics.record(
+                            context,
+                            "استعادة مسار المشهد",
+                            "WOLF SCENE RENDER PIPELINE",
+                            "WARNING",
+                            "تعذر استخدام الصورة المرفوعة؛ تم تحويل اللقطة تلقائياً إلى المحرك الإجرائي",
+                            reason
+                        )
                     }
                     try {
                         for (f in 0 until shotFrames) {
                             if (f % (fps * 5) == 0) WolfResourceGuard.ensureSafeToContinue(context)
                             val shotProgress = f.toFloat() / max(1, shotFrames - 1)
                             draw(
+                                context,
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
-                                w, h, scenes[s], s, shotIndex, shotProgress, image, preparedImage, includeWatermark,
-                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps, shotProceduralPlan
+                                w, h, scenes[s], s, shotIndex, shotProgress, preparedShot, includeWatermark,
+                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
                             track = drained.first
                             started = drained.second
                         }
                     } finally {
-                        preparedImage?.recycle()
+                        preparedShot.recycle()
                         if (image != null && !image.isRecycled) image.recycle()
                     }
                     sceneFrameOffset += shotFrames
@@ -653,38 +650,32 @@ object OfflineProductionEngine {
     }
 
     private fun draw(
-        surface: Surface, w: Int, h: Int, caption: String, scene: Int,
-        shotIndex: Int, t: Float, bitmap: Bitmap?, preparedImage: WolfUploadedImageEngine.PreparedImage?,
+        context: Context, surface: Surface, w: Int, h: Int, caption: String, scene: Int,
+        shotIndex: Int, t: Float, preparedShot: WolfSceneRenderPipeline.PreparedShot,
         includeWatermark: Boolean, typographyCue: WolfHorrorTypographyEngine.Cue?,
-        sceneFrameIndex: Int, fps: Int,
-        proceduralPlan: WolfProceduralSceneProductionEngine.ScenePlan?
+        sceneFrameIndex: Int, fps: Int
     ) {
         val c: Canvas = surface.lockCanvas(null)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         val safeShotIndex = shotIndex.coerceIn(0, WolfSceneAssetStore.SHOTS_PER_SCENE - 1)
         try {
-            if(bitmap != null && !bitmap.isRecycled) {
-                val imageEngine = preparedImage ?: WolfUploadedImageEngine.prepare(bitmap)
-                WolfUploadedImageEngine.render(
-                    canvas = c,
-                    width = w,
-                    height = h,
-                    sceneIndex = scene,
-                    shotIndex = safeShotIndex,
-                    progress = t,
-                    caption = caption,
-                    prepared = imageEngine
-                )
-                p.color = android.graphics.Color.argb(46, 0, 0, 0)
-                c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
-            } else {
-                WolfProceduralSceneProductionEngine.render(
-                    canvas = c,
-                    width = w,
-                    height = h,
-                    plan = proceduralPlan ?: throw IllegalStateException("خطة المشهد الإجرائي غير متاحة"),
-                    shotIndex = safeShotIndex,
-                    progress = t
+            WolfSceneRenderPipeline.render(
+                canvas = c,
+                width = w,
+                height = h,
+                shotIndex = safeShotIndex,
+                progress = t,
+                caption = caption,
+                sceneIndex = scene,
+                preparedShot = preparedShot
+            ) { reason ->
+                WolfDiagnostics.record(
+                    context,
+                    "استعادة مسار المشهد",
+                    "WOLF SCENE RENDER PIPELINE",
+                    "WARNING",
+                    "تعذر رسم الصورة المرفوعة؛ تم الرجوع إلى المحرك الإجرائي",
+                    reason
                 )
             }
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
@@ -987,6 +978,10 @@ object OfflineProductionEngine {
             while(max(bounds.outWidth/sample,bounds.outHeight/sample)>2048) sample*=2
             val options=BitmapFactory.Options().apply { inSampleSize=sample; inPreferredConfig=Bitmap.Config.RGB_565 }
             context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it,null,options) }
-        } catch (_: Exception) { null }
+        } catch (_: OutOfMemoryError) {
+            null
+        } catch (_: Exception) {
+            null
+        }
     }
 }
