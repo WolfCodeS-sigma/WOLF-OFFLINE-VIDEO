@@ -812,9 +812,9 @@ object OfflineProductionEngine {
                 p.textAlign=Paint.Align.CENTER
                 p.textSize=(w * 0.037f).coerceIn(16f,24f)
                 p.setShadowLayer(5f,0f,1f,android.graphics.Color.BLACK)
-                c.drawText("WOLF CODE S",w/2f,h*.965f,p)
+                c.drawText(WolfCinematicIdentity.BRAND_NAME,w/2f,h*.965f,p)
                 p.clearShadowLayer()
-                val centerX = w / 2f - p.measureText("WOLF CODE S") / 2f - 24f
+                val centerX = w / 2f - p.measureText(WolfCinematicIdentity.BRAND_NAME) / 2f - 24f
                 val centerY = h * .952f
                 val wolf = Path().apply {
                     moveTo(centerX - 12f, centerY + 8f)
@@ -965,16 +965,16 @@ object OfflineProductionEngine {
             paint.textSize=(h*0.062f).coerceIn(30f,72f)
             paint.color=android.graphics.Color.WHITE
             paint.setShadowLayer(12f,0f,0f,android.graphics.Color.RED)
-            canvas.drawText("WOLF CODE S",cx,h*0.82f,paint)
+            canvas.drawText(WolfCinematicIdentity.BRAND_NAME,cx,h*0.82f,paint)
             paint.clearShadowLayer()
             paint.typeface=android.graphics.Typeface.DEFAULT_BOLD
             paint.textSize=(h*0.027f).coerceIn(16f,30f)
             paint.color=android.graphics.Color.rgb(235,42,57)
-            canvas.drawText("شفرة الذئب S",cx,h*0.875f,paint)
+            canvas.drawText(WolfCinematicIdentity.ARABIC_BRAND_NAME,cx,h*0.875f,paint)
             paint.typeface=android.graphics.Typeface.DEFAULT
             paint.textSize=(h*0.019f).coerceIn(12f,21f)
             paint.color=android.graphics.Color.LTGRAY
-            canvas.drawText("رعب الظل المفقود",cx,h*0.92f,paint)
+            canvas.drawText(WolfCinematicIdentity.INTRO_SIGNATURE,cx,h*0.92f,paint)
 
             val fade=when {
                 progress<0.10f -> (progress/0.10f*255f).toInt()
