@@ -580,6 +580,7 @@ object OfflineProductionEngine {
                             if (f % (fps * 5) == 0) WolfResourceGuard.ensureSafeToContinue(context)
                             val shotProgress = f.toFloat() / max(1, shotFrames - 1)
                             draw(
+                                context,
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
                                 w, h, scenes[s], s, shotIndex, shotProgress, preparedShot, includeWatermark,
                                 typographyCues.getOrNull(s), sceneFrameOffset + f, fps
@@ -649,7 +650,7 @@ object OfflineProductionEngine {
     }
 
     private fun draw(
-        surface: Surface, w: Int, h: Int, caption: String, scene: Int,
+        context: Context, surface: Surface, w: Int, h: Int, caption: String, scene: Int,
         shotIndex: Int, t: Float, preparedShot: WolfSceneRenderPipeline.PreparedShot,
         includeWatermark: Boolean, typographyCue: WolfHorrorTypographyEngine.Cue?,
         sceneFrameIndex: Int, fps: Int
@@ -667,7 +668,16 @@ object OfflineProductionEngine {
                 caption = caption,
                 sceneIndex = scene,
                 preparedShot = preparedShot
-            )
+            ) { reason ->
+                WolfDiagnostics.record(
+                    context,
+                    "استعادة مسار المشهد",
+                    "WOLF SCENE RENDER PIPELINE",
+                    "WARNING",
+                    "تعذر رسم الصورة المرفوعة؛ تم الرجوع إلى المحرك الإجرائي",
+                    reason
+                )
+            }
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
             if (includeWatermark) {
                 p.color=android.graphics.Color.WHITE
