@@ -38,7 +38,7 @@ object WolfStoryLengthStructureEngine {
         val targetWords: Int,
         val actualWords: Int,
         val expectedChapters: Int,
-        val actualChapters: Int,
+        val actualChapters: Int?,
         val completionPercent: Int,
         val estimatedMinutesAt120Wpm: Int,
         val estimatedMinutesAt160Wpm: Int,
@@ -176,7 +176,7 @@ object WolfStoryLengthStructureEngine {
             add("هذا فحص كمي للبنية والطول، وليس حكمًا آليًا على جودة الحبكة أو منطق الأحداث.")
         }
         return Report(
-            targetWords, count, expectedChapters, if (count == 0) 0 else 1,
+            targetWords, count, expectedChapters, null,
             percent, (count / MIN_WORDS_PER_MINUTE.toDouble()).roundToInt(),
             (count / MAX_WORDS_PER_MINUTE.toDouble()).roundToInt(), findings
         )
@@ -214,7 +214,7 @@ object WolfStoryLengthStructureEngine {
         appendLine("WOLF STORY LENGTH & STRUCTURE")
         appendLine("الكلمات الفعلية: ${report.actualWords} / ${report.targetWords}")
         appendLine("الإنجاز التقريبي: ${report.completionPercent}%")
-        appendLine("الفصول: ${report.actualChapters} / ${report.expectedChapters}")
+        appendLine(if (report.actualChapters == null) "الفصول المخططة: ${report.expectedChapters}" else "الفصول: ${report.actualChapters} / ${report.expectedChapters}")
         appendLine("زمن القراءة/السرد التقديري: ${report.estimatedMinutesAt160Wpm}–${report.estimatedMinutesAt120Wpm} دقيقة (120–160 كلمة/دقيقة).")
         report.findings.forEach { appendLine("• $it") }
     }.trim()
