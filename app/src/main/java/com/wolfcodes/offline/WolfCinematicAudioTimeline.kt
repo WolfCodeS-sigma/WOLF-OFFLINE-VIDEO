@@ -21,8 +21,11 @@ data class WolfCinematicAudioTimeline(
             val intro = if (includeIntro) minOf(3, (requestedDurationSeconds - 1).coerceAtLeast(0)) else 0
             val validNarration = authoritativeNarrationDurationMs
                 ?.takeIf { it in 1_000L..1_800_000L }
+            require(validNarration == null || validNarration + intro.toLong() * 1000L <= 1_800_000L) {
+                "مدة التعليق الصوتي مع المقدمة تتجاوز الحد الأقصى للفيلم؛ قصّر التسجيل أو أوقف المقدمة"
+            }
             val narrationSeconds = validNarration?.let {
-                ((it + 999L) / 1000L).toInt().coerceAtMost(1800 - intro).coerceAtLeast(1)
+                ((it + 999L) / 1000L).toInt().coerceAtLeast(1)
             }
             val bodySeconds = narrationSeconds ?: (requestedDurationSeconds - intro).coerceAtLeast(1)
             return WolfCinematicAudioTimeline(
