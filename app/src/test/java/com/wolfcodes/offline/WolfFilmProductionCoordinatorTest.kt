@@ -10,7 +10,7 @@ class WolfFilmProductionCoordinatorTest {
     }
 
     @Test fun plansThreeShotsForEverySceneAndKeepsAllFrames() {
-        val frames = List(12) { 12_000 }
+        val frames = List(12) { 1_797 }
         val plan = WolfFilmProductionCoordinator.createPlan(frames, 12, 36)
 
         assertEquals(12, plan.sceneCount)
