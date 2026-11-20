@@ -83,13 +83,17 @@ object OfflineProductionEngine {
         val h = dimensions.second
         val fps = 12
         val requestedTotal = seconds.coerceIn(1, 1800)
-        val useNarrationTiming = audioDurationIsAuthoritative && audioUri != null &&
-            audioDurationMs != null && audioDurationMs in 1000L..1_800_000L
-        val introSeconds = if (includeIntro) {
-            if (useNarrationTiming) minOf(3, (requestedTotal - 1).coerceAtLeast(0)) else 3
-        } else 0
+        val audioTimeline = WolfCinematicAudioTimeline.create(
+            requestedDurationSeconds = requestedTotal,
+            includeIntro = includeIntro,
+            authoritativeNarrationDurationMs = if (audioDurationIsAuthoritative && audioUri != null) {
+                audioDurationMs
+            } else null
+        )
+        val useNarrationTiming = audioTimeline.narrationSeconds != null
+        val introSeconds = audioTimeline.introSeconds
         val introFrames = introSeconds * fps
-        val bodySeconds = if (useNarrationTiming) (requestedTotal - introSeconds).coerceAtLeast(1) else requestedTotal
+        val bodySeconds = audioTimeline.narrationSeconds ?: requestedTotal
         val rawScenes = splitStory(story)
         val scenes = if (useNarrationTiming) {
             StoryDirectorEngine.fitSceneTextsToDuration(rawScenes, bodySeconds)
@@ -101,7 +105,7 @@ object OfflineProductionEngine {
                 sceneCount = scenes.size
             )
         }
-        val totalVideoSeconds = if (useNarrationTiming) requestedTotal else total + introSeconds
+        val totalVideoSeconds = if (useNarrationTiming) audioTimeline.totalVideoSeconds else total + introSeconds
         val totalFrames = total * fps
         val minimumFrames = if (useNarrationTiming) fps else fps * 3
         val framesPerScene = OfflineMotionEngine.allocateFrames(scenes, totalFrames, minimumFrames)
@@ -121,9 +125,8 @@ object OfflineProductionEngine {
                 chapterSeconds = safeChapterDuration
             ).chapters
         } else emptyList()
-        val narrationLimitUs = if (useNarrationTiming) {
-            (audioDurationMs ?: 1000L).coerceIn(1000L, 1_800_000L) * 1000L
-        } else totalVideoSeconds.toLong() * 1_000_000L
+        val narrationLimitUs = audioTimeline.narrationLimitUs
+            ?: totalVideoSeconds.toLong() * 1_000_000L
         val name = "wolf_offline_${System.currentTimeMillis()}.mp4"
         val tempDir = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
         // Reserve for overlapping temporary/final MP4 copies, optional AAC, and a safety margin.
@@ -238,7 +241,8 @@ object OfflineProductionEngine {
                     maxDurationUs = totalTimelineUs,
                     narrationGain = 0.92,
                     effectsGain = 0.30,
-                    narrationOffsetUs = introSeconds.toLong() * 1_000_000L
+                    narrationOffsetUs = audioTimeline.narrationOffsetUs,
+                    narrationLimitUs = if (audioUri != null) narrationLimitUs else null
                 )
                 muxAudio(context, silentFile, null, mixedFile, File(tempDir, "muxed_$name"), totalTimelineUs, fps)
                 val muxedFile = File(tempDir, "muxed_$name")
