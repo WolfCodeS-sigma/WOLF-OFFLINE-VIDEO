@@ -44,28 +44,19 @@ object WolfOfflineStoryAiEngine {
 
     class LocalModel {
         private var engine: Engine? = null
-        private var conversation: Conversation? = null
 
         fun load(modelFile: File) {
-            check(engine == null && conversation == null) { "المحرك محمّل بالفعل" }
-            require(modelFile.isFile && modelFile.length() > 1_000_000L) { "ملف النموذج المحلي غير موجود أو غير صالح" }
+            check(engine == null) { "المحرك محمّل بالفعل" }
+            require(modelFile.isFile && modelFile.length() > 1_000_000L) {
+                "ملف النموذج المحلي غير موجود أو غير صالح"
+            }
             val candidate = Engine(EngineConfig(
                 modelPath = modelFile.absolutePath,
                 cacheDir = File(modelFile.parentFile, "runtime_cache").absolutePath
             ))
             try {
                 candidate.initialize()
-                val chat = candidate.createConversation(ConversationConfig(
-                    systemInstruction = Contents.of(
-                        "أنت WOLF OFFLINE STORY AI، كاتب رعب عربي محترف. اكتب نصوصًا أصلية من الصفر. " +
-                        "استخدم المراجع كسياق فقط ولا تنسخ منها عبارات أو أحداثًا مميزة. ميّز بين الوقائع الموثقة " +
-                        "والروايات الشخصية والخيال، ولا تعرض الخيال كواقعة حقيقية. التزم بالمخطط واستمرارية الشخصيات."
-                    ),
-                    samplerConfig = SamplerConfig(topK = 40, topP = 0.92, temperature = 0.82),
-                    maxOutputToken = 1536
-                ))
                 engine = candidate
-                conversation = chat
             } catch (error: Throwable) {
                 if (candidate.isInitialized()) runCatching { candidate.close() }
                 throw error
@@ -73,19 +64,30 @@ object WolfOfflineStoryAiEngine {
         }
 
         fun generate(prompt: String): String {
-            val active = conversation ?: error("حمّل نموذجًا محليًا أولًا")
+            val active = engine ?: error("حمّل نموذجًا محليًا أولًا")
             require(prompt.isNotBlank())
-            return active.sendMessage(prompt).toString().trim().also {
-                require(it.isNotBlank()) { "النموذج لم يُنتج نصًا" }
+            // A fresh conversation per request prevents the context from growing with every chapter.
+            val chat = active.createConversation(ConversationConfig(
+                systemInstruction = Contents.of(
+                    "أنت WOLF OFFLINE STORY AI، كاتب رعب عربي محترف. اكتب نصوصًا أصلية من الصفر. " +
+                    "استخدم المراجع كسياق فقط ولا تنسخ منها عبارات أو أحداثًا مميزة. ميّز بين الوقائع الموثقة " +
+                    "والروايات الشخصية والخيال، ولا تعرض الخيال كواقعة حقيقية. التزم بالمخطط واستمرارية الشخصيات."
+                ),
+                samplerConfig = SamplerConfig(topK = 40, topP = 0.92, temperature = 0.82),
+                maxOutputToken = 1536
+            ))
+            return try {
+                chat.sendMessage(prompt).toString().trim().also {
+                    require(it.isNotBlank()) { "النموذج لم يُنتج نصًا" }
+                }
+            } finally {
+                runCatching { chat.close() }
             }
         }
 
-        fun isLoaded(): Boolean = conversation != null
+        fun isLoaded(): Boolean = engine?.isInitialized() == true
 
         fun close() {
-            val chat = conversation
-            conversation = null
-            if (chat != null) runCatching { chat.close() }
             val active = engine
             engine = null
             if (active != null && active.isInitialized()) runCatching { active.close() }
