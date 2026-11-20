@@ -64,10 +64,10 @@ object WolfUploadedImageEngine {
             hasAny(text, "مطر", "تمطر", "عاصفة", "ماطر", "رعد") -> Atmosphere.RAIN
             hasAny(text, "مقبرة", "قبر", "مدفن", "جنازة") -> Atmosphere.CEMETERY
             hasAny(text, "غابة", "شجرة", "أشجار", "غصن", "غصون") -> Atmosphere.FOREST
-            hasAny(text, "ممر", "طرقة", "رصيف") -> Atmosphere.CORRIDOR
-            hasAny(text, "باب", "مقبض", "طرق", "خبط", "صرير") -> Atmosphere.DOOR
             hasAny(text, "مرآة", "مراية", "انعكاس") -> Atmosphere.MIRROR
             hasAny(text, "شبح", "ظل", "كيان", "روح", "ظهر", "اختفى", "اختفت") -> Atmosphere.GHOST
+            hasAny(text, "باب", "مقبض", "طرق", "خبط", "صرير") -> Atmosphere.DOOR
+            hasAny(text, "ممر", "طرقة", "رصيف") -> Atmosphere.CORRIDOR
             else -> Atmosphere.QUIET
         }
         val move = when (atmosphere) {
@@ -82,6 +82,7 @@ object WolfUploadedImageEngine {
                 else -> CameraMove.RIGHT_TRACK
             }
         }
+        val progressPulse = 0.96f + 0.04f * sin((durationProgress.coerceIn(0f, 1f) * PI).toDouble()).toFloat()
         val intensity = when (atmosphere) {
             Atmosphere.CHASE -> 1.0f
             Atmosphere.GHOST, Atmosphere.DOOR, Atmosphere.MIRROR -> 0.78f
@@ -100,7 +101,7 @@ object WolfUploadedImageEngine {
             Atmosphere.CEMETERY -> 0.58f
             else -> 0.50f
         }
-        return MotionPlan(move, atmosphere, intensity, focusX, focusY)
+        return MotionPlan(move, atmosphere, (intensity * progressPulse).coerceIn(0f, 1f), focusX, focusY)
     }
 
     private fun hasAny(text: String, vararg terms: String): Boolean = terms.any { text.contains(it) }
