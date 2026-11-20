@@ -637,6 +637,9 @@ class MainActivity : Activity() {
         val message = when {
             session == null -> if (parts > 0) "توجد $parts أجزاء محفوظة تنتظر الاستعادة" else "جلسة الراوي لم تبدأ بعد"
             !session.scriptApproved -> "نص القصة غير معتمد"
+            session.voiceApproved && (session.voiceFilePath.isNullOrBlank() ||
+                !File(session.voiceFilePath!!).isFile) ->
+                "ملف التسجيل المعتمد غير موجود؛ أعد تسجيل الراوي قبل الإنتاج"
             session.voiceApproved -> "التسجيل معتمد — " + (session.audioDurationMs / 1000) + " ثانية"
             session.voiceFilePath != null -> "يوجد تسجيل من $parts أجزاء يحتاج إلى المراجعة والاعتماد"
             parts > 0 -> "توجد $parts أجزاء محفوظة — افتح المشروع لاستعادتها"
