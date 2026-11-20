@@ -112,7 +112,7 @@ val verifyOfflineRuntime by tasks.registering {
         }
 
         val runtimeDependencyDeclarations = moduleBuildFile.asFile.readLines(Charsets.UTF_8)
-            .filter { Regex("""^\s*(implementation|api|runtimeOnly)\s*\(""").containsMatchIn(it) }
+            .filter { Regex("""^\s*(?!(?:test|androidTest|testFixtures))(?:implementation|api|runtimeOnly|[A-Za-z][A-Za-z0-9_]*(?:Implementation|Api|RuntimeOnly))\s*\(""").containsMatchIn(it) }
             .map { it.trim() }
         val allowedRuntimeDependencies = setOf(
             """implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")"""
