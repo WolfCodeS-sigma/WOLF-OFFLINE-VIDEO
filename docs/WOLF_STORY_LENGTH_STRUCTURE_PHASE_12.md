@@ -5,7 +5,7 @@ Add a deterministic, fully offline length and narrative-structure layer to the P
 
 ## Features
 - Unicode-aware Arabic and English word counting; combining marks and Arabic tatweel do not split words.
-- Deterministic word budgets for each planned chapter. Allocations sum exactly to the requested total; short one-chapter stories receive a compressed hook-to-resolution arc.
+- Deterministic word budgets for each planned chapter. Allocations sum exactly to the requested total; short stories group all eight narrative beats across the available chapters, including a compressed complete arc for a one-chapter story.
 - Eight ordered narrative beats: hook, setup, inciting incident, rising action, midpoint, crisis, climax, and resolution.
 - Configurable per-chapter tolerance, with explicit minimum and maximum word ranges.
 - Plan-level and chapter-level prompt guidance passed into the existing Phase 11 local model.
