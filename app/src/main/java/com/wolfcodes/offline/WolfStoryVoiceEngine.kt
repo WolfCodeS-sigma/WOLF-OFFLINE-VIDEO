@@ -105,6 +105,11 @@ object WolfStoryVoiceStateMachine {
         )
     }
 
+    fun beginAdditionalSegment(session: WolfStoryVoiceSession, now: Long): WolfStoryVoiceSession {
+        require(session.scriptApproved) { "اعتمد القصة أولًا" }
+        return session.copy(voiceApproved = false, updatedAt = now)
+    }
+
     fun requestRepeat(session: WolfStoryVoiceSession, now: Long): WolfStoryVoiceSession {
         require(session.scriptApproved) { "اعتمد القصة أولًا" }
         return session.copy(
@@ -140,8 +145,9 @@ object WolfStoryVoiceStore {
         synchronized(lock) {
             val current = readUnlocked(context, projectId) ?: initialize(context, projectId, draftStory)
             val updated = WolfStoryVoiceStateMachine.edit(current, draftStory, finalStory, System.currentTimeMillis())
-            if (updated.voiceFilePath == null && current.voiceFilePath != null) File(current.voiceFilePath).delete()
             writeUnlocked(context, updated)
+            if (updated.voiceFilePath == null && current.voiceFilePath != null) File(current.voiceFilePath).delete()
+            if (updated.finalStory != current.finalStory) WolfVoiceSegmentStore.clearProject(context, projectId)
             updated
         }
 
@@ -149,8 +155,9 @@ object WolfStoryVoiceStore {
         synchronized(lock) {
             val current = readUnlocked(context, projectId) ?: throw IllegalStateException("مسودة القصة غير موجودة")
             val updated = WolfStoryVoiceStateMachine.approveScript(current, finalStory, System.currentTimeMillis())
-            if (updated.voiceFilePath == null && current.voiceFilePath != null) File(current.voiceFilePath).delete()
             writeUnlocked(context, updated)
+            if (updated.voiceFilePath == null && current.voiceFilePath != null) File(current.voiceFilePath).delete()
+            if (updated.finalStory != current.finalStory) WolfVoiceSegmentStore.clearProject(context, projectId)
             updated
         }
 
@@ -202,7 +209,43 @@ object WolfStoryVoiceStore {
         val updated = WolfStoryVoiceStateMachine.invalidateForStoryChange(
             current, newStory, System.currentTimeMillis()
         )
+        writeUnlocked(context, updated)
         current.voiceFilePath?.let { File(it).delete() }
+        WolfVoiceSegmentStore.clearProject(context, projectId)
+        updated
+    }
+
+    fun beginAdditionalSegment(context: Context, projectId: String): WolfStoryVoiceSession =
+        synchronized(lock) {
+            val current = readUnlocked(context, projectId)
+                ?: throw IllegalStateException("جلسة القصة غير موجودة")
+            val updated = WolfStoryVoiceStateMachine.beginAdditionalSegment(
+                current, System.currentTimeMillis()
+            )
+            writeUnlocked(context, updated)
+            updated
+        }
+
+    fun restoreMergedSegments(
+        context: Context,
+        projectId: String,
+        mergedFile: File,
+        durationMs: Long
+    ): WolfStoryVoiceSession? = synchronized(lock) {
+        val current = readUnlocked(context, projectId) ?: return@synchronized null
+        if (!current.scriptApproved || !mergedFile.isFile || durationMs !in 1000L..1_800_000L) {
+            return@synchronized null
+        }
+        val directory = voiceDirectory(context).canonicalFile
+        val actual = mergedFile.canonicalFile
+        if (!actual.path.startsWith(directory.path + File.separator)) return@synchronized null
+        val updated = current.copy(
+            voiceFilePath = actual.absolutePath,
+            audioDurationMs = durationMs,
+            recordingStoryHash = WolfStoryVoiceStateMachine.storyFingerprint(current.finalStory),
+            voiceApproved = false,
+            updatedAt = System.currentTimeMillis()
+        )
         writeUnlocked(context, updated)
         updated
     }
@@ -212,14 +255,16 @@ object WolfStoryVoiceStore {
         val updated = runCatching {
             WolfStoryVoiceStateMachine.requestRepeat(current, System.currentTimeMillis())
         }.getOrNull() ?: return@synchronized null
-        current.voiceFilePath?.let { File(it).delete() }
         writeUnlocked(context, updated)
+        current.voiceFilePath?.let { File(it).delete() }
+        WolfVoiceSegmentStore.clearProject(context, projectId)
         updated
     }
 
     fun clearProject(context: Context, projectId: String) = synchronized(lock) {
         if (!validProjectId(projectId)) return@synchronized
         readUnlocked(context, projectId)?.voiceFilePath?.let { File(it).delete() }
+        WolfVoiceSegmentStore.clearProject(context, projectId)
         listOf(
             File(voiceDirectory(context), projectId + ".json"),
             File(voiceDirectory(context), projectId + ".json.bak"),

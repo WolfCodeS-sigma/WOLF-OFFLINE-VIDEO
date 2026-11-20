@@ -41,6 +41,8 @@ class MainActivity : Activity() {
     private val selectedImageUris = mutableListOf<String>()
     private var pendingImageSlot: Int? = null
     private var producing = false
+    private var voiceMergePending = false
+    private var voiceRecoveryPending = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -140,7 +142,8 @@ class MainActivity : Activity() {
         })
 
         root.addView(label("التعليق الصوتي"))
-        root.addView(button("تسجيل / إعادة تسجيل التعليق الصوتي").apply {
+        root.addView(label("يمكنك تسجيل الراوي على أجزاء؛ إيقاف الجزء يحفظه، والضغط مجددًا يستكمل من الجزء التالي."))
+        root.addView(button("تسجيل جزء جديد / استكمال التعليق الصوتي").apply {
             setOnClickListener { startVoiceRecording() }
         })
         root.addView(button("إيقاف التسجيل").apply {
@@ -264,6 +267,10 @@ class MainActivity : Activity() {
     }
 
     private fun chooseMultipleImages() {
+        if (producing || voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "انتظر انتهاء العملية الحالية قبل تعديل صور المشروع"
+            return
+        }
         pendingImageSlot = null
         val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(android.content.Intent.CATEGORY_OPENABLE)
@@ -274,6 +281,10 @@ class MainActivity : Activity() {
     }
 
     private fun chooseImageSlot() {
+        if (producing || voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "انتظر انتهاء العملية الحالية قبل تعديل صور المشروع"
+            return
+        }
         val labels = Array(WolfSceneAssetStore.MAX_IMAGE_SLOTS) { index ->
             val scene = index / WolfSceneAssetStore.SHOTS_PER_SCENE + 1
             val shot = index % WolfSceneAssetStore.SHOTS_PER_SCENE + 1
@@ -297,6 +308,10 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != 742 || resultCode != RESULT_OK || data == null) return
+        if (producing || voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "تم تجاهل اختيار الصور لأن المشروع مشغول بعملية أخرى"
+            return
+        }
         val slot = pendingImageSlot
         pendingImageSlot = null
         val picked = mutableListOf<Uri>()
@@ -377,6 +392,10 @@ class MainActivity : Activity() {
     }
 
     private fun saveProject() {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف التسجيل وانتظر اكتمال حفظ مقاطعه قبل حفظ تعديلات المشروع"
+            return
+        }
         try {
             val project = currentProject()
             WolfProjectStore.save(this, project)
@@ -392,6 +411,10 @@ class MainActivity : Activity() {
     }
 
     private fun approveStory() {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف التسجيل وانتظر اكتمال حفظ مقاطعه قبل اعتماد نص جديد"
+            return
+        }
         try {
             val project = currentProject()
             WolfProjectStore.save(this, project)
@@ -408,6 +431,14 @@ class MainActivity : Activity() {
     }
 
     private fun startVoiceRecording() {
+        if (producing || voiceMergePending || voiceRecoveryPending) {
+            status.text = "انتظر انتهاء العملية الحالية قبل بدء مقطع صوتي جديد"
+            return
+        }
+        if (voiceRecorder?.isRecording == true) {
+            status.text = "التسجيل يعمل بالفعل؛ أوقف المقطع الحالي أولًا"
+            return
+        }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 741)
             return
@@ -424,38 +455,98 @@ class MainActivity : Activity() {
             return
         }
         stopVoicePreview()
-        WolfStoryVoiceStore.requestRepeat(this, project.id)
-        voiceUri = null
-        workingProject = project.copy(audioUri = null)
-        WolfProjectStore.save(this, workingProject!!)
-        val destination = WolfStoryVoiceStore.recordingTarget(this, project.id)
+        // Copying a legacy take and validating AAC parts can be slow on low-end phones.
+        // Keep that file work off the UI thread and block conflicting project actions.
+        voiceRecoveryPending = true
+        storyField.isEnabled = false
+        status.text = "جارٍ تجهيز مساحة تسجيل الراوي..."
+        worker.execute {
+            val targetResult = runCatching {
+                val previousSession = WolfStoryVoiceStore.read(this, project.id)
+                WolfVoiceSegmentStore.importExistingTake(
+                    this, project.id,
+                    previousSession?.voiceFilePath?.let(::File),
+                    previousSession?.audioDurationMs ?: 0L
+                )
+                WolfStoryVoiceStore.beginAdditionalSegment(this, project.id)
+                WolfVoiceSegmentStore.nextSegmentTarget(this, project.id)
+            }
+            runOnUiThread {
+                voiceRecoveryPending = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                storyField.isEnabled = true
+                targetResult.onSuccess { destination ->
+                    try {
+                        voiceUri = null
+                        workingProject = project.copy(audioUri = null)
+                        WolfProjectStore.save(this@MainActivity, workingProject!!)
+                        startVoiceRecorder(project, destination)
+                    } catch (error: Exception) {
+                        storyField.isEnabled = true
+                        showError(error)
+                    }
+                }.onFailure {
+                    storyField.isEnabled = true
+                    showError(it)
+                    refreshVoiceStatus()
+                }
+            }
+        }
+    }
+
+    private fun startVoiceRecorder(project: WolfProject, destination: File) {
+        storyField.isEnabled = false
         voiceRecorder = WolfVoiceRecorder(this, object : WolfVoiceRecorder.Listener {
             override fun onProgress(elapsedMs: Long, speechDetected: Boolean) {
                 runOnUiThread { status.text = "تسجيل الراوي: " + (elapsedMs / 1000) + " ثانية" }
             }
 
             override fun onSaved(file: File, durationMs: Long, automaticStop: Boolean) {
+                voiceMergePending = true
                 runOnUiThread {
-                    runCatching {
-                        val savedTake = WolfStoryVoiceStore.saveRecording(
+                    storyField.isEnabled = false
+                    status.text = "تم حفظ المقطع؛ جارٍ دمجه مع المقاطع السابقة..."
+                }
+                worker.execute {
+                    val mergedResult = runCatching {
+                        val merged = WolfVoiceSegmentStore.appendAndMerge(
                             this@MainActivity, project.id, file, durationMs
                         )
-                        voiceUri = Uri.fromFile(file).toString()
-                        workingProject = project.copy(audioUri = voiceUri)
-                        WolfProjectStore.save(this@MainActivity, workingProject!!)
-                        status.text = "تم حفظ التسجيل للمراجعة — " +
-                            (savedTake.audioDurationMs / 1000) + " ثانية. استمع إليه ثم اعتمده."
-                        refreshVoiceStatus()
-                        refreshProjectList()
-                    }.onFailure { showError(it) }
+                        val savedTake = WolfStoryVoiceStore.saveRecording(
+                            this@MainActivity, project.id, merged.file, merged.durationMs
+                        )
+                        merged to savedTake
+                    }
+                    runOnUiThread {
+                        voiceMergePending = false
+                        storyField.isEnabled = true
+                        mergedResult.onSuccess { (merged, savedTake) ->
+                            voiceUri = Uri.fromFile(merged.file).toString()
+                            val latestProject = runCatching { currentProject() }.getOrElse { project }
+                            workingProject = latestProject.copy(audioUri = voiceUri)
+                            WolfProjectStore.save(this@MainActivity, workingProject!!)
+                            status.text = "تم حفظ الجزء ${merged.segmentCount} ودمجه مع التسجيل السابق — " +
+                                (savedTake.audioDurationMs / 1000) + " ثانية إجمالًا. استمع إليه ثم اعتمده."
+                            refreshVoiceStatus()
+                            refreshProjectList()
+                        }.onFailure {
+                            showError(it)
+                            status.text = "حُفظ المقطع محليًا؛ تعذر دمجه الآن. افتح المشروع لاستعادة المقاطع أو أعد المحاولة."
+                        }
+                    }
                 }
             }
 
             override fun onError(message: String) {
-                runOnUiThread { showError(IllegalStateException(message)); refreshVoiceStatus() }
+                runOnUiThread {
+                    storyField.isEnabled = true
+                    showError(IllegalStateException(message))
+                    refreshVoiceStatus()
+                }
             }
         })
         if (voiceRecorder?.start(destination) != true) {
+            storyField.isEnabled = true
             status.text = "تعذر بدء التسجيل الصوتي"
         } else {
             status.text = "بدأ تسجيل الراوي"
@@ -463,6 +554,10 @@ class MainActivity : Activity() {
     }
 
     private fun approveVoiceTake() {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف التسجيل وانتظر اكتمال دمج المقاطع قبل الاعتماد"
+            return
+        }
         val project = try {
             currentProject().also { WolfProjectStore.save(this, it) }
         } catch (error: Exception) {
@@ -492,6 +587,10 @@ class MainActivity : Activity() {
     }
 
     private fun requestVoiceRepeat() {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف التسجيل وانتظر اكتمال دمج المقاطع أولًا"
+            return
+        }
         val project = try {
             currentProject().also { WolfProjectStore.save(this, it) }
         } catch (error: Exception) {
@@ -507,12 +606,16 @@ class MainActivity : Activity() {
         voiceUri = null
         workingProject = project.copy(audioUri = null)
         WolfProjectStore.save(this, workingProject!!)
-        status.text = "تم إلغاء اعتماد التسجيل السابق. يمكنك التسجيل من جديد."
+        status.text = "تم حذف مقاطع التسجيل السابقة وإلغاء اعتمادها. يمكنك البدء من جديد."
         refreshVoiceStatus()
         refreshProjectList()
     }
 
     private fun playVoicePreview() {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "انتظر اكتمال حفظ أو استعادة مقاطع الراوي قبل المعاينة"
+            return
+        }
         val project = try {
             currentProject().also { WolfProjectStore.save(this, it) }
         } catch (error: Exception) {
@@ -558,11 +661,18 @@ class MainActivity : Activity() {
     private fun refreshVoiceStatus() {
         val project = workingProject ?: return
         val session = WolfStoryVoiceStore.read(this, project.id)
+        val parts = WolfVoiceSegmentStore.segmentCount(this, project.id)
         val message = when {
-            session == null -> "جلسة الراوي لم تبدأ بعد"
+            session == null -> if (parts > 0) "توجد $parts أجزاء محفوظة تنتظر الاستعادة" else "جلسة الراوي لم تبدأ بعد"
             !session.scriptApproved -> "نص القصة غير معتمد"
+            session.voiceApproved && (session.voiceFilePath.isNullOrBlank() ||
+                !File(session.voiceFilePath!!).isFile) ->
+                "ملف التسجيل المعتمد غير موجود؛ أعد تسجيل الراوي قبل الإنتاج"
             session.voiceApproved -> "التسجيل معتمد — " + (session.audioDurationMs / 1000) + " ثانية"
-            session.voiceFilePath != null -> "يوجد تسجيل يحتاج إلى المراجعة والاعتماد"
+            !session.voiceFilePath.isNullOrBlank() && !File(session.voiceFilePath!!).isFile ->
+                "ملف الدمج غير متاح؛ افتح المشروع لاستعادة الأجزاء أو أعد التسجيل"
+            session.voiceFilePath != null -> "يوجد تسجيل من $parts أجزاء يحتاج إلى المراجعة والاعتماد"
+            parts > 0 -> "توجد $parts أجزاء محفوظة — افتح المشروع لاستعادتها"
             else -> "النص معتمد — لم يتم تسجيل الراوي بعد"
         }
         status.text = message
@@ -589,13 +699,28 @@ class MainActivity : Activity() {
     }
 
     private fun openProject(item: WolfProject) {
-        if (producing) return
+        if (producing || voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) return
         stopVoicePreview()
         workingProject = item
         titleField.setText(item.title)
         storyField.setText(item.story)
         durationField.setText(item.durationSeconds.toString())
         voiceUri = item.audioUri
+        val persistedVoice = WolfStoryVoiceStore.read(this, item.id)
+        val approvedVoicePath = persistedVoice?.voiceFilePath
+        if (persistedVoice?.voiceApproved == true &&
+            persistedVoice.scriptApproved &&
+            persistedVoice.finalStory == item.story &&
+            persistedVoice.recordingStoryHash == WolfStoryVoiceStateMachine.storyFingerprint(item.story) &&
+            !approvedVoicePath.isNullOrBlank() &&
+            File(approvedVoicePath).isFile
+        ) {
+            voiceUri = Uri.fromFile(File(approvedVoicePath)).toString()
+            if (item.audioUri != voiceUri) {
+                workingProject = item.copy(audioUri = voiceUri)
+                WolfProjectStore.save(this, workingProject!!)
+            }
+        }
         selectedImageUris.clear()
         selectedImageUris.addAll(item.imageUris)
         selectedAspectRatio = item.aspectRatio.substringBefore(" ")
@@ -605,6 +730,51 @@ class MainActivity : Activity() {
         status.text = "تم فتح المشروع: " + item.title
         refreshVoiceStatus()
         refreshChapterStatus()
+        voiceRecoveryPending = true
+        status.text = "جارٍ التحقق من مقاطع الراوي واستعادة التسجيل المحفوظ..."
+        worker.execute {
+            val recovered = runCatching { WolfVoiceSegmentStore.recover(this, item.id) }
+            runOnUiThread {
+                voiceRecoveryPending = false
+                recovered.onSuccess { merged ->
+                    if (merged != null && workingProject?.id == item.id) {
+                        val existing = WolfStoryVoiceStore.read(this, item.id)
+                        val approvedStillMatches =
+                            existing?.voiceApproved == true &&
+                                existing.scriptApproved &&
+                                existing.finalStory == item.story &&
+                                existing.recordingStoryHash ==
+                                    WolfStoryVoiceStateMachine.storyFingerprint(item.story) &&
+                                existing.voiceFilePath == merged.file.absolutePath
+                        if (approvedStillMatches) {
+                            // The combined file may have been rebuilt after an interruption;
+                            // keep its approval but restore the project URI.
+                            voiceUri = Uri.fromFile(merged.file).toString()
+                            workingProject = item.copy(audioUri = voiceUri)
+                            WolfProjectStore.save(this, workingProject!!)
+                            refreshVoiceStatus()
+                            refreshProjectList()
+                        } else {
+                            val restored = WolfStoryVoiceStore.restoreMergedSegments(
+                                this, item.id, merged.file, merged.durationMs
+                            )
+                            if (restored != null) {
+                                voiceUri = Uri.fromFile(merged.file).toString()
+                                workingProject = item.copy(audioUri = voiceUri)
+                                WolfProjectStore.save(this, workingProject!!)
+                                status.text = "تم استعادة ${merged.segmentCount} مقطعًا محفوظًا للراوي؛ راجع التسجيل واعتمده."
+                                refreshVoiceStatus()
+                                refreshProjectList()
+                            } else {
+                                refreshVoiceStatus()
+                            }
+                        }
+                    } else if (merged == null && workingProject?.id == item.id) {
+                        refreshVoiceStatus()
+                    }
+                }.onFailure { status.text = "تعذر استعادة مقاطع الراوي: " + (it.message ?: "خطأ غير معروف") }
+            }
+        }
     }
 
     private fun confirmDeleteProject(item: WolfProject) {
@@ -617,8 +787,8 @@ class MainActivity : Activity() {
     }
 
     private fun deleteProject(item: WolfProject) {
-        if (producing) {
-            status.text = "لا يمكن حذف مشروع أثناء إنتاج الفيديو"
+        if (producing || voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف التسجيل أو انتظر انتهاء العملية الحالية قبل حذف المشروع"
             return
         }
         val deleted = WolfProjectStore.delete(this, item.id)
@@ -682,6 +852,10 @@ class MainActivity : Activity() {
     }
 
     private fun produce() {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف تسجيل الراوي وانتظر اكتمال حفظ المقاطع قبل إنتاج الفيلم"
+            return
+        }
         if (producing) {
             status.text = "يوجد إنتاج قيد التشغيل بالفعل"
             return

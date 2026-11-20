@@ -83,13 +83,17 @@ object OfflineProductionEngine {
         val h = dimensions.second
         val fps = 12
         val requestedTotal = seconds.coerceIn(1, 1800)
-        val useNarrationTiming = audioDurationIsAuthoritative && audioUri != null &&
-            audioDurationMs != null && audioDurationMs in 1000L..1_800_000L
-        val introSeconds = if (includeIntro) {
-            if (useNarrationTiming) minOf(3, (requestedTotal - 1).coerceAtLeast(0)) else 3
-        } else 0
+        val audioTimeline = WolfCinematicAudioTimeline.create(
+            requestedDurationSeconds = requestedTotal,
+            includeIntro = includeIntro,
+            authoritativeNarrationDurationMs = if (audioDurationIsAuthoritative && audioUri != null) {
+                audioDurationMs
+            } else null
+        )
+        val useNarrationTiming = audioTimeline.narrationSeconds != null
+        val introSeconds = audioTimeline.introSeconds
         val introFrames = introSeconds * fps
-        val bodySeconds = if (useNarrationTiming) (requestedTotal - introSeconds).coerceAtLeast(1) else requestedTotal
+        val bodySeconds = audioTimeline.narrationSeconds ?: requestedTotal
         val rawScenes = splitStory(story)
         val scenes = if (useNarrationTiming) {
             StoryDirectorEngine.fitSceneTextsToDuration(rawScenes, bodySeconds)
@@ -101,7 +105,7 @@ object OfflineProductionEngine {
                 sceneCount = scenes.size
             )
         }
-        val totalVideoSeconds = if (useNarrationTiming) requestedTotal else total + introSeconds
+        val totalVideoSeconds = if (useNarrationTiming) audioTimeline.totalVideoSeconds else total + introSeconds
         val totalFrames = total * fps
         val minimumFrames = if (useNarrationTiming) fps else fps * 3
         val framesPerScene = OfflineMotionEngine.allocateFrames(scenes, totalFrames, minimumFrames)
@@ -121,9 +125,8 @@ object OfflineProductionEngine {
                 chapterSeconds = safeChapterDuration
             ).chapters
         } else emptyList()
-        val narrationLimitUs = if (useNarrationTiming) {
-            (audioDurationMs ?: 1000L).coerceIn(1000L, 1_800_000L) * 1000L
-        } else totalVideoSeconds.toLong() * 1_000_000L
+        val narrationLimitUs = audioTimeline.narrationLimitUs
+            ?: totalVideoSeconds.toLong() * 1_000_000L
         val name = "wolf_offline_${System.currentTimeMillis()}.mp4"
         val tempDir = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
         // Reserve for overlapping temporary/final MP4 copies, optional AAC, and a safety margin.
@@ -225,39 +228,36 @@ object OfflineProductionEngine {
                 }
             }
         } else null
-        if(audioUri!=null || generatedAudio!=null) {
-            val mixedFile=File(tempDir,name)
-            var convertedAudioFile: File? = null
-            var layeredAudioFile: File? = null
+        if (audioUri != null || generatedAudio != null) {
+            val mixedFile = File(tempDir, name)
+            val totalTimelineUs = totalVideoSeconds.toLong() * 1_000_000L
             try {
-                if (audioUri != null && generatedAudio != null) {
-                    layeredAudioFile = File(tempDir, "layered_$name.m4a")
-                    WolfAudioMixer.mix(
-                        context, audioUri, generatedAudio, layeredAudioFile,
-                        narrationLimitUs, narrationGain = 0.92, effectsGain = 0.30
-                    )
-                    muxAudio(context, silentFile, null, layeredAudioFile, mixedFile, narrationLimitUs, fps)
-                } else {
-                    convertedAudioFile = audioUri?.let { source ->
-                        WolfAudioTranscoder.transcodeToAacIfNeeded(
-                            context, source, File(tempDir, "converted_$name.m4a"),
-                            narrationLimitUs
-                        )
-                    }
-                    val muxAudioUri = if (convertedAudioFile == null) audioUri else null
-                    val muxAudioFile = convertedAudioFile ?: generatedAudio
-                    muxAudio(context,silentFile,muxAudioUri,muxAudioFile,mixedFile,narrationLimitUs, fps)
-                }
+                // Narration begins after the branded intro. SFX already contains the intro sound bed.
+                WolfAudioMixer.mix(
+                    context = context,
+                    narrationUri = audioUri,
+                    effectsFile = generatedAudio,
+                    outputFile = mixedFile,
+                    maxDurationUs = totalTimelineUs,
+                    narrationGain = 0.92,
+                    effectsGain = 0.30,
+                    narrationOffsetUs = audioTimeline.narrationOffsetUs,
+                    narrationLimitUs = if (audioUri != null) narrationLimitUs else null
+                )
+                muxAudio(context, silentFile, null, mixedFile, File(tempDir, "muxed_$name"), totalTimelineUs, fps)
+                val muxedFile = File(tempDir, "muxed_$name")
                 silentFile.delete()
-                tempFile=mixedFile
-            } catch(e:Exception) {
                 mixedFile.delete()
+                tempFile = muxedFile
+            } catch (e: Exception) {
+                mixedFile.delete()
+                File(tempDir, "muxed_$name").delete()
                 silentFile.delete()
-                throw IllegalStateException("تعذر تجهيز أو دمج ملف الصوت: ${e.message ?: "صيغة غير مدعومة"}",e)
+                throw IllegalStateException(
+                    "تعذر تجهيز أو دمج ملف الصوت: ${e.message ?: "صيغة غير مدعومة"}", e
+                )
             } finally {
                 generatedAudio?.delete()
-                convertedAudioFile?.delete()
-                layeredAudioFile?.delete()
             }
         } else {
             // Surface-backed Canvas frames can inherit wall-clock timestamps from slow devices.
@@ -329,7 +329,7 @@ object OfflineProductionEngine {
             frames = framesPerScene.sum() + introFrames,
             savedLocation = savedLocation,
             mediaUri = finalReference,
-            durationSeconds = if (useNarrationTiming) requestedTotal else totalVideoSeconds,
+            durationSeconds = totalVideoSeconds,
             framesPerSecond = fps,
             videoWidth = outputWidth,
             videoHeight = outputHeight,
@@ -812,9 +812,9 @@ object OfflineProductionEngine {
                 p.textAlign=Paint.Align.CENTER
                 p.textSize=(w * 0.037f).coerceIn(16f,24f)
                 p.setShadowLayer(5f,0f,1f,android.graphics.Color.BLACK)
-                c.drawText("WOLF CODE S",w/2f,h*.965f,p)
+                c.drawText(WolfCinematicIdentity.BRAND_NAME,w/2f,h*.965f,p)
                 p.clearShadowLayer()
-                val centerX = w / 2f - p.measureText("WOLF CODE S") / 2f - 24f
+                val centerX = w / 2f - p.measureText(WolfCinematicIdentity.BRAND_NAME) / 2f - 24f
                 val centerY = h * .952f
                 val wolf = Path().apply {
                     moveTo(centerX - 12f, centerY + 8f)
@@ -965,16 +965,16 @@ object OfflineProductionEngine {
             paint.textSize=(h*0.062f).coerceIn(30f,72f)
             paint.color=android.graphics.Color.WHITE
             paint.setShadowLayer(12f,0f,0f,android.graphics.Color.RED)
-            canvas.drawText("WOLF CODE S",cx,h*0.82f,paint)
+            canvas.drawText(WolfCinematicIdentity.BRAND_NAME,cx,h*0.82f,paint)
             paint.clearShadowLayer()
             paint.typeface=android.graphics.Typeface.DEFAULT_BOLD
             paint.textSize=(h*0.027f).coerceIn(16f,30f)
             paint.color=android.graphics.Color.rgb(235,42,57)
-            canvas.drawText("شفرة الذئب S",cx,h*0.875f,paint)
+            canvas.drawText(WolfCinematicIdentity.ARABIC_BRAND_NAME,cx,h*0.875f,paint)
             paint.typeface=android.graphics.Typeface.DEFAULT
             paint.textSize=(h*0.019f).coerceIn(12f,21f)
             paint.color=android.graphics.Color.LTGRAY
-            canvas.drawText("رعب الظل المفقود",cx,h*0.92f,paint)
+            canvas.drawText(WolfCinematicIdentity.INTRO_SIGNATURE,cx,h*0.92f,paint)
 
             val fade=when {
                 progress<0.10f -> (progress/0.10f*255f).toInt()
