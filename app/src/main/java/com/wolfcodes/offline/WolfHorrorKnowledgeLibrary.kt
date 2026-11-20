@@ -208,6 +208,9 @@ object WolfHorrorKnowledgeLibrary {
                 throw IllegalStateException("تعذر تثبيت القصة داخل المكتبة")
             }
             SaveResult(entry, false)
+        } catch (error: OutOfMemoryError) {
+            staging.deleteRecursively()
+            throw IllegalStateException("الملف أكبر من الذاكرة المتاحة أثناء الفهرسة؛ لم تتم إضافته إلى المكتبة", error)
         } catch (error: Exception) {
             staging.deleteRecursively()
             throw error
@@ -270,6 +273,9 @@ object WolfHorrorKnowledgeLibrary {
             writeMetadata(directory, entry)
             cleanupOldContentVersions(directory, stats.fingerprint)
             SaveResult(entry, false)
+        } catch (error: OutOfMemoryError) {
+            pending.delete()
+            throw IllegalStateException("تعذر تحديث القصة بسبب الذاكرة المتاحة؛ النسخة المحفوظة السابقة لم تتغير", error)
         } catch (error: Exception) {
             pending.delete()
             throw error
@@ -303,7 +309,7 @@ object WolfHorrorKnowledgeLibrary {
     }
 
     /** Bounded preview helpers keep very large imported stories out of EditText and dialogs. */
-    fun readContentPreview(root: File, id: String, maxChars: Int = 250_000): String? =
+    fun readContentPreview(root: File, id: String, maxChars: Int = 60_000): String? =
         readPreview(root, id, "content", maxChars)
 
     fun readOriginalPreview(root: File, id: String, maxChars: Int = 40_000): String? =
