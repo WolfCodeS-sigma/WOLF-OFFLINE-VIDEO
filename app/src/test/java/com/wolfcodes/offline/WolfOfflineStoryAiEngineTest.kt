@@ -16,6 +16,8 @@ class WolfOfflineStoryAiEngineTest {
         assertFalse(runCatching { WolfOfflineStoryAiEngine.chapterCount(499) }.isSuccess)
         assertFalse(runCatching { WolfOfflineStoryAiEngine.chapterCount(50_001) }.isSuccess)
         assertFalse(runCatching { WolfOfflineStoryAiEngine.validateBrief(brief(500).copy(premise = "قصيرة")) }.isSuccess)
+        assertFalse(runCatching { WolfOfflineStoryAiEngine.validateBrief(brief(500).copy(premise = "فكرة".repeat(1_100))) }.isSuccess)
+        assertFalse(runCatching { WolfOfflineStoryAiEngine.validateBrief(brief(500).copy(title = "ع".repeat(181))) }.isSuccess)
     }
 
     @Test fun parserAcceptsExactChapterCountAndFallsBackSafely() {
@@ -75,6 +77,26 @@ class WolfOfflineStoryAiEngineTest {
             assertEquals(reviewedText, restored!!.finalText)
             assertTrue(restored.approved)
             assertEquals(generated.chapters, restored.chapters)
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun unapprovedReviewedDraftSurvivesSessionRestore() {
+        val root = Files.createTempDirectory("wolf-story-draft-review").toFile()
+        try {
+            val brief = brief(500)
+            val plan = WolfOfflineStoryAiEngine.parsePlan(
+                """{"chapter_titles":["البيت"],"continuity_summary":"بداية"}""", brief
+            )
+            val generated = WolfOfflineStoryAiEngine.withChapter(
+                WolfOfflineStoryAiEngine.newSession(brief, plan),
+                "الفصل الأصلي الذي كتبه النموذج. ".repeat(8)
+            )
+            val draftText = "نسخة المستخدم المعدلة التي لم يعتمدها بعد. ".repeat(20)
+            WolfOfflineStoryAiEngine.saveSession(root, generated.copy(finalText = draftText, approved = false))
+            val restored = WolfOfflineStoryAiEngine.loadLatestSession(root)
+            assertNotNull(restored)
+            assertEquals(draftText, restored!!.finalText)
+            assertFalse(restored.approved)
         } finally { root.deleteRecursively() }
     }
 
