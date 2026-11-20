@@ -29,7 +29,7 @@ object WolfImageDepthSegmenter {
     // Bound both dimensions and total working pixels to avoid large temporary
     // masks/queues on memory-constrained Android devices.
     private const val MAX_ANALYSIS_DIMENSION = 768
-    private const val MAX_ANALYSIS_PIXELS = 524_288
+    private const val MAX_ANALYSIS_PIXELS = 262_144
     private const val MIN_COMPONENT_PIXELS = 48
     private const val MIN_FOREGROUND_RATIO = 0.008f
     private const val MAX_FOREGROUND_RATIO = 0.86f
@@ -60,7 +60,7 @@ object WolfImageDepthSegmenter {
     private data class BackgroundModel(val color: Int, val threshold: Int, val consistency: Float)
 
     fun segment(source: Bitmap): Layers {
-        require(!source.isRecycled && source.width > 0 && source.height > 0) {
+        require(!source.isRecycled && source.width > 2 && source.height > 2) {
             "الصورة غير صالحة لفصل طبقات العمق"
         }
 
@@ -205,9 +205,15 @@ object WolfImageDepthSegmenter {
                 largestSize = componentTail
                 largestPixels = componentQueue.copyOf(componentTail)
             }
-            val target = if (componentTail >= minimumComponent) frontMask else midMask
-            for (i in 0 until componentTail) target[componentQueue[i]] = true
+            // Ignore sub-threshold components instead of promoting isolated noise
+            // into the primary subject plane.
+            if (componentTail >= minimumComponent) {
+                for (i in 0 until componentTail) frontMask[componentQueue[i]] = true
+            }
         }
+
+        // Without one coherent component, the apparent foreground is only noise.
+        if (largestSize < minimumComponent) return emptyResult(pixels.size)
 
         // The largest coherent subject is the primary midground plane.
         for (index in largestPixels) {
