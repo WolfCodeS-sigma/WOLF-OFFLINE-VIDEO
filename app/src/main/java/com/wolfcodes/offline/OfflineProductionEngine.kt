@@ -540,6 +540,16 @@ object OfflineProductionEngine {
         typographyCues: List<WolfHorrorTypographyEngine.Cue?>,
         introSeconds: Int, onSceneProgress: ((Int, Int) -> Unit)?, bitRate: Int,
         shotSlices: List<WolfLongFilmEngine.SceneSlice>? = null) {
+        if (shotSlices != null) {
+            require(shotSlices.size == scenes.size && framesPerScene.size == scenes.size) {
+                "خطة اللقطات لا تطابق بيانات الفصل"
+            }
+            require(shotSlices.all {
+                it.shotIndex in 0 until WolfSceneAssetStore.SHOTS_PER_SCENE &&
+                    it.shotTotalFrames > 0 && it.shotStartFrame >= 0 &&
+                    it.shotStartFrame + it.frameCount <= it.shotTotalFrames
+            }) { "بيانات استئناف اللقطة غير صالحة" }
+        }
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, 0x7F000789)
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate.coerceIn(400_000, 2_500_000))
