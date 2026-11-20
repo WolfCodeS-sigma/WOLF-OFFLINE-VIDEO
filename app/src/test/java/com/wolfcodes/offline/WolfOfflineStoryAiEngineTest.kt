@@ -100,6 +100,24 @@ class WolfOfflineStoryAiEngineTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun latestCorruptSessionDoesNotHideOlderValidCheckpoint() {
+        val root = Files.createTempDirectory("wolf-story-latest-fallback").toFile()
+        try {
+            val brief = brief(500)
+            val plan = WolfOfflineStoryAiEngine.parsePlan(
+                """{"chapter_titles":["البيت"],"continuity_summary":"بداية"}""", brief
+            )
+            val valid = WolfOfflineStoryAiEngine.newSession(brief, plan)
+            WolfOfflineStoryAiEngine.saveSession(root, valid)
+            val corrupt = File(root, "00000000-0000-0000-0000-000000000000.json")
+            corrupt.writeText("{broken", Charsets.UTF_8)
+            corrupt.setLastModified(System.currentTimeMillis() + 10_000)
+            val restored = WolfOfflineStoryAiEngine.loadLatestSession(root)
+            assertNotNull(restored)
+            assertEquals(valid.id, restored!!.id)
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun modelImportBackupIsRestoredAfterInterruptedReplacement() {
         val directory = Files.createTempDirectory("wolf-model-recovery").toFile()
         try {
