@@ -743,17 +743,27 @@ object OfflineProductionEngine {
                     c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
                 }
             } else {
-                WolfSceneArtEngine.draw(c, w, h, caption, scene * WolfSceneAssetStore.SHOTS_PER_SCENE + shotIndex, t)
+                val proceduralPlan = WolfProceduralSceneProductionEngine.plan(caption, scene)
+                WolfProceduralSceneProductionEngine.render(
+                    canvas = c,
+                    width = w,
+                    height = h,
+                    plan = proceduralPlan,
+                    shotIndex = safeShotIndex,
+                    progress = t
+                )
             }
-            WolfProceduralMotionEngine.renderDepthAware(
-                canvas = c,
-                width = w,
-                height = h,
-                caption = caption,
-                sceneIndex = scene,
-                shotIndex = safeShotIndex,
-                progress = t
-            )
+            if (bitmap != null && !bitmap.isRecycled) {
+                WolfProceduralMotionEngine.renderDepthAware(
+                    canvas = c,
+                    width = w,
+                    height = h,
+                    caption = caption,
+                    sceneIndex = scene,
+                    shotIndex = safeShotIndex,
+                    progress = t
+                )
+            }
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
             if (includeWatermark) {
                 p.color=android.graphics.Color.WHITE
