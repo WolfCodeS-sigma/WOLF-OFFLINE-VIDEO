@@ -4,20 +4,32 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.sin
 
 /**
  * Isolated offline pipeline for user-supplied still images.
- *
- * This component deliberately has no dependency on the procedural scene planner,
- * procedural artwork renderer, story classifier, network, or remote models.
- * Its failures degrade to the original bitmap and never escape its public render API.
+ * Story-aware camera choreography and atmospheric overlays are local to this engine.
+ * It has no dependency on the procedural scene planner or renderer.
  */
 object WolfUploadedImageEngine {
-
     enum class Result { DEPTH_LAYERS, ORIGINAL_IMAGE, SAFE_FRAME }
+    enum class CameraMove { SLOW_PUSH, SLOW_PULL, LEFT_TRACK, RIGHT_TRACK, REVEAL, HANDHELD }
+    enum class Atmosphere { QUIET, FOREST, CORRIDOR, DOOR, GHOST, CHASE, RAIN, CEMETERY, MIRROR }
+
+    data class MotionPlan(
+        val cameraMove: CameraMove,
+        val atmosphere: Atmosphere,
+        val intensity: Float,
+        val focusX: Float,
+        val focusY: Float
+    )
 
     class PreparedImage internal constructor(
         internal val source: Bitmap,
@@ -31,13 +43,69 @@ object WolfUploadedImageEngine {
     }
 
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val atmospherePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private const val MIN_CONFIDENCE = 0.12f
+    private const val TAU = (2.0 * PI).toFloat()
 
     internal fun shouldUseDepthLayers(separated: Boolean, confidence: Float): Boolean =
         separated && confidence >= MIN_CONFIDENCE
 
-    private const val MIN_CONFIDENCE = 0.30f
+    /** Story text, shot identity and normalized shot progress determine deterministic motion. */
+    internal fun planMotion(
+        story: String,
+        sceneIndex: Int,
+        shotIndex: Int,
+        durationProgress: Float
+    ): MotionPlan {
+        val text = story.lowercase()
+        val atmosphere = when {
+            hasAny(text, "مطاردة", "يطارد", "يجري", "يركض", "هرب", "لاحق", "يلاحق") -> Atmosphere.CHASE
+            hasAny(text, "مطر", "تمطر", "عاصفة", "ماطر", "رعد") -> Atmosphere.RAIN
+            hasAny(text, "مقبرة", "قبر", "مدفن", "جنازة") -> Atmosphere.CEMETERY
+            hasAny(text, "غابة", "شجرة", "أشجار", "غصن", "غصون") -> Atmosphere.FOREST
+            hasAny(text, "ممر", "طرقة", "رصيف") -> Atmosphere.CORRIDOR
+            hasAny(text, "باب", "مقبض", "طرق", "خبط", "صرير") -> Atmosphere.DOOR
+            hasAny(text, "مرآة", "مراية", "انعكاس") -> Atmosphere.MIRROR
+            hasAny(text, "شبح", "ظل", "كيان", "روح", "ظهر", "اختفى", "اختفت") -> Atmosphere.GHOST
+            else -> Atmosphere.QUIET
+        }
+        val move = when (atmosphere) {
+            Atmosphere.CHASE -> if (shotIndex % 2 == 0) CameraMove.LEFT_TRACK else CameraMove.RIGHT_TRACK
+            Atmosphere.DOOR, Atmosphere.GHOST, Atmosphere.MIRROR -> CameraMove.REVEAL
+            Atmosphere.CEMETERY, Atmosphere.FOREST -> CameraMove.SLOW_PULL
+            Atmosphere.RAIN, Atmosphere.CORRIDOR -> CameraMove.SLOW_PUSH
+            Atmosphere.QUIET -> when (Math.floorMod(sceneIndex + shotIndex, 4)) {
+                0 -> CameraMove.SLOW_PUSH
+                1 -> CameraMove.LEFT_TRACK
+                2 -> CameraMove.SLOW_PULL
+                else -> CameraMove.RIGHT_TRACK
+            }
+        }
+        val intensity = when (atmosphere) {
+            Atmosphere.CHASE -> 1.0f
+            Atmosphere.GHOST, Atmosphere.DOOR, Atmosphere.MIRROR -> 0.78f
+            Atmosphere.RAIN, Atmosphere.CORRIDOR -> 0.62f
+            Atmosphere.FOREST, Atmosphere.CEMETERY -> 0.48f
+            Atmosphere.QUIET -> 0.28f
+        }
+        val focusX = when (move) {
+            CameraMove.LEFT_TRACK -> 0.40f
+            CameraMove.RIGHT_TRACK -> 0.60f
+            CameraMove.REVEAL -> if (shotIndex % 2 == 0) 0.43f else 0.57f
+            else -> 0.50f
+        }
+        val focusY = when (atmosphere) {
+            Atmosphere.GHOST, Atmosphere.MIRROR -> 0.44f
+            Atmosphere.CEMETERY -> 0.58f
+            else -> 0.50f
+        }
+        return MotionPlan(move, atmosphere, intensity, focusX, focusY)
+    }
 
-    /** Analysis is best-effort: the source bitmap remains caller-owned and untouched. */
+    private fun hasAny(text: String, vararg terms: String): Boolean = terms.any { text.contains(it) }
+
+    /** Best-effort analysis; source remains caller-owned and unchanged. */
     fun prepare(source: Bitmap, onFailure: (Exception) -> Unit = {}): PreparedImage {
         return try {
             require(!source.isRecycled && source.width > 0 && source.height > 0) {
@@ -48,7 +116,7 @@ object WolfUploadedImageEngine {
                 PreparedImage(source, candidate, candidate.confidence)
             } else {
                 candidate.recycle()
-                PreparedImage(source, null, 0f)
+                PreparedImage(source, null, 0f, "InsufficientSegmentationConfidence")
             }
         } catch (failure: OutOfMemoryError) {
             PreparedImage(source, null, 0f, "OutOfMemoryError")
@@ -59,9 +127,10 @@ object WolfUploadedImageEngine {
     }
 
     /**
-     * Renders only uploaded-image content. Any analysis/composition error falls back
-     * to the untouched source image; it does not call or mutate the procedural renderer.
+     * Every uploaded-image frame is animated, including the no-segmentation fallback.
+     * Atmospheric overlays are composed locally and never call the procedural renderer.
      */
+    @Synchronized
     fun render(
         canvas: Canvas,
         width: Int,
@@ -72,18 +141,22 @@ object WolfUploadedImageEngine {
         caption: String,
         prepared: PreparedImage
     ): Result {
-        if (width <= 0 || height <= 0 || prepared.source.isRecycled) {
-            return safeFrame(canvas, width, height)
-        }
+        if (width <= 0 || height <= 0 || prepared.source.isRecycled) return safeFrame(canvas, width, height)
         return try {
-            renderImage(canvas, width, height, sceneIndex, shotIndex, progress, caption, prepared)
+            val t = progress.coerceIn(0f, 1f)
+            val plan = planMotion(caption, sceneIndex, shotIndex, t)
+            renderImage(canvas, width, height, sceneIndex, shotIndex, t, plan, prepared)
+            drawAtmosphere(canvas, width, height, sceneIndex, shotIndex, t, plan)
             if (prepared.layers != null) Result.DEPTH_LAYERS else Result.ORIGINAL_IMAGE
         } catch (_: OutOfMemoryError) {
             safeFrame(canvas, width, height)
         } catch (_: Exception) {
             try {
                 canvas.drawColor(Color.BLACK)
-                drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, caption)
+                val t = progress.coerceIn(0f, 1f)
+                val plan = planMotion(caption, sceneIndex, shotIndex, t)
+                drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, t, plan)
+                drawAtmosphere(canvas, width, height, sceneIndex, shotIndex, t, plan)
                 Result.ORIGINAL_IMAGE
             } catch (_: OutOfMemoryError) {
                 safeFrame(canvas, width, height)
@@ -94,100 +167,224 @@ object WolfUploadedImageEngine {
     }
 
     private fun renderImage(
-        canvas: Canvas,
-        width: Int,
-        height: Int,
-        sceneIndex: Int,
-        shotIndex: Int,
-        progress: Float,
-        caption: String,
-        prepared: PreparedImage
+        canvas: Canvas, width: Int, height: Int, sceneIndex: Int, shotIndex: Int,
+        progress: Float, plan: MotionPlan, prepared: PreparedImage
     ) {
-        val source = prepared.source
-        val crop = cropForAspect(source.width, source.height, width, height)
-        val shotCrop = shotCrop(crop, shotIndex, progress)
-        val destination = destination(width, height, shotIndex, progress, sceneIndex, caption)
         val layers = prepared.layers
-        if (layers != null && !layers.background.isRecycled &&
-            !layers.midground.isRecycled && !layers.foreground.isRecycled
+        if (layers == null || layers.background.isRecycled ||
+            layers.midground.isRecycled || layers.foreground.isRecycled
         ) {
-            val scale = layers.sourceScale
-            val layerSource = Rect(
-                (shotCrop.left * scale).toInt().coerceIn(0, layers.background.width - 1),
-                (shotCrop.top * scale).toInt().coerceIn(0, layers.background.height - 1),
-                (shotCrop.right * scale).toInt().coerceIn(1, layers.background.width),
-                (shotCrop.bottom * scale).toInt().coerceIn(1, layers.background.height)
-            )
-            if (layerSource.width() <= 0 || layerSource.height() <= 0) {
-                canvas.drawColor(Color.BLACK)
-                drawOriginal(canvas, width, height, source, sceneIndex, shotIndex, progress, caption)
-            } else {
-                canvas.drawColor(Color.BLACK)
-                drawDepthPlane(canvas, width, height, sceneIndex, progress, layers.background,
-                    layerSource, destination, cameraRotation(sceneIndex, progress, shotIndex), 0.16f, 1.018f, 0.006f)
-                drawDepthPlane(canvas, width, height, sceneIndex, progress, layers.midground,
-                    layerSource, destination, cameraRotation(sceneIndex, progress, shotIndex), 0.54f, 1.038f, 0.012f)
-                drawDepthPlane(canvas, width, height, sceneIndex, progress, layers.foreground,
-                    layerSource, destination, cameraRotation(sceneIndex, progress, shotIndex), 1.0f, 1.058f, 0.019f)
-            }
-        } else {
             canvas.drawColor(Color.BLACK)
-            drawOriginal(canvas, width, height, source, sceneIndex, shotIndex, progress, caption)
+            drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, plan)
+            return
         }
+        val crop = cropForAspect(prepared.source.width, prepared.source.height, width, height)
+        val scale = layers.sourceScale
+        val layerSource = Rect(
+            (crop.left * scale).toInt().coerceIn(0, layers.background.width - 1),
+            (crop.top * scale).toInt().coerceIn(0, layers.background.height - 1),
+            (crop.right * scale).toInt().coerceIn(1, layers.background.width),
+            (crop.bottom * scale).toInt().coerceIn(1, layers.background.height)
+        )
+        if (layerSource.width() <= 0 || layerSource.height() <= 0) {
+            canvas.drawColor(Color.BLACK)
+            drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, plan)
+            return
+        }
+        canvas.drawColor(Color.BLACK)
+        val destination = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        drawDepthPlane(canvas, width, height, sceneIndex, shotIndex, progress, plan,
+            layers.background, layerSource, destination, 0.16f, 1.0f)
+        drawDepthPlane(canvas, width, height, sceneIndex, shotIndex, progress, plan,
+            layers.midground, layerSource, destination, 0.56f, 1.018f)
+        drawDepthPlane(canvas, width, height, sceneIndex, shotIndex, progress, plan,
+            layers.foreground, layerSource, destination, 1.0f, 1.038f)
     }
 
     private fun drawOriginal(
-        canvas: Canvas,
-        width: Int,
-        height: Int,
-        source: Bitmap,
-        sceneIndex: Int,
-        shotIndex: Int,
-        progress: Float,
-        caption: String
+        canvas: Canvas, width: Int, height: Int, source: Bitmap, sceneIndex: Int,
+        shotIndex: Int, progress: Float, plan: MotionPlan
     ) {
-        val crop = shotCrop(cropForAspect(source.width, source.height, width, height), shotIndex, progress)
-        val target = destination(width, height, shotIndex, progress, sceneIndex, caption)
-        val save = canvas.save()
+        val crop = cropForAspect(source.width, source.height, width, height)
+        val destination = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        val saved = canvas.save()
         try {
-            canvas.rotate(cameraRotation(sceneIndex, progress, shotIndex), width / 2f, height / 2f)
-            canvas.drawBitmap(source, crop, target, imagePaint)
+            applyCamera(canvas, width, height, sceneIndex, shotIndex, progress, plan, 0f)
+            canvas.drawBitmap(source, crop, destination, imagePaint)
         } finally {
-            canvas.restoreToCount(save)
+            canvas.restoreToCount(saved)
         }
     }
 
-    /** Private image-only compositor; it does not share the procedural depth compositor. */
     private fun drawDepthPlane(
-        canvas: Canvas,
-        width: Int,
-        height: Int,
-        sceneIndex: Int,
-        progress: Float,
-        bitmap: Bitmap,
-        source: Rect,
-        destination: RectF,
-        rotationDegrees: Float,
-        parallax: Float,
-        baseScale: Float,
-        travel: Float
+        canvas: Canvas, width: Int, height: Int, sceneIndex: Int, shotIndex: Int,
+        progress: Float, plan: MotionPlan, bitmap: Bitmap, source: Rect,
+        destination: RectF, depth: Float, parallaxScale: Float
     ) {
         if (bitmap.isRecycled) return
-        val t = progress.coerceIn(0f, 1f)
-        val phase = sceneIndex * 0.73f + t * 6.2831853f
-        val dx = kotlin.math.sin(phase.toDouble()).toFloat() * width * 0.018f * parallax
-        val dy = kotlin.math.sin((phase * 0.61f + 1.2f).toDouble()).toFloat() * height * 0.009f * parallax
-        val scale = baseScale + travel * t
         val saved = canvas.save()
         try {
-            canvas.translate(width * 0.5f + dx, height * 0.5f + dy)
-            canvas.scale(scale, scale)
-            canvas.rotate(rotationDegrees, 0f, 0f)
-            canvas.translate(-width * 0.5f, -height * 0.5f)
+            applyCamera(canvas, width, height, sceneIndex, shotIndex, progress, plan, depth)
+            canvas.scale(parallaxScale, parallaxScale, width * 0.5f, height * 0.5f)
             canvas.drawBitmap(bitmap, source, destination, imagePaint)
         } finally {
             canvas.restoreToCount(saved)
         }
+    }
+
+    private fun applyCamera(
+        canvas: Canvas, width: Int, height: Int, sceneIndex: Int, shotIndex: Int,
+        progress: Float, plan: MotionPlan, depth: Float
+    ) {
+        val t = smooth(progress)
+        val wave = sin((sceneIndex * 0.71f + shotIndex * 0.43f + t * TAU).toDouble()).toFloat()
+        val secondary = cos((sceneIndex * 0.37f + t * TAU * 0.72f).toDouble()).toFloat()
+        val zoom = when (plan.cameraMove) {
+            CameraMove.SLOW_PUSH -> 1.018f + 0.105f * t
+            CameraMove.SLOW_PULL -> 1.112f - 0.092f * t
+            CameraMove.LEFT_TRACK, CameraMove.RIGHT_TRACK -> 1.065f + 0.025f * sin((t * PI).toDouble()).toFloat()
+            CameraMove.REVEAL -> 1.025f + 0.082f * t
+            CameraMove.HANDHELD -> 1.055f + 0.022f * wave
+        }
+        val direction = when (plan.cameraMove) {
+            CameraMove.LEFT_TRACK -> 1f
+            CameraMove.RIGHT_TRACK -> -1f
+            CameraMove.REVEAL -> if (shotIndex % 2 == 0) -1f else 1f
+            else -> 0f
+        }
+        val panX = when (plan.cameraMove) {
+            CameraMove.LEFT_TRACK, CameraMove.RIGHT_TRACK -> direction * width * 0.042f * (t - 0.5f)
+            CameraMove.REVEAL -> direction * width * 0.024f * (t - 0.5f)
+            CameraMove.HANDHELD -> wave * width * 0.009f
+            else -> wave * width * 0.004f
+        }
+        val panY = when (plan.cameraMove) {
+            CameraMove.REVEAL -> -height * 0.018f * (t - 0.5f)
+            CameraMove.HANDHELD -> secondary * height * 0.007f
+            else -> secondary * height * 0.0035f
+        }
+        val rotation = when (plan.cameraMove) {
+            CameraMove.HANDHELD -> wave * 0.34f
+            CameraMove.REVEAL -> wave * 0.12f
+            else -> wave * 0.055f
+        }
+        val parallax = 0.42f + depth * 0.58f
+        canvas.translate(width * 0.5f + panX * parallax, height * 0.5f + panY * parallax)
+        canvas.scale(zoom, zoom)
+        canvas.rotate(rotation)
+        canvas.translate(-width * 0.5f, -height * 0.5f)
+    }
+
+    private fun drawAtmosphere(
+        canvas: Canvas, width: Int, height: Int, sceneIndex: Int, shotIndex: Int,
+        progress: Float, plan: MotionPlan
+    ) {
+        val t = progress.coerceIn(0f, 1f)
+        val phase = sceneIndex * 0.83f + shotIndex * 0.47f + t * TAU
+        val strength = plan.intensity
+        val saved = canvas.save()
+        try {
+            when (plan.atmosphere) {
+                Atmosphere.FOREST, Atmosphere.CEMETERY, Atmosphere.GHOST ->
+                    drawFog(canvas, width, height, phase, strength, t)
+                Atmosphere.CORRIDOR, Atmosphere.DOOR, Atmosphere.MIRROR ->
+                    drawDust(canvas, width, height, phase, strength, t)
+                Atmosphere.RAIN -> drawRain(canvas, width, height, phase, strength, t)
+                Atmosphere.CHASE -> {
+                    drawDust(canvas, width, height, phase, strength * 0.72f, t)
+                    drawMotionStreaks(canvas, width, height, phase, strength)
+                }
+                Atmosphere.QUIET -> drawDust(canvas, width, height, phase, strength * 0.42f, t)
+            }
+            if (plan.atmosphere == Atmosphere.DOOR || plan.atmosphere == Atmosphere.GHOST ||
+                plan.atmosphere == Atmosphere.MIRROR
+            ) {
+                val pulse = 0.5f + 0.5f * sin((phase * 1.7f).toDouble()).toFloat()
+                atmospherePaint.shader = RadialGradient(
+                    width * plan.focusX, height * plan.focusY, max(width, height) * 0.62f,
+                    intArrayOf(Color.argb((strength * pulse * 24f).toInt(), 255, 30, 42), Color.TRANSPARENT),
+                    floatArrayOf(0f, 1f), Shader.TileMode.CLAMP
+                )
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), atmospherePaint)
+                atmospherePaint.shader = null
+            }
+            drawVignette(canvas, width, height, strength)
+        } finally {
+            atmospherePaint.shader = null
+            canvas.restoreToCount(saved)
+        }
+    }
+
+    private fun drawFog(canvas: Canvas, width: Int, height: Int, phase: Float, strength: Float, progress: Float) {
+        val drift = progress * width * 0.12f
+        val centers = floatArrayOf(
+            width * (0.18f + 0.06f * sin(phase.toDouble()).toFloat()) + drift,
+            width * (0.70f + 0.05f * cos(phase.toDouble()).toFloat()) - drift * 0.55f,
+            width * (0.46f + 0.04f * sin((phase * 0.6f).toDouble()).toFloat()) + drift * 0.25f
+        )
+        val ys = floatArrayOf(height * 0.72f, height * 0.58f, height * 0.86f)
+        for (index in centers.indices) {
+            val radius = width * (0.24f + index * 0.045f)
+            val alpha = (strength * (18f + index * 5f)).toInt().coerceIn(0, 42)
+            atmospherePaint.shader = RadialGradient(
+                centers[index], ys[index], radius,
+                intArrayOf(Color.argb(alpha, 178, 185, 194), Color.TRANSPARENT),
+                floatArrayOf(0f, 1f), Shader.TileMode.CLAMP
+            )
+            canvas.drawCircle(centers[index], ys[index], radius, atmospherePaint)
+        }
+        atmospherePaint.shader = null
+    }
+
+    private fun drawDust(canvas: Canvas, width: Int, height: Int, phase: Float, strength: Float, progress: Float) {
+        atmospherePaint.shader = null
+        atmospherePaint.color = Color.argb((strength * 34f).toInt().coerceIn(0, 38), 210, 207, 190)
+        atmospherePaint.style = Paint.Style.FILL
+        for (index in 0 until 13) {
+            val seed = index * 1.731f + phase
+            val x = Math.floorMod((width * (0.08f + index * 0.071f) +
+                sin(seed.toDouble()).toFloat() * width * 0.035f +
+                progress * width * (0.025f + index * 0.001f)).toInt(), width).toFloat()
+            val y = Math.floorMod((height * (0.16f + index * 0.061f) +
+                cos((seed * 0.77f).toDouble()).toFloat() * height * 0.045f -
+                progress * height * 0.018f).toInt(), height).toFloat()
+            val radius = (width * (0.0012f + (index % 3) * 0.00055f)).coerceAtLeast(0.7f)
+            canvas.drawCircle(x, y, radius, atmospherePaint)
+        }
+    }
+
+    private fun drawRain(canvas: Canvas, width: Int, height: Int, phase: Float, strength: Float, progress: Float) {
+        linePaint.shader = null
+        linePaint.color = Color.argb((strength * 72f).toInt().coerceIn(0, 80), 190, 205, 218)
+        linePaint.strokeWidth = (width * 0.0011f).coerceIn(0.7f, 1.5f)
+        for (index in 0 until 34) {
+            val seed = index * 2.17f + phase
+            val x = Math.floorMod((width * (index * 0.037f) + progress * width * 0.22f).toInt(), width).toFloat()
+            val y = Math.floorMod((height * (index * 0.071f) + progress * height * 0.82f +
+                sin(seed.toDouble()).toFloat() * height * 0.04f).toInt(), height).toFloat()
+            canvas.drawLine(x, y, x - width * 0.009f, y + height * 0.035f, linePaint)
+        }
+    }
+
+    private fun drawMotionStreaks(canvas: Canvas, width: Int, height: Int, phase: Float, strength: Float) {
+        linePaint.shader = null
+        linePaint.color = Color.argb((strength * 28f).toInt().coerceIn(0, 32), 210, 215, 220)
+        linePaint.strokeWidth = (width * 0.0013f).coerceIn(0.8f, 1.7f)
+        for (index in 0 until 8) {
+            val y = height * (0.18f + index * 0.095f) +
+                sin((phase + index).toDouble()).toFloat() * height * 0.012f
+            canvas.drawLine(width * 0.04f, y, width * 0.16f, y - height * 0.018f, linePaint)
+        }
+    }
+
+    private fun drawVignette(canvas: Canvas, width: Int, height: Int, strength: Float) {
+        atmospherePaint.shader = RadialGradient(
+            width * 0.5f, height * 0.48f, max(width, height) * 0.76f,
+            intArrayOf(Color.TRANSPARENT, Color.argb((strength * 82f).toInt().coerceIn(0, 88), 0, 0, 0)),
+            floatArrayOf(0.52f, 1f), Shader.TileMode.CLAMP
+        )
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), atmospherePaint)
+        atmospherePaint.shader = null
     }
 
     private fun cropForAspect(sourceWidth: Int, sourceHeight: Int, width: Int, height: Int): Rect {
@@ -204,39 +401,9 @@ object WolfUploadedImageEngine {
         }
     }
 
-    private fun shotCrop(base: Rect, shotIndex: Int, progress: Float): Rect {
-        val t = progress.coerceIn(0f, 1f)
-        val factor = when (shotIndex.coerceIn(0, 2)) { 0 -> 1f; 1 -> 0.78f; else -> 0.60f }
-        val width = max(1, (base.width() * factor).toInt())
-        val height = max(1, (base.height() * factor).toInt())
-        val focusX = when (shotIndex.coerceIn(0, 2)) { 0 -> 0.5f; 1 -> 0.34f + 0.30f * t; else -> 0.62f - 0.24f * t }
-        val focusY = when (shotIndex.coerceIn(0, 2)) { 0 -> 0.5f; 1 -> 0.45f; else -> 0.40f + 0.12f * t }
-        val left = (base.left + (base.width() - width) * focusX).toInt()
-            .coerceIn(base.left, base.right - width)
-        val top = (base.top + (base.height() - height) * focusY).toInt()
-            .coerceIn(base.top, base.bottom - height)
-        return Rect(left, top, left + width, top + height)
-    }
-
-    private fun destination(
-        width: Int, height: Int, shotIndex: Int, progress: Float, sceneIndex: Int, caption: String
-    ): RectF {
-        val t = progress.coerceIn(0f, 1f)
-        val zoom = when (shotIndex.coerceIn(0, 2)) { 0 -> 1.012f; 1 -> 1.034f; else -> 1.058f }
-        val phase = sceneIndex * 0.73f + t * 6.2831853f + caption.length * 0.013f
-        val scale = zoom + 0.006f * kotlin.math.sin(phase.toDouble()).toFloat()
-        val dw = width * scale
-        val dh = height * scale
-        val shiftX = kotlin.math.sin(phase.toDouble()).toFloat() * width * 0.006f
-        val shiftY = kotlin.math.cos(phase.toDouble()).toFloat() * height * 0.004f
-        return RectF((width - dw) / 2f + shiftX, (height - dh) / 2f + shiftY,
-            (width + dw) / 2f + shiftX, (height + dh) / 2f + shiftY)
-    }
-
-    private fun cameraRotation(sceneIndex: Int, progress: Float, shotIndex: Int): Float {
-        val phase = sceneIndex * 0.73f + progress.coerceIn(0f, 1f) * 6.2831853f
-        val shotBias = when (shotIndex.coerceIn(0, 2)) { 0 -> 0f; 1 -> 0.12f; else -> -0.16f }
-        return (kotlin.math.sin(phase.toDouble()).toFloat() * 0.22f + shotBias).coerceIn(-0.4f, 0.4f)
+    private fun smooth(value: Float): Float {
+        val t = value.coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
     }
 
     private fun safeFrame(canvas: Canvas, width: Int, height: Int): Result {

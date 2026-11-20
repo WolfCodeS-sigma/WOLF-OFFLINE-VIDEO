@@ -244,7 +244,7 @@ object WolfImageDepthSegmenter {
             midgroundMask = midMask,
             foregroundPlaneMask = frontMask,
             confidence = if (totalAssigned == 0) 0f else confidence,
-            separated = totalAssigned > 0 && confidence >= 0.30f
+            separated = totalAssigned > 0 && confidence >= 0.12f
         )
     }
 

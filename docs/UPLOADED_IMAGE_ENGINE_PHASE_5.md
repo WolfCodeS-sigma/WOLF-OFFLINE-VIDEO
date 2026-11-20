@@ -1,30 +1,37 @@
 # Phase 5 — Isolated Uploaded Image Engine
 
 ## Architecture boundary
-- Added `WolfUploadedImageEngine` as a dedicated offline component for user-supplied still images.
-- It does not call the procedural scene planner, procedural artwork renderer, or story/environment classifier.
-- The procedural no-image branch remains the existing `WolfProceduralSceneProductionEngine` path.
-- Uploaded-image analysis and composition are best-effort and are contained behind the image engine API.
+- WolfUploadedImageEngine is a dedicated offline component for user-supplied still images.
+- It does not call the procedural scene planner, procedural artwork renderer, or procedural motion engine.
+- The no-image path remains the existing WolfProceduralSceneProductionEngine path.
+- Story-aware camera choreography and image-only atmospheric composition stay inside the uploaded-image engine.
 
-## Processing
+## Image preparation and partial segmentation
 1. The caller decodes the selected image and retains ownership of the original bitmap.
-2. The image engine attempts the existing deterministic border-background/depth-plane analysis.
-3. Depth layers are accepted only when separation succeeds and confidence is at least 0.30.
-4. A weak or failed analysis discards only the generated layer bitmaps and keeps the original image intact.
-5. The image engine renders the three image depth planes with independent depth parallax when available; otherwise it renders the original image with a local virtual-camera move.
-6. Composition exceptions trigger a best-effort original-image redraw, then a safe black frame if even that drawing fails.
-7. Prepared layer bitmaps are released after their shot; the caller-owned source bitmap is released by the existing caller lifecycle.
+2. The image engine attempts deterministic border-background/depth-plane analysis.
+3. Usable separated planes are retained at confidence 0.12 or higher; the segmentation result must also explicitly report successful separation.
+4. If no usable plane separation exists, generated layer bitmaps are discarded and the untouched original image remains available.
+5. The original-image fallback still receives continuous virtual-camera movement and image-only atmosphere.
+6. If only a subset of depth planes contains useful separated content, empty planes remain transparent and only available planes contribute parallax.
+7. Composition exceptions trigger an original-image redraw, then a safe black frame if even that drawing fails.
 
-## Isolation and safety
+## Story-aware camera and atmosphere
+- Camera motion is selected from scene text and shot index: slow push, slow pull, lateral tracking, reveal, or restrained handheld drift.
+- Movement is continuous across each shot and driven by normalized shot progress, so it respects shot duration.
+- Story cues select independent visual atmosphere: drifting fog for forest/ghost/cemetery beats, dust for corridors/doors/mirrors, rain streaks for rain beats, and restrained motion streaks for chase beats.
+- A restrained vignette and contextual red light pulse support selected reveal beats.
+- No image fallback is frozen; even without segmentation, the original bitmap is animated by the virtual camera and atmosphere compositor.
+- These effects are image-engine-local and do not call procedural rendering or alter the source bitmap.
+
+## Resource and isolation safety
 - No network, external model, image download, or new dependency.
-- No image-processing failure is allowed to propagate from `prepare` or `render` into the procedural renderer.
-- The image path uses a private image-only depth compositor; it does not share the procedural scene depth compositor or its cached frame buffers.
-- The engine has no reference to procedural engine classes.
+- Analysis and rendering failures are contained behind the image engine API.
+- Prepared layer bitmaps are released after their shot; the caller-owned source bitmap is released by the existing caller lifecycle.
 - The existing procedural engine remains the fallback for scenes with no decoded user image; it is not used to process uploaded images.
-- Existing atmosphere/typography/watermark and export stages remain outside this isolated image component.
 
 ## Verification boundary and limitations
-- Added JVM coverage for the strict layer acceptance threshold.
+- JVM tests cover segmentation acceptance, story-to-camera/atmosphere selection, determinism, and bounded motion-plan values.
 - Existing segmenter tests cover deterministic masks, border-background separation, disconnected components, uniform-image fallback, and failure signaling.
-- This remains heuristic depth-plane segmentation, not semantic AI instance segmentation. It cannot reliably identify every object in arbitrary photos, separate overlapping objects, or reconstruct hidden pixels.
+- Segmentation remains a deterministic heuristic, not semantic AI instance segmentation. It cannot reliably identify every object in arbitrary photos, separate overlapping objects, or reconstruct hidden pixels.
+- Atmospheric overlays are procedural approximations, not physically simulated fog/rain or object-aware lighting.
 - CI lint and JVM tests are required. No APK, emulator, screenshot, or physical-device test is performed in this phase.
