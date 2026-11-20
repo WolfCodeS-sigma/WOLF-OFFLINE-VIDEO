@@ -95,6 +95,7 @@ object WolfVoiceSegmentStore {
 
         val merged = File(directory, "$projectId-voiceover.m4a")
         mergeAacSegments(entries.map { File(directory, it.fileName) }, entries, merged)
+        markMerged(directory, projectId, entries, merged)
         WolfVoiceMergeResult(merged, totalDuration, entries.size)
     }
 
@@ -108,8 +109,9 @@ object WolfVoiceSegmentStore {
         if (files.any { !it.isFile || it.length() <= 1024L }) return@synchronized null
         val totalDuration = totalDurationMs(entries.map { it.durationMs })
         val merged = File(directory, "$projectId-voiceover.m4a")
-        if (!isValidAac(merged)) {
+        if (!isMergeCurrent(directory, projectId, entries, merged)) {
             mergeAacSegments(files, entries, merged)
+            markMerged(directory, projectId, entries, merged)
         }
         WolfVoiceMergeResult(merged, totalDuration, entries.size)
     }
@@ -307,9 +309,13 @@ object WolfVoiceSegmentStore {
     }
 
     private fun writeEntries(directory: File, projectId: String, entries: List<Entry>) {
-        val json = JSONObject().put("projectId", projectId).put("segments", JSONArray().apply {
-            entries.forEach { put(JSONObject().put("fileName", it.fileName).put("durationMs", it.durationMs)) }
-        })
+        val json = JSONObject()
+            .put("projectId", projectId)
+            .put("segments", JSONArray().apply {
+                entries.forEach { put(JSONObject().put("fileName", it.fileName).put("durationMs", it.durationMs)) }
+            })
+            .put("mergedSegmentCount", 0)
+            .put("mergedFileLength", 0L)
         val target = manifestFile(directory, projectId)
         val temporary = File(directory, "$projectId-segments.json.tmp")
         java.io.FileOutputStream(temporary).use { stream ->
@@ -317,6 +323,40 @@ object WolfVoiceSegmentStore {
             stream.fd.sync()
         }
         Os.rename(temporary.absolutePath, target.absolutePath)
+    }
+
+    private fun markMerged(
+        directory: File,
+        projectId: String,
+        entries: List<Entry>,
+        merged: File
+    ) {
+        val json = JSONObject()
+            .put("projectId", projectId)
+            .put("segments", JSONArray().apply {
+                entries.forEach { put(JSONObject().put("fileName", it.fileName).put("durationMs", it.durationMs)) }
+            })
+            .put("mergedSegmentCount", entries.size)
+            .put("mergedFileLength", merged.length())
+        writeManifest(directory, projectId, json)
+    }
+
+    private fun isMergeCurrent(
+        directory: File,
+        projectId: String,
+        entries: List<Entry>,
+        merged: File
+    ): Boolean {
+        if (!isValidAac(merged)) return false
+        return runCatching {
+            val json = JSONObject(manifestFile(directory, projectId).readText(Charsets.UTF_8))
+            json.optInt("mergedSegmentCount", 0) == entries.size &&
+                json.optLong("mergedFileLength", -1L) == merged.length()
+        }.getOrDefault(false)
+    }
+
+    private fun writeManifest(directory: File, projectId: String, json: JSONObject) {
+        writeManifest(directory, projectId, json)
     }
 
     private fun formatInt(format: MediaFormat, key: String): Int =
