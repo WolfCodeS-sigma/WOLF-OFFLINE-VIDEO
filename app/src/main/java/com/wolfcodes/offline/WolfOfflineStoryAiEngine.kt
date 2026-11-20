@@ -141,6 +141,8 @@ object WolfOfflineStoryAiEngine {
             الطول المستهدف: ${v.targetWords} كلمة تقريبًا.
             عدد الفصول: ${chapterCount(v.targetWords)}.
             ابدأ بخطاف قوي وتصاعد تدريجي وأحداث منطقية وأسرار تكشف تدريجيًا ونهاية مؤثرة.
+            تعليمات توزيع الطول والبنية:
+            ${WolfStoryLengthStructureEngine.planGuidance(v.targetWords, (1..chapterCount(v.targetWords)).map { "الفصل $it" })}
             لا تكتب الرواية الآن. أخرج JSON صالحًا فقط بالمفاتيح:
             logline, characters, secrets, ending, continuity_summary, chapter_titles (array).
             يجب أن يحتوي chapter_titles على ${chapterCount(v.targetWords)} عنوانًا بالضبط.
@@ -175,7 +177,10 @@ object WolfOfflineStoryAiEngine {
     fun buildChapterPrompt(s: Session, refs: List<String>): String {
         val i = s.nextChapterIndex
         require(i in s.plan.chapterTitles.indices) { "اكتملت فصول الرواية" }
-        val target = (s.brief.targetWords / s.plan.chapterTitles.size).coerceAtLeast(500)
+        val chapterTarget = WolfStoryLengthStructureEngine.chapterTargets(
+            s.brief.targetWords, s.plan.chapterTitles
+        )[i]
+        val target = chapterTarget.targetWords
         return """
             اكتب الفصل ${i + 1} من ${s.plan.chapterTitles.size} بعنوان:
             ${s.plan.chapterTitles[i]}
@@ -194,6 +199,7 @@ object WolfOfflineStoryAiEngine {
             ${formatReferences(refs, "لا توجد مراجع.")}
             </مراجع_سياقية>
             اكتب هذا الفصل فقط بمشاهد حية وتفاصيل حسية وتشويق متصاعد.
+            ${WolfStoryLengthStructureEngine.chapterGuidance(chapterTarget)}
             استهدف نحو ${target} كلمة ولا تلخص الأحداث ولا تكتب ملاحظات خارج الرواية.
         """.trimIndent()
     }
