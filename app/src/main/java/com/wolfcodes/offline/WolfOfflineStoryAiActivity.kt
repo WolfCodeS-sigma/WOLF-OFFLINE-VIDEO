@@ -39,9 +39,19 @@ class WolfOfflineStoryAiActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createScreen()
-        session = WolfOfflineStoryAiEngine.loadLatestSession(WolfOfflineStoryAiEngine.sessionRoot(this))
-        renderSession()
         updateModelStatus()
+        setBusy(true, "جارٍ استعادة آخر جلسة تأليف محفوظة...")
+        worker.execute {
+            val restored = WolfOfflineStoryAiEngine.loadLatestSession(WolfOfflineStoryAiEngine.sessionRoot(this))
+            runOnUiThread {
+                session = restored
+                if (restored == null) setBusy(false, "ابدأ باستيراد نموذج محلي لإنشاء قصتك الأولى.")
+                else {
+                    renderSession()
+                    setBusy(false, "تمت استعادة الجلسة: ${restored.chapters.size} / ${restored.plan.chapterTitles.size} فصل.")
+                }
+            }
+        }
     }
 
     private fun createScreen() {
