@@ -5,8 +5,8 @@
 - Repository: `WolfCodeS-sigma/WOLF-OFFLINE-VIDEO`.
 - Test branch: `test/phase-17-android-runtime`.
 - Base: approved Phase 16 branch `feature/phase-16-offline-runtime-closure`, commit `2094f6c7a3a64d6becc3f80602c4b702ba69153f`.
-- This phase adds a dedicated validation workflow and this test record only.
-- It does not edit application production source, the Phase 16 workflow, prior phase files, or project data formats.
+- This phase adds a dedicated validation workflow, its isolated Bash smoke-test helper, and this test record only.
+- The workflow and helper live under `.github/`; they do not edit application production source, the Phase 16 workflow, prior phase implementation files, or project data formats.
 - No merge into `main` is performed.
 
 ## Automated Android emulator validation
@@ -17,11 +17,12 @@ The dedicated GitHub Actions workflow `.github/workflows/phase-17-android-runtim
 2. Runs the Phase 16 offline runtime guard, Android lint, and JVM unit tests again.
 3. Builds the debug APK with `:app:assembleDebug`.
 4. Starts an Android 35 Google APIs x86_64 emulator.
-5. Installs the APK.
-6. Disables Wi-Fi, mobile data, and enables airplane mode in the emulator.
-7. Launches the application through its launcher activity.
-8. Confirms the app process remains alive and the main-screen accessibility hierarchy contains the application title.
-9. Captures a screenshot and uploads the APK plus emulator evidence as a 30-day workflow artifact.
+5. Invokes `.github/scripts/phase-17-android-runtime-smoke.sh` as one shell command. The helper owns its shell state and multi-line control flow; it is intentionally not expanded into multiple lines in the emulator action input.
+6. Installs the APK.
+7. Disables Wi-Fi and mobile data, enables airplane mode, and checks the emulator's airplane-mode and Wi-Fi state.
+8. Launches the application through `com.wolfcodes.offline/.MainActivity`.
+9. Confirms the app process remains alive and the UI hierarchy contains `WOLF OFFLINE VIDEO`.
+10. Captures a screenshot and uploads the APK plus successful emulator evidence as 30-day workflow artifacts.
 
 The emulator job is an automated launch smoke test. It is not a physical-device test and does not by itself prove successful film rendering or all application workflows.
 
