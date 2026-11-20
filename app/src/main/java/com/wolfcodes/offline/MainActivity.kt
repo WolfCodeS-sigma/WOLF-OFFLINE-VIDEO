@@ -455,22 +455,46 @@ class MainActivity : Activity() {
             return
         }
         stopVoicePreview()
-        val destination = try {
-            val previousSession = WolfStoryVoiceStore.read(this, project.id)
-            WolfVoiceSegmentStore.importExistingTake(
-                this, project.id,
-                previousSession?.voiceFilePath?.let(::File),
-                previousSession?.audioDurationMs ?: 0L
-            )
-            WolfStoryVoiceStore.beginAdditionalSegment(this, project.id)
-            WolfVoiceSegmentStore.nextSegmentTarget(this, project.id)
-        } catch (error: Exception) {
-            showError(error)
-            return
+        // Copying a legacy take and validating AAC parts can be slow on low-end phones.
+        // Keep that file work off the UI thread and block conflicting project actions.
+        voiceRecoveryPending = true
+        storyField.isEnabled = false
+        status.text = "جارٍ تجهيز مساحة تسجيل الراوي..."
+        worker.execute {
+            val targetResult = runCatching {
+                val previousSession = WolfStoryVoiceStore.read(this, project.id)
+                WolfVoiceSegmentStore.importExistingTake(
+                    this, project.id,
+                    previousSession?.voiceFilePath?.let(::File),
+                    previousSession?.audioDurationMs ?: 0L
+                )
+                WolfStoryVoiceStore.beginAdditionalSegment(this, project.id)
+                WolfVoiceSegmentStore.nextSegmentTarget(this, project.id)
+            }
+            runOnUiThread {
+                voiceRecoveryPending = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                storyField.isEnabled = true
+                targetResult.onSuccess { destination ->
+                    try {
+                        voiceUri = null
+                        workingProject = project.copy(audioUri = null)
+                        WolfProjectStore.save(this@MainActivity, workingProject!!)
+                        startVoiceRecorder(project, destination)
+                    } catch (error: Exception) {
+                        storyField.isEnabled = true
+                        showError(error)
+                    }
+                }.onFailure {
+                    storyField.isEnabled = true
+                    showError(it)
+                    refreshVoiceStatus()
+                }
+            }
         }
-        voiceUri = null
-        workingProject = project.copy(audioUri = null)
-        WolfProjectStore.save(this, workingProject!!)
+    }
+
+    private fun startVoiceRecorder(project: WolfProject, destination: File) {
         storyField.isEnabled = false
         voiceRecorder = WolfVoiceRecorder(this, object : WolfVoiceRecorder.Listener {
             override fun onProgress(elapsedMs: Long, speechDetected: Boolean) {
