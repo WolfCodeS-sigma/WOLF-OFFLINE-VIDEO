@@ -21,6 +21,22 @@ class WolfVoiceSegmentStoreTest {
     }
 
     @Test
+    fun recoveryRejectsACombinedTakeThatDoesNotRepresentEverySavedSegment() {
+        assertTrue(
+            WolfVoiceSegmentStore.mergeStateMatches(3, 3, 8192L, 8192L, true)
+        )
+        assertTrue(
+            !WolfVoiceSegmentStore.mergeStateMatches(3, 2, 8192L, 8192L, true)
+        )
+        assertTrue(
+            !WolfVoiceSegmentStore.mergeStateMatches(3, 3, 8192L, 4096L, true)
+        )
+        assertTrue(
+            !WolfVoiceSegmentStore.mergeStateMatches(3, 3, 8192L, 8192L, false)
+        )
+    }
+
+    @Test
     fun maximumNarrationDurationIsExactlyThirtyMinutes() {
         assertEquals(
             1_800_000L,
