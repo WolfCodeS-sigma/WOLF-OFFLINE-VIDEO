@@ -105,6 +105,11 @@ object WolfStoryVoiceStateMachine {
         )
     }
 
+    fun beginAdditionalSegment(session: WolfStoryVoiceSession, now: Long): WolfStoryVoiceSession {
+        require(session.scriptApproved) { "اعتمد القصة أولًا" }
+        return session.copy(voiceApproved = false, updatedAt = now)
+    }
+
     fun requestRepeat(session: WolfStoryVoiceSession, now: Long): WolfStoryVoiceSession {
         require(session.scriptApproved) { "اعتمد القصة أولًا" }
         return session.copy(
@@ -207,12 +212,48 @@ object WolfStoryVoiceStore {
         updated
     }
 
+    fun beginAdditionalSegment(context: Context, projectId: String): WolfStoryVoiceSession =
+        synchronized(lock) {
+            val current = readUnlocked(context, projectId)
+                ?: throw IllegalStateException("جلسة القصة غير موجودة")
+            val updated = WolfStoryVoiceStateMachine.beginAdditionalSegment(
+                current, System.currentTimeMillis()
+            )
+            writeUnlocked(context, updated)
+            updated
+        }
+
+    fun restoreMergedSegments(
+        context: Context,
+        projectId: String,
+        mergedFile: File,
+        durationMs: Long
+    ): WolfStoryVoiceSession? = synchronized(lock) {
+        val current = readUnlocked(context, projectId) ?: return@synchronized null
+        if (!current.scriptApproved || !mergedFile.isFile || durationMs !in 1000L..1_800_000L) {
+            return@synchronized null
+        }
+        val directory = voiceDirectory(context).canonicalFile
+        val actual = mergedFile.canonicalFile
+        if (!actual.path.startsWith(directory.path + File.separator)) return@synchronized null
+        val updated = current.copy(
+            voiceFilePath = actual.absolutePath,
+            audioDurationMs = durationMs,
+            recordingStoryHash = WolfStoryVoiceStateMachine.storyFingerprint(current.finalStory),
+            voiceApproved = false,
+            updatedAt = System.currentTimeMillis()
+        )
+        writeUnlocked(context, updated)
+        updated
+    }
+
     fun requestRepeat(context: Context, projectId: String): WolfStoryVoiceSession? = synchronized(lock) {
         val current = readUnlocked(context, projectId) ?: return@synchronized null
         val updated = runCatching {
             WolfStoryVoiceStateMachine.requestRepeat(current, System.currentTimeMillis())
         }.getOrNull() ?: return@synchronized null
         current.voiceFilePath?.let { File(it).delete() }
+        WolfVoiceSegmentStore.clearProject(context, projectId)
         writeUnlocked(context, updated)
         updated
     }
@@ -220,6 +261,7 @@ object WolfStoryVoiceStore {
     fun clearProject(context: Context, projectId: String) = synchronized(lock) {
         if (!validProjectId(projectId)) return@synchronized
         readUnlocked(context, projectId)?.voiceFilePath?.let { File(it).delete() }
+        WolfVoiceSegmentStore.clearProject(context, projectId)
         listOf(
             File(voiceDirectory(context), projectId + ".json"),
             File(voiceDirectory(context), projectId + ".json.bak"),
