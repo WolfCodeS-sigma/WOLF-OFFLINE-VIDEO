@@ -42,7 +42,7 @@ Important limitations:
 - It does not reliably understand negation, context, character motivation, causal consistency, scene stakes, metaphor, or paraphrased event meaning.
 - It can miss unlisted Arabic dialect forms and synonyms, and can flag conventional repeated actions that are intentional.
 - It does not prove plot originality or guarantee narrative quality. Human review remains required.
-- The event scan is bounded by the already-enforced final story character limit; it does not load reference texts or add runtime dependencies.
+- The event scan is independently bounded to 1,000,000 characters, 2,000 segments, and 100,000 tokens; any truncation is disclosed. It does not load reference texts or add runtime dependencies.
 
 ## Bounds and failure handling
 
