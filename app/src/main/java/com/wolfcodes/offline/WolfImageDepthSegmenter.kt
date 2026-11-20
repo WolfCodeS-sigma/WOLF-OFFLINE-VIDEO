@@ -162,7 +162,9 @@ object WolfImageDepthSegmenter {
             }
         }
 
-        val foregroundMask = BooleanArray(pixels.size) { !connectedBackground[it] }
+        val foregroundMask = BooleanArray(pixels.size) {
+            !connectedBackground[it] && (pixels[it] ushr 24) > 20
+        }
         val foregroundCount = foregroundMask.count { it }
         val ratio = foregroundCount.toFloat() / pixels.size.toFloat()
         if (ratio !in MIN_FOREGROUND_RATIO..MAX_FOREGROUND_RATIO) {
@@ -174,8 +176,7 @@ object WolfImageDepthSegmenter {
         val frontMask = BooleanArray(pixels.size)
         val componentQueue = IntArray(pixels.size)
         var largestSize = 0
-        var largestStart = -1
-        var largestEnd = -1
+        var largestPixels = IntArray(0)
         val minimumComponent = max(MIN_COMPONENT_PIXELS, (foregroundCount * 0.001f).toInt())
 
         for (start in pixels.indices) {
@@ -202,44 +203,16 @@ object WolfImageDepthSegmenter {
             }
             if (componentTail > largestSize) {
                 largestSize = componentTail
-                largestStart = start
-                largestEnd = componentTail
+                largestPixels = componentQueue.copyOf(componentTail)
             }
             val target = if (componentTail >= minimumComponent) frontMask else midMask
             for (i in 0 until componentTail) target[componentQueue[i]] = true
         }
 
         // The largest coherent subject is the primary midground plane.
-        if (largestStart >= 0) {
-            // Re-walk only the largest component; no second full-size pixel copy.
-            val component = IntArray(largestSize)
-            var count = 0
-            val seen = BooleanArray(pixels.size)
-            var qHead = 0
-            var qTail = 0
-            component[qTail++] = largestStart
-            seen[largestStart] = true
-            while (qHead < qTail) {
-                val index = component[qHead++]
-                val x = index % width
-                val y = index / width
-                for (dy in -1..1) for (dx in -1..1) {
-                    if (dx == 0 && dy == 0) continue
-                    val nx = x + dx
-                    val ny = y + dy
-                    if (nx !in 0 until width || ny !in 0 until height) continue
-                    val next = ny * width + nx
-                    if (foregroundMask[next] && !seen[next]) {
-                        seen[next] = true
-                        component[qTail++] = next
-                    }
-                }
-            }
-            count = qTail
-            for (i in 0 until count) {
-                midMask[component[i]] = true
-                frontMask[component[i]] = false
-            }
+        for (index in largestPixels) {
+            midMask[index] = true
+            frontMask[index] = false
         }
 
         val assigned = midMask.any { it } || frontMask.any { it }
