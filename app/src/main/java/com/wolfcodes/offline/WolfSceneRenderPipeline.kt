@@ -45,6 +45,20 @@ object WolfSceneRenderPipeline {
     ): Boolean = sourceAvailable && hasUsableDepthLayers && !analysisFailed
 
     /**
+     * Fallback reporting is best-effort. A diagnostics callback must never interrupt
+     * the production route it is reporting, including the no-image recovery path.
+     */
+    private fun reportFallback(onFallback: (String) -> Unit, reason: String) {
+        try {
+            onFallback(reason)
+        } catch (_: OutOfMemoryError) {
+            // Rendering recovery takes priority over optional diagnostics.
+        } catch (_: Exception) {
+            // Rendering recovery takes priority over optional diagnostics.
+        }
+    }
+
+    /**
      * Prepares one shot without eagerly planning procedural artwork for a valid image.
      * A null image or an unsuccessful analysis selects the procedural route immediately.
      */
@@ -58,17 +72,17 @@ object WolfSceneRenderPipeline {
         require(sceneIndex >= 0) { "رقم المشهد غير صالح" }
 
         if (source == null || source.isRecycled || source.width <= 0 || source.height <= 0) {
-            onFallback(if (source == null) "NoUploadedImage" else "InvalidUploadedImage")
+            reportFallback(onFallback, if (source == null) "NoUploadedImage" else "InvalidUploadedImage")
             return proceduralShot(caption, sceneIndex)
         }
 
         val prepared = try {
             WolfUploadedImageEngine.prepare(source)
         } catch (failure: OutOfMemoryError) {
-            onFallback("OutOfMemoryError")
+            reportFallback(onFallback, "OutOfMemoryError")
             null
         } catch (failure: Exception) {
-            onFallback(failure.javaClass.simpleName)
+            reportFallback(onFallback, failure.javaClass.simpleName)
             null
         }
 
@@ -79,7 +93,7 @@ object WolfSceneRenderPipeline {
         )
         if (!useImage) {
             prepared?.recycle()
-            onFallback(prepared?.warning ?: "NoUsableDepthLayers")
+            reportFallback(onFallback, prepared?.warning ?: "NoUsableDepthLayers")
             return proceduralShot(caption, sceneIndex)
         }
 
@@ -121,7 +135,7 @@ object WolfSceneRenderPipeline {
 
         val image = preparedShot.image
         if (image == null) {
-            onFallback("PreparedImageUnavailable")
+            reportFallback(onFallback, "PreparedImageUnavailable")
             preparedShot.switchToProcedural()
             renderProcedural(canvas, width, height, shotIndex, progress, preparedShot)
             return Backend.PROCEDURAL
@@ -139,15 +153,15 @@ object WolfSceneRenderPipeline {
                 prepared = image
             )
         } catch (failure: OutOfMemoryError) {
-            onFallback("ImageRenderOutOfMemory")
+            reportFallback(onFallback, "ImageRenderOutOfMemory")
             WolfUploadedImageEngine.Result.SAFE_FRAME
         } catch (failure: Exception) {
-            onFallback(failure.javaClass.simpleName)
+            reportFallback(onFallback, failure.javaClass.simpleName)
             WolfUploadedImageEngine.Result.SAFE_FRAME
         }
 
         if (result == WolfUploadedImageEngine.Result.SAFE_FRAME) {
-            onFallback("ImageRenderSafeFrame")
+            reportFallback(onFallback, "ImageRenderSafeFrame")
             preparedShot.switchToProcedural()
             renderProcedural(canvas, width, height, shotIndex, progress, preparedShot)
             return Backend.PROCEDURAL
