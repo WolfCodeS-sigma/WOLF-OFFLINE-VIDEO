@@ -255,6 +255,7 @@ object WolfStoryOriginalityReviewEngine {
         val unavailable = unavailableSources.take(MAX_REFERENCES).toMutableList()
         val seenContentFingerprints = HashSet<String>()
         var checkedSources = 0
+        var processedReferences = 0
         var referenceWordCount = 0
         var sourceTruncationCount = 0
         var sourceLimitReached = false
@@ -262,11 +263,12 @@ object WolfStoryOriginalityReviewEngine {
         val iterator = references.iterator()
 
         while (iterator.hasNext()) {
-            if (checkedSources >= MAX_REFERENCES) {
+            if (processedReferences >= MAX_REFERENCES) {
                 sourceLimitReached = true
                 break
             }
             val reference = iterator.next()
+            processedReferences++
             validateSourceStamp(reference.source)
             if (reference.text.isBlank()) {
                 unavailable += UnavailableSource(reference.source, "المحتوى فارغ أو غير متاح")
@@ -340,7 +342,7 @@ object WolfStoryOriginalityReviewEngine {
         val warnings = buildList {
             if (checkedSources == 0) add("لم تتم مقارنة النص بأي محتوى مرجعي صالح؛ لا يمكن اعتبار ذلك إثباتًا للأصالة.")
             if (unavailable.isNotEmpty()) add("تعذر فحص ${unavailable.size} مرجعًا أو استُبعدت نسخته المتغيرة.")
-            if (unavailableInputCount > MAX_REFERENCES) add("تم إخفاء ${unavailableInputCount - MAX_REFERENCES} مراجع إضافية غير متاحة للحفاظ على حجم التقرير.")
+            if (unavailable.size > MAX_REFERENCES) add("تم إخفاء ${unavailable.size - MAX_REFERENCES} مراجع إضافية غير متاحة للحفاظ على حجم التقرير.")
             if (storyTokenized.truncated) add("تم تحليل أول $MAX_REVIEW_WORDS كلمة من القصة فقط بسبب حد الذاكرة الآمن.")
             if (sourceTruncationCount > 0) add("تم اختصار محتوى ${sourceTruncationCount} مرجعًا وفق حد المعالجة المحلي.")
             if (sourceLimitReached) add("توقف الفحص عند الحد الآمن لعدد المراجع أو الكلمات؛ توجد مصادر أخرى لم تدخل هذه الجولة.")
