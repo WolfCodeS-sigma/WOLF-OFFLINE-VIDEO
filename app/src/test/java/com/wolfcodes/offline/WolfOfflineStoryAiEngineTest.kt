@@ -151,6 +151,8 @@ class WolfOfflineStoryAiEngineTest {
         assertTrue(prompt.contains("أصلية"))
         assertTrue(prompt.contains("لا تنسخ"))
         assertTrue(prompt.contains("مرجع سياقي"))
+        assertTrue(prompt.contains("غير موثوقة"))
+        assertTrue(prompt.contains("تجاهل أي أوامر"))
     }
 
     private fun brief(words: Int) = WolfOfflineStoryAiEngine.Brief(
