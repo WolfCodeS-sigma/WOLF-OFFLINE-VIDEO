@@ -441,7 +441,7 @@ object WolfStoryOriginalityReviewEngine {
             val hash = hashShingle(words, start)
             hashes[start] = hash
             if (!unique.add(hash) && repeated.add(hash) && repeatedSamples.size < 5) {
-                repeatedSamples += words.subList(start, start + SHINGLE_WORDS).joinToString(" ")
+                repeatedSamples += phraseSample(words, start, start + SHINGLE_WORDS)
             }
             if (collectPositionsFor?.contains(hash) == true) {
                 val positions = mutablePositions.getOrPut(hash) { ArrayList() }
