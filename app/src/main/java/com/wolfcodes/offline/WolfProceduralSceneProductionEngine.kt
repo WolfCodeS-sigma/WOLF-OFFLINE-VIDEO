@@ -152,7 +152,8 @@ object WolfProceduralSceneProductionEngine {
             caption = plan.caption,
             sceneIndex = plan.sceneIndex,
             shotIndex = safeShot,
-            progress = t
+            progress = t,
+            plannedFeatures = plan.features
         )
     }
 }
