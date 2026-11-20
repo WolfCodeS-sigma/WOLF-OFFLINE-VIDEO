@@ -113,6 +113,7 @@ object WolfUploadedImageEngine {
                 (shotCrop.bottom * scale).toInt().coerceIn(1, layers.background.height)
             )
             if (layerSource.width() <= 0 || layerSource.height() <= 0) {
+                canvas.drawColor(Color.BLACK)
                 drawOriginal(canvas, width, height, source, sceneIndex, shotIndex, progress, caption)
             } else {
                 canvas.drawColor(Color.BLACK)
