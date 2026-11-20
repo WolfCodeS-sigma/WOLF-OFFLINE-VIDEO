@@ -1,6 +1,5 @@
 package com.wolfcodes.offline
 
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -129,6 +128,7 @@ object Wolf25DCinematicImageEngine {
             }
         }
         drawCinematicGrade(canvas, width, height, progress, plan)
+        return true
     }
 
     private fun drawCinematicGrade(
