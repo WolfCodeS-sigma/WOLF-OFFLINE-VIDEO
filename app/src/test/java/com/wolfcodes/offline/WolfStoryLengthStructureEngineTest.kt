@@ -84,6 +84,21 @@ class WolfStoryLengthStructureEngineTest {
         assertTrue(report.findings.any { it.contains("أقصر من نطاقه") })
     }
 
+    @Test fun completeChapterSetReportsOverallUnderAndOverLength() {
+        val titles = listOf("الفصل الأول", "الفصل الثاني")
+        val under = WolfStoryLengthStructureEngine.analyzeChapters(
+            1_000, listOf("كلمة ".repeat(300), "كلمة ".repeat(300)), titles
+        )
+        assertFalse(under.withinOverallTolerance)
+        assertTrue(under.findings.any { it.contains("أقل من النطاق المستهدف") })
+
+        val over = WolfStoryLengthStructureEngine.analyzeChapters(
+            1_000, listOf("كلمة ".repeat(600), "كلمة ".repeat(600)), titles
+        )
+        assertFalse(over.withinOverallTolerance)
+        assertTrue(over.findings.any { it.contains("أعلى من النطاق المستهدف") })
+    }
+
     @Test fun fullChapterSetReportsAggregateAndPerChapterLength() {
         val titles = (1..4).map { "الفصل $it" }
         val targets = WolfStoryLengthStructureEngine.chapterTargets(3_200, titles)
