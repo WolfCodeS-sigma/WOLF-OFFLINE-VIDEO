@@ -462,7 +462,8 @@ class WolfOfflineStoryAiActivity : Activity() {
                 title = entry.title,
                 sourceType = entry.sourceType,
                 sourceLabel = entry.sourceLabel,
-                contentFingerprint = entry.contentFingerprint
+                contentFingerprint = entry.contentFingerprint,
+                sourceDate = entry.sourceDate
             )
             val prompt = "عنوان المرجع: ${entry.title}\nنوع المصدر: ${entry.sourceType}\nملخص: ${entry.summary}\nمقتطف: ${text.take(1_200)}"
             source to prompt
@@ -523,6 +524,7 @@ class WolfOfflineStoryAiActivity : Activity() {
                             sourceType = entry.sourceType,
                             sourceLabel = entry.sourceLabel,
                             contentFingerprint = entry.contentFingerprint,
+                            sourceDate = entry.sourceDate,
                             usages = listOf("اختير للمراجعة الحالية")
                         )
                     } else {
