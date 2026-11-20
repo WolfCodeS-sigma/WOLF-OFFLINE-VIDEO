@@ -108,8 +108,10 @@ object OfflineProductionEngine {
         val typographyCues = WolfHorrorTypographyEngine.plan(
             scenes, framesPerScene, fps, enabled = enableHorrorTypography
         )
+        // The opening intro must fit in the first chapter with at least one body frame.
+        val minimumChapterSeconds = introSeconds + 1
         val safeChapterDuration = chapterDurationLimitSeconds.coerceIn(
-            1, WolfLongFilmEngine.DEFAULT_CHAPTER_SECONDS
+            minimumChapterSeconds, WolfLongFilmEngine.DEFAULT_CHAPTER_SECONDS
         )
         val chapterPlans = if (totalVideoSeconds > safeChapterDuration) {
             WolfFilmProductionCoordinator.createPlan(
