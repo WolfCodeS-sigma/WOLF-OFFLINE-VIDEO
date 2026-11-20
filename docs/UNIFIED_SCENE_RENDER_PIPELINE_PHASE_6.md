@@ -14,11 +14,13 @@
 ## Runtime fallback
 - If the uploaded-image renderer returns `SAFE_FRAME` or throws while rendering, the same frame is redrawn through `WolfProceduralSceneProductionEngine`.
 - The procedural renderer clears and redraws the frame, so a partially drawn image frame is not left under the fallback scene.
-- Runtime fallback events are recorded through `WolfDiagnostics`.
+- Fallback reporting is best-effort: exceptions from the optional diagnostics callback are contained and cannot interrupt image-to-procedural routing.
+- Runtime fallback events are recorded through `WolfDiagnostics` when diagnostics storage is available.
 - The caller retains ownership of the decoded source bitmap. The prepared shot releases only its generated segmentation layers; the encoder releases the source bitmap in its existing `finally` lifecycle.
 
 ## No-image verification
 - JVM test `missingUploadedImageSelectsProceduralBackendAndBuildsACompletePlan` invokes the production pipeline preparation API with a null image and asserts that the procedural backend is selected, a complete scene plan is produced for the requested scene, and the fallback reason is recorded.
+- JVM test `missingImageStillSelectsProceduralBackendWhenDiagnosticsCallbackFails` verifies that an unavailable diagnostics callback cannot interrupt the no-image route.
 - Additional tests verify that failed/unusable analysis selects the procedural route and that usable partial depth layers retain the uploaded-image route.
 - CI runs Android lint and JVM unit tests. No APK, emulator, or physical-device test is performed.
 
