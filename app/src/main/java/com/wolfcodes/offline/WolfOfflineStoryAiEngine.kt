@@ -36,7 +36,8 @@ object WolfOfflineStoryAiEngine {
 
     data class Session(
         val id: String, val brief: Brief, val plan: Plan, val chapters: List<String>,
-        val continuitySummary: String, val approved: Boolean, val createdAt: Long, val updatedAt: Long
+        val continuitySummary: String, val approved: Boolean, val createdAt: Long, val updatedAt: Long,
+        val finalText: String = ""
     ) {
         val nextChapterIndex: Int get() = chapters.size
         val isComplete: Boolean get() = chapters.size == plan.chapterTitles.size
@@ -193,7 +194,8 @@ object WolfOfflineStoryAiEngine {
             chapters = s.chapters + clean,
             continuitySummary = updateContinuity(s.continuitySummary, clean),
             approved = false,
-            updatedAt = System.currentTimeMillis()
+            updatedAt = System.currentTimeMillis(),
+            finalText = ""
         )
     }
 
@@ -208,6 +210,7 @@ object WolfOfflineStoryAiEngine {
             .put("plan", planJson(s.plan)).put("chapters", JSONArray(s.chapters))
             .put("continuitySummary", s.continuitySummary).put("approved", s.approved)
             .put("createdAt", s.createdAt).put("updatedAt", s.updatedAt)
+            .put("finalText", s.finalText)
         try {
             FileOutputStream(pending).use { out ->
                 out.write(json.toString().toByteArray(Charsets.UTF_8))
@@ -266,7 +269,8 @@ object WolfOfflineStoryAiEngine {
         val plan = Plan(p.optString("logline"), p.optString("characters"), p.optString("secrets"),
             p.optString("ending"), p.optString("continuitySummary"), titles, p.optString("raw"))
         return Session(j.getString("id"), brief, plan, chapters, j.optString("continuitySummary"),
-            j.optBoolean("approved"), j.optLong("createdAt"), j.optLong("updatedAt"))
+            j.optBoolean("approved"), j.optLong("createdAt"), j.optLong("updatedAt"),
+            j.optString("finalText"))
     }
 
     private fun JSONArray.toStringList(): List<String> =
