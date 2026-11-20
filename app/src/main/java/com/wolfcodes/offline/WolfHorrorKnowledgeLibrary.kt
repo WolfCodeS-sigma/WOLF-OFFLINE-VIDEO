@@ -564,6 +564,9 @@ object WolfHorrorKnowledgeLibrary {
         }
 
         private fun append(char: Char) {
+            // Combining marks, Arabic tatweel, and directional marks are removed
+            // without splitting the surrounding word (e.g. "الإِشارة" -> "الاشارة").
+            if (isIgnoredCharacter(char)) return
             val normalized = normalizeCharacter(char)
             if (normalized != null && Character.isLetterOrDigit(normalized)) {
                 if (current.length < 80) current.append(normalized)
@@ -584,6 +587,13 @@ object WolfHorrorKnowledgeLibrary {
             return tokens
         }
     }
+
+    private fun isIgnoredCharacter(char: Char): Boolean =
+        char == '\u0640' ||
+            char in '\u064B'..'\u065F' ||
+            char == '\u0670' ||
+            char == '\u200E' ||
+            char == '\u200F'
 
     private fun normalizeCharacter(char: Char): Char? = when (char) {
         '\u0622', '\u0623', '\u0625', '\u0671' -> '\u0627'
