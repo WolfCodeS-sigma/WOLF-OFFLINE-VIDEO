@@ -70,6 +70,9 @@ object WolfFilmProductionCoordinator {
         require(actualIntroFrames in 0..introFrames.coerceAtLeast(0)) {
             "ميزانية المقدمة غير متسقة"
         }
+        require(expectedBodyFrames.toLong() + actualIntroFrames.toLong() <= 1_800L * framesPerSecond) {
+            "تجاوزت مدة الفيلم الحد الأقصى البالغ 30 دقيقة"
+        }
 
         return Plan(
             framesPerSecond = framesPerSecond,
