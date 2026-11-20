@@ -252,6 +252,24 @@ class WolfStoryOriginalityReviewEngineTest {
         }
     }
 
+    @Test fun oversizedUnavailableSourceListIsCappedAndDisclosed() {
+        val unavailable = (1..(WolfStoryOriginalityReviewEngine.MAX_REFERENCES + 2)).map { index ->
+            val text = "محتوى مرجع غير متاح رقم $index"
+            WolfStoryOriginalityReviewEngine.UnavailableSource(
+                stamp(text, id = "missing-$index", title = "مرجع غير متاح $index"),
+                "المصدر غير موجود"
+            )
+        }
+        val report = WolfStoryOriginalityReviewEngine.analyze(
+            "قصة قصيرة للمراجعة",
+            emptySequence(),
+            unavailable
+        )
+
+        assertEquals(WolfStoryOriginalityReviewEngine.MAX_REFERENCES, report.unavailableSources.size)
+        assertTrue(report.warnings.any { it.contains("إخفاء 2 مراجع إضافية") })
+    }
+
     @Test fun reportsWhenOnlyTheSafeReferenceLimitCanBeChecked() {
         val text = "الحارس وجد مفتاحا اسود تحت السجادة ثم سمع صوتا خلف الباب المغلق"
         val references = (1..(WolfStoryOriginalityReviewEngine.MAX_REFERENCES + 2)).map { index ->
