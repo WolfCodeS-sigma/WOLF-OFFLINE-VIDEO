@@ -5,12 +5,12 @@ Add a deterministic, fully offline length and narrative-structure layer to the P
 
 ## Features
 - Unicode-aware Arabic and English word counting; combining marks and Arabic tatweel do not split words.
-- Deterministic word budgets for each planned chapter. Allocations sum exactly to the requested total.
+- Deterministic word budgets for each planned chapter. Allocations sum exactly to the requested total; short one-chapter stories receive a compressed hook-to-resolution arc.
 - Eight ordered narrative beats: hook, setup, inciting incident, rising action, midpoint, crisis, climax, and resolution.
 - Configurable per-chapter tolerance, with explicit minimum and maximum word ranges.
 - Plan-level and chapter-level prompt guidance passed into the existing Phase 11 local model.
 - Quantitative review report: actual/target words, completion percentage, chapter progress, per-chapter under/over-length findings, and estimated narration/reading time at 120–160 words per minute.
-- Live report in the existing story studio, including a fresh aggregate count while the user edits the completed story.
+- Debounced live report in the existing story studio; word analysis runs on the existing background worker and stale queued reports are skipped to keep the UI responsive.
 
 ## Boundaries
 - No model, dependency, network permission, paid service, API, cloud service, or background service added.
