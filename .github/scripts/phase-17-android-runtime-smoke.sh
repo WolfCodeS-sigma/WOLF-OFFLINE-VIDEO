@@ -10,6 +10,15 @@ SCREENSHOT="${GITHUB_WORKSPACE}/wolf-phase17.png"
 test -s "$APK"
 adb install -r "$APK"
 
+# Require Android 12 (API 31) and use the Realme 7's 1080x2400 display resolution.
+ANDROID_API="$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+test "$ANDROID_API" = "31"
+echo "Android API verified: $ANDROID_API (Android 12)"
+adb shell wm size 1080x2400
+DISPLAY_SIZE="$(adb shell wm size | tr -d '\r')"
+printf '%s\n' "$DISPLAY_SIZE"
+printf '%s\n' "$DISPLAY_SIZE" | grep -q "Override size: 1080x2400"
+
 # Airplane mode is a protected system operation. Ask ConnectivityService to
 # change it so Android itself publishes the protected state-change broadcast.
 adb shell cmd connectivity airplane-mode enable
