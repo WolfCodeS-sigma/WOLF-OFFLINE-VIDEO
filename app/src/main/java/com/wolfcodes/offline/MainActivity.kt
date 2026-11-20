@@ -470,6 +470,7 @@ class MainActivity : Activity() {
         voiceUri = null
         workingProject = project.copy(audioUri = null)
         WolfProjectStore.save(this, workingProject!!)
+        storyField.isEnabled = false
         voiceRecorder = WolfVoiceRecorder(this, object : WolfVoiceRecorder.Listener {
             override fun onProgress(elapsedMs: Long, speechDetected: Boolean) {
                 runOnUiThread { status.text = "تسجيل الراوي: " + (elapsedMs / 1000) + " ثانية" }
@@ -512,10 +513,15 @@ class MainActivity : Activity() {
             }
 
             override fun onError(message: String) {
-                runOnUiThread { showError(IllegalStateException(message)); refreshVoiceStatus() }
+                runOnUiThread {
+                    storyField.isEnabled = true
+                    showError(IllegalStateException(message))
+                    refreshVoiceStatus()
+                }
             }
         })
         if (voiceRecorder?.start(destination) != true) {
+            storyField.isEnabled = true
             status.text = "تعذر بدء التسجيل الصوتي"
         } else {
             status.text = "بدأ تسجيل الراوي"
