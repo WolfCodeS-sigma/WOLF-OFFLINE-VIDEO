@@ -35,6 +35,7 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
     private lateinit var charactersField: EditText
     private lateinit var placesField: EditText
     private lateinit var eventsField: EditText
+    private lateinit var relatedStoriesField: EditText
     private lateinit var themesField: EditText
     private lateinit var keywordsField: EditText
     private lateinit var contentField: EditText
@@ -121,11 +122,13 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
         charactersField = field("الشخصيات — مفصولة بفواصل")
         placesField = field("الأماكن — مفصولة بفواصل")
         eventsField = field("الأحداث — مفصولة بفواصل")
+        relatedStoriesField = field("قصص ذات صلة — العناوين أو المعرفات مفصولة بفواصل")
         themesField = field("الموضوعات — مفصولة بفواصل")
         keywordsField = field("الكلمات المفتاحية — مفصولة بفواصل")
         root.addView(charactersField)
         root.addView(placesField)
         root.addView(eventsField)
+        root.addView(relatedStoriesField)
         root.addView(themesField)
         root.addView(keywordsField)
 
@@ -238,6 +241,7 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
             characters = splitValues(charactersField.text.toString()),
             places = splitValues(placesField.text.toString()),
             events = splitValues(eventsField.text.toString()),
+            relatedStories = splitValues(relatedStoriesField.text.toString()),
             themes = splitValues(themesField.text.toString()),
             keywords = splitValues(keywordsField.text.toString()),
             includeInStoryReferences = includeReferencesToggle.isChecked
@@ -323,6 +327,7 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
         charactersField.setText("")
         placesField.setText("")
         eventsField.setText("")
+        relatedStoriesField.setText("")
         themesField.setText("")
         keywordsField.setText("")
         contentField.isEnabled = true
@@ -422,6 +427,7 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
                     charactersField.setText(entry.characters.joinToString("، "))
                     placesField.setText(entry.places.joinToString("، "))
                     eventsField.setText(entry.events.joinToString("، "))
+                    relatedStoriesField.setText(entry.relatedStories.joinToString("، "))
                     themesField.setText(entry.themes.joinToString("، "))
                     keywordsField.setText(entry.keywords.joinToString("، "))
                     includeReferencesToggle.isChecked = entry.includeInStoryReferences
