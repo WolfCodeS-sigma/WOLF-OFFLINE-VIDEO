@@ -214,14 +214,17 @@ object WolfUploadedImageEngine {
             drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, plan)
             return
         }
-        canvas.drawColor(Color.BLACK)
-        val destination = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        drawDepthPlane(canvas, width, height, sceneIndex, shotIndex, progress, plan,
-            layers.background, layerSource, destination, 0.16f, 1.0f)
-        drawDepthPlane(canvas, width, height, sceneIndex, shotIndex, progress, plan,
-            layers.midground, layerSource, destination, 0.56f, 1.018f)
-        drawDepthPlane(canvas, width, height, sceneIndex, shotIndex, progress, plan,
-            layers.foreground, layerSource, destination, 1.0f, 1.038f)
+        Wolf25DCinematicImageEngine.render(
+            canvas = canvas,
+            width = width,
+            height = height,
+            sceneIndex = sceneIndex,
+            shotIndex = shotIndex,
+            progress = progress,
+            plan = plan,
+            layers = layers,
+            source = layerSource
+        )
     }
 
     private fun drawOriginal(
