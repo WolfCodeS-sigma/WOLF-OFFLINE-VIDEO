@@ -10,11 +10,12 @@ Complete the offline film's sound and approved WOLF CODE S identity as one coher
 - If the app is interrupted after a segment is committed, opening the project can rebuild the combined take from registered parts. It also detects a valid AAC segment renamed immediately before a process interruption but not yet entered in the manifest. Incomplete temporary recorder files are not treated as completed parts.
 - The manifest records the segment count and merged-file length; recovery rejects a stale combined file after a partially completed append and rebuilds it from the full segment list.
 - The combined take can be previewed and must be explicitly approved before film production uses it. Re-recording explicitly clears the old parts.
-- Existing single-take recordings are migrated into the segment ledger when the user continues recording.
+- Existing single-take recordings are copied (not moved) into the segment ledger when the user continues recording; the previously approved take remains intact until the new combined take is fully assembled.
+- Recovery only registers contiguous parts that keep the complete narration within the 30-minute limit. An over-limit orphan cannot invalidate the previously saved take.
 
 ## Narration/audio processing
 - One shared timeline places the optional three-second opening signature before narration and includes both in final film duration.
-- Narration duration is authoritative when an approved voice take is used; it is not allowed to shorten the video mux to narration-only duration.
+- Narration duration is authoritative when an approved voice take is used; it is not allowed to shorten the video mux to narration-only duration. If the optional intro would push the combined film beyond 30 minutes, production rejects the plan rather than silently trimming the narration.
 - Local PCM conversion applies DC/very-low-frequency rumble reduction, a gentle noise-floor gate, voice-aware sound-effect ducking and a final soft limiter.
 - Narration is mixed with generated effects into one AAC track. Narration-only and effects-only exports use the same normalized mixer path.
 - Existing automatic quiet-tail stop remains enabled after five seconds of detected silence. This is not claimed to be word-level speech recognition or automatic transcript correction.
