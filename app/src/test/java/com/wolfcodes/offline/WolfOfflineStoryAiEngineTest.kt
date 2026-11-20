@@ -100,6 +100,18 @@ class WolfOfflineStoryAiEngineTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun modelImportBackupIsRestoredAfterInterruptedReplacement() {
+        val directory = Files.createTempDirectory("wolf-model-recovery").toFile()
+        try {
+            val backup = File(directory, "model.previous")
+            backup.writeBytes(ByteArray(1_100_000) { 7 })
+            val restored = WolfOfflineStoryAiEngine.recoverModelFile(directory)
+            assertTrue(restored.isFile)
+            assertEquals(1_100_000L, restored.length())
+            assertFalse(backup.exists())
+        } finally { directory.deleteRecursively() }
+    }
+
     @Test fun loadRecoversCheckpointAfterInterruptedAtomicReplacement() {
         val root = Files.createTempDirectory("wolf-story-recovery").toFile()
         try {
