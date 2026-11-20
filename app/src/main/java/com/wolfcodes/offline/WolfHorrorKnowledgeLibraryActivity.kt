@@ -610,7 +610,7 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
 
     companion object {
         private const val REQUEST_IMPORT_TXT = 861
-        private const val EDITABLE_PREVIEW_CHARS = 250_000
+        private const val EDITABLE_PREVIEW_CHARS = 60_000
         private const val ORIGINAL_PREVIEW_CHARS = 40_000
         private const val PAGE_SIZE = 50
     }
