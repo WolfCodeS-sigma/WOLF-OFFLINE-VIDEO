@@ -35,7 +35,9 @@ object WolfVoiceSegmentStore {
         if (!directory.exists() && !directory.mkdirs()) {
             throw IllegalStateException("تعذر إنشاء مجلد مقاطع الراوي")
         }
-        val entries = readEntries(directory, projectId)
+        val stored = readEntries(directory, projectId)
+        val entries = registerCommittedOrphans(directory, projectId, stored)
+        if (entries.size != stored.size) writeEntries(directory, projectId, entries)
         require(entries.size < MAX_SEGMENTS) { "وصل التسجيل إلى الحد الأقصى لعدد المقاطع" }
         File(directory, segmentFileName(projectId, entries.size + 1))
     }
@@ -103,7 +105,9 @@ object WolfVoiceSegmentStore {
     fun recover(context: Context, projectId: String): WolfVoiceMergeResult? = synchronized(lock) {
         if (!validProjectId(projectId)) return@synchronized null
         val directory = voiceDirectory(context).canonicalFile
-        val entries = readEntries(directory, projectId)
+        val stored = readEntries(directory, projectId)
+        val entries = registerCommittedOrphans(directory, projectId, stored)
+        if (entries.size != stored.size) writeEntries(directory, projectId, entries)
         if (entries.isEmpty()) return@synchronized null
         val files = entries.map { File(directory, it.fileName) }
         if (files.any { !it.isFile || it.length() <= 1024L }) return@synchronized null
@@ -159,6 +163,27 @@ object WolfVoiceSegmentStore {
     }
 
     private data class Entry(val fileName: String, val durationMs: Long)
+
+    /**
+     * A recorder may finish and atomically rename its M4A just before the app process is killed,
+     * before the UI worker can append it to the manifest. Register only contiguous, valid AAC
+     * files with the next expected segment number; ignore incomplete temporary/orphan files.
+     */
+    private fun registerCommittedOrphans(
+        directory: File,
+        projectId: String,
+        existing: List<Entry>
+    ): List<Entry> {
+        val result = existing.toMutableList()
+        while (result.size < MAX_SEGMENTS) {
+            val candidate = File(directory, segmentFileName(projectId, result.size + 1))
+            if (!candidate.isFile || !isValidAac(candidate)) break
+            val duration = readDurationMs(candidate)
+            if (duration !in 1_000L..MAX_DURATION_MS) break
+            result += Entry(candidate.name, duration)
+        }
+        return result
+    }
 
     private fun mergeAacSegments(files: List<File>, entries: List<Entry>, output: File) {
         require(files.isNotEmpty() && files.size == entries.size)
