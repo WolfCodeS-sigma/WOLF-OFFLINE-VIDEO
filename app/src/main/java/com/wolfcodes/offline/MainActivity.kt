@@ -378,6 +378,10 @@ class MainActivity : Activity() {
     }
 
     private fun saveProject() {
+        if (voiceMergePending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف التسجيل وانتظر اكتمال حفظ مقاطعه قبل حفظ تعديلات المشروع"
+            return
+        }
         try {
             val project = currentProject()
             WolfProjectStore.save(this, project)
@@ -393,6 +397,10 @@ class MainActivity : Activity() {
     }
 
     private fun approveStory() {
+        if (voiceMergePending || voiceRecorder?.isRecording == true) {
+            status.text = "أوقف التسجيل وانتظر اكتمال حفظ مقاطعه قبل اعتماد نص جديد"
+            return
+        }
         try {
             val project = currentProject()
             WolfProjectStore.save(this, project)
@@ -451,7 +459,10 @@ class MainActivity : Activity() {
 
             override fun onSaved(file: File, durationMs: Long, automaticStop: Boolean) {
                 voiceMergePending = true
-                runOnUiThread { status.text = "تم حفظ المقطع؛ جارٍ دمجه مع المقاطع السابقة..." }
+                runOnUiThread {
+                    storyField.isEnabled = false
+                    status.text = "تم حفظ المقطع؛ جارٍ دمجه مع المقاطع السابقة..."
+                }
                 worker.execute {
                     val mergedResult = runCatching {
                         val merged = WolfVoiceSegmentStore.appendAndMerge(
@@ -464,6 +475,7 @@ class MainActivity : Activity() {
                     }
                     runOnUiThread {
                         voiceMergePending = false
+                        storyField.isEnabled = true
                         mergedResult.onSuccess { (merged, savedTake) ->
                             voiceUri = Uri.fromFile(merged.file).toString()
                             workingProject = project.copy(audioUri = voiceUri)
