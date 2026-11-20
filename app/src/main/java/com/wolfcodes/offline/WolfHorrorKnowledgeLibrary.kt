@@ -73,6 +73,7 @@ object WolfHorrorKnowledgeLibrary {
         val characters: List<String> = emptyList(),
         val places: List<String> = emptyList(),
         val events: List<String> = emptyList(),
+        val relatedStories: List<String> = emptyList(),
         val themes: List<String> = emptyList(),
         val keywords: List<String> = emptyList(),
         val includeInStoryReferences: Boolean = true,
@@ -93,6 +94,7 @@ object WolfHorrorKnowledgeLibrary {
         val characters: List<String>,
         val places: List<String>,
         val events: List<String>,
+        val relatedStories: List<String>,
         val themes: List<String>,
         val keywords: List<String>,
         val includeInStoryReferences: Boolean,
@@ -365,6 +367,16 @@ object WolfHorrorKnowledgeLibrary {
         category: String? = null
     ): List<Entry> = search(root, query, category, referencesOnly = true)
 
+    /** Select an explicit subset of permitted sources, or all permitted entries when ids is null. */
+    fun selectedStoryReferences(
+        root: File,
+        ids: Set<String>? = null,
+        query: String = "",
+        category: String? = null
+    ): List<Entry> = synchronized(lock) {
+        searchStoryReferences(root, query, category).filter { ids == null || it.id in ids }
+    }
+
     fun autoSaveAppAuthoredStoriesEnabled(root: File): Boolean = synchronized(lock) {
         val file = File(root, SETTINGS_FILE)
         if (!file.isFile) return@synchronized true
@@ -437,6 +449,7 @@ object WolfHorrorKnowledgeLibrary {
             characters = cleanList(draft.characters, 80),
             places = cleanList(draft.places, 80),
             events = cleanList(draft.events, 80),
+            relatedStories = cleanList(draft.relatedStories, 80),
             themes = cleanList(draft.themes, 80),
             keywords = cleanList(draft.keywords, 120)
         )
@@ -472,6 +485,7 @@ object WolfHorrorKnowledgeLibrary {
         characters = draft.characters,
         places = draft.places,
         events = draft.events,
+        relatedStories = draft.relatedStories,
         themes = draft.themes,
         keywords = draft.keywords,
         includeInStoryReferences = draft.includeInStoryReferences,
@@ -596,6 +610,7 @@ object WolfHorrorKnowledgeLibrary {
             append(entry.characters.joinToString(" ")).append(' ')
             append(entry.places.joinToString(" ")).append(' ')
             append(entry.events.joinToString(" ")).append(' ')
+            append(entry.relatedStories.joinToString(" ")).append(' ')
             append(entry.themes.joinToString(" ")).append(' ')
             append(entry.keywords.joinToString(" "))
         }
@@ -669,6 +684,7 @@ object WolfHorrorKnowledgeLibrary {
             characters = strings("characters"),
             places = strings("places"),
             events = strings("events"),
+            relatedStories = strings("relatedStories"),
             themes = strings("themes"),
             keywords = strings("keywords"),
             includeInStoryReferences = json.optBoolean("includeInStoryReferences", true),
@@ -696,6 +712,7 @@ object WolfHorrorKnowledgeLibrary {
             put("characters", JSONArray(entry.characters))
             put("places", JSONArray(entry.places))
             put("events", JSONArray(entry.events))
+            put("relatedStories", JSONArray(entry.relatedStories))
             put("themes", JSONArray(entry.themes))
             put("keywords", JSONArray(entry.keywords))
             put("includeInStoryReferences", entry.includeInStoryReferences)
