@@ -30,6 +30,20 @@ Older sessions created before Phase 13 have no source-use ledger. They can still
 - To limit memory use, source positions are retained only for phrases also present in the story; positions for any one extremely repetitive phrase are capped at 128 and the report discloses when this limit is reached.
 - Repeated meaningful six-word phrases within the story are listed separately from cross-reference overlap.
 
+
+## Narrative diversity and structure screening
+
+The final review also runs `WolfNarrativePatternAudit`, a deterministic offline heuristic over sentence/paragraph segments. It groups Arabic and English synonym cues into ten event families: discovery, investigation, supernatural appearance, pursuit, threat/attack, confrontation, revelation, escape/survival, loss/disappearance, and return/resolution. The report shows detected event families in order, the number of distinct families, a transparent diversity ratio, and event families appearing in three or more segments.
+
+The same pass raises advisory checks for too few detectable events, low event variety, repeated event families, missing mid-story escalation cues, missing late-story climax cues, and missing ending/consequence cues. These are warnings for the writer, not automatic rejection rules; deliberate repetition and open endings may be valid artistic choices.
+
+Important limitations:
+- This is a keyword/synonym and position heuristic, not an offline language model or true semantic understanding.
+- It does not reliably understand negation, context, character motivation, causal consistency, scene stakes, metaphor, or paraphrased event meaning.
+- It can miss unlisted Arabic dialect forms and synonyms, and can flag conventional repeated actions that are intentional.
+- It does not prove plot originality or guarantee narrative quality. Human review remains required.
+- The event scan is bounded by the already-enforced final story character limit; it does not load reference texts or add runtime dependencies.
+
 ## Bounds and failure handling
 
 - The reference ledger is private app storage under filesDir/wolf_story_originality_review; it is separate from the Phase 11 story checkpoint format.
