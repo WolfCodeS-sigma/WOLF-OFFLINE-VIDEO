@@ -209,8 +209,8 @@ class WolfOfflineStoryAiActivity : Activity() {
             pending.delete()
             runOnUiThread {
                 setBusy(false, result.fold(
-                    { "تم استيراد النموذج (§{it / (1024 * 1024)} MB). اضغط إنشاء المخطط للبدء." },
-                    { "فشل استيراد النموذج: §{it.message}" }
+                    { "تم استيراد النموذج (${it / (1024 * 1024)} MB). اضغط إنشاء المخطط للبدء." },
+                    { "فشل استيراد النموذج: ${it.message}" }
                 ))
                 updateModelStatus()
             }
@@ -261,7 +261,7 @@ class WolfOfflineStoryAiActivity : Activity() {
                     planView.text = formatPlan(it)
                     storyField.setText("")
                     setBusy(false, "تم إنشاء المخطط. راجعه ثم ابدأ توليد الفصل الأول.")
-                }.onFailure { setBusy(false, "تعذر إنشاء المخطط: §{it.message}") }
+                }.onFailure { setBusy(false, "تعذر إنشاء المخطط: ${it.message}") }
             }
         }
     }
@@ -277,7 +277,7 @@ class WolfOfflineStoryAiActivity : Activity() {
             status.text = "اكتملت كل الفصول. راجع النص النهائي ثم اعتمده."
             return
         }
-        setBusy(true, "جارٍ توليد الفصل §{current.nextChapterIndex + 1} وحفظ نقطة الاستعادة...")
+        setBusy(true, "جارٍ توليد الفصل ${current.nextChapterIndex + 1} وحفظ نقطة الاستعادة...")
         worker.execute {
             val result = runCatching {
                 if (!model.isLoaded()) model.load(WolfOfflineStoryAiEngine.modelFile(this))
@@ -292,8 +292,8 @@ class WolfOfflineStoryAiActivity : Activity() {
                     session = it
                     storyField.setText(formatChapters(it))
                     setBusy(false, if (it.isComplete) "اكتملت الفصول. راجع القصة واعتمدها عند رضاك."
-                    else "تم حفظ الفصل §{it.chapters.size} من §{it.plan.chapterTitles.size}. يمكنك المتابعة لاحقًا.")
-                }.onFailure { setBusy(false, "تعذر توليد الفصل: §{it.message}") }
+                    else "تم حفظ الفصل ${it.chapters.size} من ${it.plan.chapterTitles.size}. يمكنك المتابعة لاحقًا.")
+                }.onFailure { setBusy(false, "تعذر توليد الفصل: ${it.message}") }
             }
         }
     }
@@ -308,22 +308,22 @@ class WolfOfflineStoryAiActivity : Activity() {
         return matches.take(3)
             .mapNotNull { entry ->
                 val text = WolfHorrorKnowledgeLibrary.readContent(root, entry.id) ?: return@mapNotNull null
-                "عنوان المرجع: §{entry.title}\nنوع المصدر: §{entry.sourceType}\nملخص: §{entry.summary}\nمقتطف: §{text.take(1_200)}"
+                "عنوان المرجع: ${entry.title}\nنوع المصدر: ${entry.sourceType}\nملخص: ${entry.summary}\nمقتطف: ${text.take(1_200)}"
             }
     }
 
     private fun formatPlan(value: WolfOfflineStoryAiEngine.Session) = buildString {
-        appendLine("المخطط — §{value.brief.title}")
+        appendLine("المخطط — ${value.brief.title}")
         appendLine(value.plan.logline)
-        appendLine("\nالشخصيات:\n§{value.plan.characters}")
-        appendLine("\nالأسرار وقواعد العالم:\n§{value.plan.secrets}")
-        appendLine("\nالنهاية المخططة:\n§{value.plan.ending}")
-        value.plan.chapterTitles.forEachIndexed { i, title -> appendLine("\n§{i + 1}. $title") }
+        appendLine("\nالشخصيات:\n${value.plan.characters}")
+        appendLine("\nالأسرار وقواعد العالم:\n${value.plan.secrets}")
+        appendLine("\nالنهاية المخططة:\n${value.plan.ending}")
+        value.plan.chapterTitles.forEachIndexed { i, title -> appendLine("\n${i + 1}. $title") }
     }
 
     private fun formatChapters(value: WolfOfflineStoryAiEngine.Session) = buildString {
         value.chapters.forEachIndexed { i, chapter ->
-            appendLine("الفصل §{i + 1} — §{value.plan.chapterTitles[i]}\n")
+            appendLine("الفصل ${i + 1} — ${value.plan.chapterTitles[i]}\n")
             appendLine(chapter)
             appendLine()
         }
@@ -342,7 +342,7 @@ class WolfOfflineStoryAiActivity : Activity() {
         libraryToggle.isChecked = value.brief.useKnowledgeLibrary
         planView.text = formatPlan(value)
         storyField.setText(formatChapters(value))
-        status.text = "تم استعادة جلسة محفوظة: §{value.chapters.size} / §{value.plan.chapterTitles.size} فصل"
+        status.text = "تم استعادة جلسة محفوظة: ${value.chapters.size} / ${value.plan.chapterTitles.size} فصل"
     }
 
     private fun restoreSession() {
@@ -391,7 +391,7 @@ class WolfOfflineStoryAiActivity : Activity() {
                                 saved.duplicateOfExisting -> "تم الاعتماد؛ المحتوى موجود بالفعل في المكتبة."
                                 else -> "تم اعتماد القصة وحفظها في WOLF HORROR KNOWLEDGE LIBRARY."
                             })
-                        }.onFailure { setBusy(false, "تعذر حفظ القصة المعتمدة: §{it.message}") }
+                        }.onFailure { setBusy(false, "تعذر حفظ القصة المعتمدة: ${it.message}") }
                     }
                 }
             }
@@ -406,7 +406,7 @@ class WolfOfflineStoryAiActivity : Activity() {
 
     private fun updateModelStatus() {
         val file = WolfOfflineStoryAiEngine.modelFile(this)
-        if (file.isFile) status.text = "نموذج محلي مستورد: §{file.length() / (1024 * 1024)} MB — يعمل دون إنترنت."
+        if (file.isFile) status.text = "نموذج محلي مستورد: ${file.length() / (1024 * 1024)} MB — يعمل دون إنترنت."
     }
 
     override fun onDestroy() {
