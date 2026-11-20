@@ -16,17 +16,19 @@
 The dedicated GitHub Actions workflow `.github/workflows/phase-17-android-runtime.yml` performs the following:
 
 1. Uses JDK 17, Android SDK 35, and Gradle 8.13.
-2. Pins the JavaScript-based GitHub Actions to verified Node.js 24-compatible release commits.
+2. Pins the JavaScript-based GitHub Actions to verified Node.js 24-compatible release commits, including the Android emulator runner.
 3. Uses the basic GitHub Actions cache provider for Gradle.
-4. Runs the Phase 16 offline runtime guard, Android lint, and JVM unit tests again.
-5. Builds the debug APK with `:app:assembleDebug`.
-6. Starts an Android 35 Google APIs x86_64 emulator.
-7. Invokes `.github/scripts/phase-17-android-runtime-smoke.sh` as one shell command. The helper owns its shell state and multi-line control flow; it is intentionally not expanded into multiple lines in the emulator action input.
-8. Installs the APK.
-9. Enables airplane mode through Android's ConnectivityService shell command (`cmd connectivity airplane-mode enable`), then explicitly disables Wi-Fi. It disables mobile data when the emulator exposes a telephony service; emulator images without a phone service have no mobile-data radio to disable. It verifies airplane mode and Wi-Fi are off. It does not attempt to send Android's protected airplane-mode broadcast directly.
-10. Launches the application through `com.wolfcodes.offline/.MainActivity`.
-11. Confirms the app process remains alive and the UI hierarchy contains `WOLF OFFLINE VIDEO`.
-12. Captures a screenshot and uploads the APK plus successful emulator evidence as 30-day workflow artifacts.
+4. Enables the hosted runner's `/dev/kvm` device using a per-job udev rule and verifies read/write access before starting the emulator. The x86_64 emulator requires KVM acceleration on this runner; falling back to software TCG caused Android services and ADB to become unstable before the app test could start.
+5. Starts the emulator with hardware acceleration required (`-accel on`), rather than forcing software emulation.
+6. Runs the Phase 16 offline runtime guard, Android lint, and JVM unit tests again.
+7. Builds the debug APK with `:app:assembleDebug`.
+8. Starts an Android 35 Google APIs x86_64 emulator.
+9. Invokes `.github/scripts/phase-17-android-runtime-smoke.sh` as one shell command. The helper owns its shell state and multi-line control flow; it is intentionally not expanded into multiple lines in the emulator action input.
+10. Installs the APK.
+11. Enables airplane mode through Android's ConnectivityService shell command (`cmd connectivity airplane-mode enable`), then explicitly disables Wi-Fi. It disables mobile data when the emulator exposes a telephony service; emulator images without a phone service have no mobile-data radio to disable. It verifies airplane mode and Wi-Fi are off. It does not attempt to send Android's protected airplane-mode broadcast directly.
+12. Launches the application through `com.wolfcodes.offline/.MainActivity`.
+13. Confirms the app process remains alive and the UI hierarchy contains `WOLF OFFLINE VIDEO`.
+14. Captures a screenshot and uploads the APK plus successful emulator evidence as 30-day workflow artifacts.
 
 The emulator job is an automated launch smoke test. It is not a physical-device test and does not by itself prove successful film rendering or all application workflows.
 
