@@ -144,38 +144,75 @@ object WolfStoryOriginalityReviewEngine {
         val target = ledgerFile(root, sessionId)
         val backup = File(root, "$sessionId.json.backup")
         val pending = File(root, "$sessionId.json.pending")
-        if (!target.exists() && backup.isFile) {
-            if (!backup.renameTo(target)) throw IllegalStateException("تعذر استعادة سجل المراجع الاحتياطي")
-        } else if (target.isFile && backup.exists()) {
-            backup.delete()
-        }
         if (pending.exists()) pending.delete()
+
+        fun readLedger(file: File): List<SourceStamp> {
+            val json = JSONObject(file.readText(Charsets.UTF_8))
+            require(json.optInt("version", -1) == LEDGER_VERSION) { "إصدار سجل المراجع غير مدعوم" }
+            val array = json.optJSONArray("sources") ?: JSONArray()
+            require(array.length() <= MAX_LEDGER_REFERENCES) { "سجل المراجع المحفوظ يتجاوز الحد الآمن" }
+            val result = ArrayList<SourceStamp>(array.length())
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                val usages = item.optJSONArray("usages") ?: JSONArray()
+                val source = SourceStamp(
+                    id = item.getString("id"),
+                    title = item.getString("title"),
+                    sourceType = item.getString("sourceType"),
+                    sourceLabel = item.optString("sourceLabel"),
+                    contentFingerprint = item.getString("contentFingerprint"),
+                    sourceDate = item.optString("sourceDate"),
+                    usages = (0 until usages.length()).mapNotNull { position ->
+                        usages.optString(position).takeIf { it.isNotBlank() }
+                    }
+                )
+                validateSourceStamp(source)
+                result += source
+            }
+            require(result.map(::sourceKey).distinct().size == result.size) {
+                "سجل المراجع يحتوي على إدخالات مكررة"
+            }
+            return result
+        }
+
+        if (!target.isFile && backup.isFile) {
+            if (!backup.renameTo(target)) {
+                throw IllegalStateException("تعذر استعادة سجل المراجع الاحتياطي")
+            }
+        }
         if (!target.isFile) return emptyList()
 
-        val json = JSONObject(target.readText(Charsets.UTF_8))
-        require(json.optInt("version", -1) == LEDGER_VERSION) { "إصدار سجل المراجع غير مدعوم" }
-        val array = json.optJSONArray("sources") ?: JSONArray()
-        require(array.length() <= MAX_LEDGER_REFERENCES) { "سجل المراجع المحفوظ يتجاوز الحد الآمن" }
-        val result = ArrayList<SourceStamp>(array.length())
-        for (index in 0 until array.length()) {
-            val item = array.getJSONObject(index)
-            val usages = item.optJSONArray("usages") ?: JSONArray()
-            val source = SourceStamp(
-                id = item.getString("id"),
-                title = item.getString("title"),
-                sourceType = item.getString("sourceType"),
-                sourceLabel = item.optString("sourceLabel"),
-                contentFingerprint = item.getString("contentFingerprint"),
-                sourceDate = item.optString("sourceDate"),
-                usages = (0 until usages.length()).mapNotNull { position ->
-                    usages.optString(position).takeIf { it.isNotBlank() }
-                }
-            )
-            validateSourceStamp(source)
-            result += source
+        return try {
+            readLedger(target).also {
+                // Do not discard the previous good copy until the current ledger parses
+                // and validates successfully.
+                if (backup.exists()) backup.delete()
+            }
+        } catch (primaryError: Exception) {
+            if (!backup.isFile) throw primaryError
+
+            val damaged = File(root, "$sessionId.json.corrupt")
+            if (damaged.exists()) damaged.delete()
+            if (!target.renameTo(damaged) && !target.delete()) {
+                throw IllegalStateException(
+                    "تعذر عزل سجل المراجع التالف لاستعادة النسخة الاحتياطية",
+                    primaryError
+                )
+            }
+            if (!backup.renameTo(target)) {
+                if (damaged.isFile) damaged.renameTo(target)
+                throw IllegalStateException(
+                    "تعذر استعادة النسخة الاحتياطية لسجل المراجع",
+                    primaryError
+                )
+            }
+            try {
+                readLedger(target).also { damaged.delete() }
+            } catch (recoveryError: Exception) {
+                recoveryError.addSuppressed(primaryError)
+                throw recoveryError
+            }
         }
-        require(result.map(::sourceKey).distinct().size == result.size) { "سجل المراجع يحتوي على إدخالات مكررة" }
-        return result
     }
 
     private fun saveSourcesLocked(root: File, sessionId: String, sources: List<SourceStamp>) {
