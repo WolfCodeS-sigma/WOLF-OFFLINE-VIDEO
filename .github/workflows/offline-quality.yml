@@ -6,11 +6,15 @@ on:
       - main
       - 'development/**'
       - 'feature/**'
+      - 'test/**'
+      - 'release/**'
   pull_request:
     branches:
       - main
       - 'development/**'
       - 'feature/**'
+      - 'test/**'
+      - 'release/**'
   workflow_dispatch:
 
 permissions:
