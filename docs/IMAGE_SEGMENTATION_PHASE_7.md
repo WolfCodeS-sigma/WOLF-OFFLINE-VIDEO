@@ -5,10 +5,10 @@ Phase 7 improves the existing uploaded-image depth estimator without adding a ne
 
 ## Changes
 - Replace the single median-border distance threshold with a robust border model using bounded border sampling, per-channel median color, and upper-percentile border variation to adapt the foreground threshold.
-- Bound working analysis to at most 768 pixels on the longest side and 524,288 pixels total, whichever is smaller.
+- Bound working analysis to at most 768 pixels on the longest side and 262,144 pixels total, whichever is smaller.
 - Treat transparent/near-transparent pixels as non-foreground so transparent holes do not become invented subjects.
 - Use 8-connected border flood fill and 8-connected component grouping to reduce diagonal pinholes and fragmented masks.
-- Keep the largest coherent foreground component in the primary midground plane; retain sufficiently large disconnected components in the secondary foreground plane; suppress tiny isolated noise from becoming its own foreground plane.
+- Keep the largest coherent foreground component in the primary midground plane; retain sufficiently large disconnected components in the secondary foreground plane; discard sub-threshold isolated components entirely, and reject frames without a sufficiently large coherent subject.
 - Preserve conservative confidence gating. Ambiguous images remain unusable for depth layers and continue through the existing Phase 6 routing/fallback behavior.
 - Keep source bitmap ownership with the caller. Temporary analysis bitmaps are recycled in a finally block, and partially allocated output layers are recycled if construction fails.
 
