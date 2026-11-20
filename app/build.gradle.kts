@@ -85,11 +85,11 @@ val verifyOfflineRuntime by tasks.registering {
         }
 
         val forbiddenSourcePatterns = listOf(
-            Regex("""\\b(?:java|javax)\\.net\\."""),
-            Regex("""\\b(?:okhttp3|retrofit2|io\\.ktor\\.client|com\\.android\\.volley|com\\.google\\.firebase)\\."""),
-            Regex("""\\bWebView\\b"""),
-            Regex("""\\b(?:HttpURLConnection|HttpsURLConnection|Socket|ServerSocket|DownloadManager)\\b"""),
-            Regex("""android\\.permission\\.(?:INTERNET|ACCESS_NETWORK_STATE)\\b""")
+            Regex("""\b(?:java|javax)\.net\."""),
+            Regex("""\b(?:okhttp3|retrofit2|io\.ktor\.client|com\.android\.volley|com\.google\.firebase)\."""),
+            Regex("""\bWebView\b"""),
+            Regex("""\b(?:HttpURLConnection|HttpsURLConnection|Socket|ServerSocket|DownloadManager)\b"""),
+            Regex("""android\.permission\.(?:INTERNET|ACCESS_NETWORK_STATE)\b""")
         )
         val endpointPattern = Regex("""["']https?://""")
         val productionFiles = fileTree(productionSource) {
@@ -108,11 +108,11 @@ val verifyOfflineRuntime by tasks.registering {
             }
         }
         check(sourceViolations.isEmpty()) {
-            "Offline runtime source violation(s):\\n${sourceViolations.joinToString("\\n")}"
+            "Offline runtime source violation(s):\n${sourceViolations.joinToString("\n")}"
         }
 
         val runtimeDependencyDeclarations = moduleBuildFile.asFile.readLines(Charsets.UTF_8)
-            .filter { Regex("""^\\s*(implementation|api|runtimeOnly)\\s*\\(""").containsMatchIn(it) }
+            .filter { Regex("""^\s*(implementation|api|runtimeOnly)\s*\(""").containsMatchIn(it) }
             .map { it.trim() }
         val allowedRuntimeDependencies = setOf(
             """implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")"""
