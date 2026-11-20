@@ -312,13 +312,38 @@ object WolfVoiceSegmentStore {
 
     private fun readDurationMs(file: File): Long {
         val retriever = MediaMetadataRetriever()
-        return try {
+        val metadataDuration = try {
             retriever.setDataSource(file.absolutePath)
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
         } catch (_: Exception) {
             0L
         } finally {
             runCatching { retriever.release() }
+        }
+        if (metadataDuration > 0L) return metadataDuration
+
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(file.absolutePath)
+            val track = (0 until extractor.trackCount).firstOrNull { index ->
+                extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
+                    ?.startsWith("audio/") == true
+            } ?: return 0L
+            val format = extractor.getTrackFormat(track)
+            if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                return (format.getLong(MediaFormat.KEY_DURATION) / 1000L).coerceAtLeast(0L)
+            }
+            extractor.selectTrack(track)
+            var lastSampleUs = -1L
+            while (extractor.sampleTime >= 0L) {
+                lastSampleUs = extractor.sampleTime
+                if (!extractor.advance()) break
+            }
+            if (lastSampleUs >= 0L) lastSampleUs / 1000L + 24L else 0L
+        } catch (_: Exception) {
+            0L
+        } finally {
+            runCatching { extractor.release() }
         }
     }
 
