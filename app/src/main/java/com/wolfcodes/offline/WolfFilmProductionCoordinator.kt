@@ -33,6 +33,7 @@ object WolfFilmProductionCoordinator {
             "يجب توفير إطارات كافية للقطات الثلاث في كل مشهد"
         }
         require(framesPerSecond in 1..60) { "معدل الإطارات غير صالح" }
+        require(introFrames >= 0) { "عدد إطارات المقدمة غير صالح" }
         require(chapterSeconds in 1..DEFAULT_CHAPTER_SECONDS) { "مدة فصل الإنتاج غير صالحة" }
 
         val chapters = WolfLongFilmEngine.planShotChapters(
