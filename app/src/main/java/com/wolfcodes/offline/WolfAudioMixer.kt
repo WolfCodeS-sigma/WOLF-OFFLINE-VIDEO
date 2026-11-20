@@ -23,25 +23,44 @@ object WolfAudioMixer {
     private const val MIME = "audio/mp4a-latm"
     private const val CHUNK_SAMPLES = 2048
 
+    internal fun noiseGateGain(voiceEnvelope: Double): Double {
+        val amount = ((voiceEnvelope - 0.0008) / 0.0042).coerceIn(0.0, 1.0)
+        return amount * amount * (3.0 - 2.0 * amount)
+    }
+
+    internal fun effectsDuckingGain(voiceEnvelope: Double): Double {
+        val amount = ((voiceEnvelope - 0.003) / 0.022).coerceIn(0.0, 1.0)
+        val smooth = amount * amount * (3.0 - 2.0 * amount)
+        return 1.0 - smooth * 0.58
+    }
+
     internal fun mixSample(narration: Double, effects: Double,
                            narrationGain: Double = 0.92,
-                           effectsGain: Double = 0.30): Short {
+                           effectsGain: Double = 0.30,
+                           effectsDucking: Double = 1.0): Short {
         val combined = narration * narrationGain.coerceIn(0.0, 1.5) +
-            effects * effectsGain.coerceIn(0.0, 1.0)
+            effects * effectsGain.coerceIn(0.0, 1.0) * effectsDucking.coerceIn(0.0, 1.0)
         val limited = tanh(combined * 1.12).coerceIn(-0.98, 0.98)
         return (limited * 32767.0).toInt().toShort()
     }
 
     fun mix(
         context: Context,
-        narrationUri: Uri,
-        effectsFile: File,
+        narrationUri: Uri?,
+        effectsFile: File?,
         outputFile: File,
         maxDurationUs: Long,
         narrationGain: Double = 0.92,
-        effectsGain: Double = 0.30
+        effectsGain: Double = 0.30,
+        narrationOffsetUs: Long = 0L
     ): File {
-        require(effectsFile.isFile && effectsFile.length() > 0L) { "ملف المؤثرات الصوتية غير موجود" }
+        require(narrationUri != null || effectsFile != null) { "لا يوجد مصدر صوت للدمج" }
+        require(narrationOffsetUs >= 0L && narrationOffsetUs < maxDurationUs.coerceAtLeast(1L)) {
+            "موضع بدء الراوي خارج مدة الفيلم"
+        }
+        if (effectsFile != null) require(effectsFile.isFile && effectsFile.length() > 0L) {
+            "ملف المؤثرات الصوتية غير موجود"
+        }
         val directory = outputFile.parentFile ?: throw IllegalStateException("مجلد ملف الدمج غير محدد")
         if (!directory.exists() && !directory.mkdirs()) throw IllegalStateException("تعذر إنشاء مجلد الدمج الصوتي")
         val narrationPcm = File(directory, outputFile.nameWithoutExtension + "_voice.pcm")
@@ -49,8 +68,16 @@ object WolfAudioMixer {
         val mixedPcm = File(directory, outputFile.nameWithoutExtension + "_mix.pcm")
         var success = false
         try {
-            decodeToPcm(context, narrationUri, null, narrationPcm, maxDurationUs)
-            decodeToPcm(context, null, effectsFile, effectsPcm, maxDurationUs)
+            if (narrationUri != null) {
+                decodeToPcm(context, narrationUri, null, narrationPcm, maxDurationUs, narrationOffsetUs)
+            } else {
+                narrationPcm.writeBytes(ByteArray(0))
+            }
+            if (effectsFile != null) {
+                decodeToPcm(context, null, effectsFile, effectsPcm, maxDurationUs)
+            } else {
+                effectsPcm.writeBytes(ByteArray(0))
+            }
             mixPcmFiles(narrationPcm, effectsPcm, mixedPcm, maxDurationUs, narrationGain, effectsGain)
             encodePcmToAac(mixedPcm, outputFile)
             success = outputFile.isFile && outputFile.length() > 0L
@@ -69,7 +96,8 @@ object WolfAudioMixer {
         sourceUri: Uri?,
         sourceFile: File?,
         output: File,
-        maxDurationUs: Long
+        maxDurationUs: Long,
+        startOffsetUs: Long = 0L
     ) {
         val extractor = MediaExtractor()
         var descriptor: ParcelFileDescriptor? = null
@@ -166,7 +194,7 @@ object WolfAudioMixer {
                                 val frames = info.size / frameBytes
                                 val startUs = info.presentationTimeUs.coerceAtLeast(0L)
                                 for (frame in 0 until frames) {
-                                    val targetIndex = startUs * SAMPLE_RATE / 1_000_000L +
+                                    val targetIndex = (startOffsetUs + startUs) * SAMPLE_RATE / 1_000_000L +
                                         (frame.toLong() * SAMPLE_RATE / sampleRate)
                                     if (targetIndex >= maxSamples) break
                                     var mono = 0.0
@@ -237,6 +265,9 @@ object WolfAudioMixer {
                     val voiceBuffer = ByteArray(CHUNK_SAMPLES * 2)
                     val sfxBuffer = ByteArray(CHUNK_SAMPLES * 2)
                     var offset = 0L
+                    var previousVoiceInput = 0.0
+                    var previousVoiceOutput = 0.0
+                    var voiceEnvelope = 0.0
                     while (offset < maxBytes) {
                         val count = minOf(voiceBuffer.size.toLong(), maxBytes - offset).toInt()
                         val aligned = count - count % 2
@@ -259,7 +290,17 @@ object WolfAudioMixer {
                                 (((sfxBuffer[i * 2 + 1].toInt() shl 8) or
                                     (sfxBuffer[i * 2].toInt() and 0xff)).toShort()).toDouble() / 32768.0
                             } else 0.0
-                            val sample = mixSample(v, e, narrationGain, effectsGain).toInt()
+                            // Remove DC/very-low-frequency rumble, gently gate the noise floor,
+                            // and duck effects while the narration is actively speaking.
+                            val highPassedVoice = v - previousVoiceInput + 0.995 * previousVoiceOutput
+                            previousVoiceInput = v
+                            previousVoiceOutput = highPassedVoice
+                            voiceEnvelope = maxOf(kotlin.math.abs(highPassedVoice), voiceEnvelope * 0.9992)
+                            val cleanedVoice = highPassedVoice * noiseGateGain(voiceEnvelope)
+                            val sample = mixSample(
+                                cleanedVoice, e, narrationGain, effectsGain,
+                                effectsDuckingGain(voiceEnvelope)
+                            ).toInt()
                             bytes[i * 2] = sample.toByte()
                             bytes[i * 2 + 1] = (sample shr 8).toByte()
                         }
