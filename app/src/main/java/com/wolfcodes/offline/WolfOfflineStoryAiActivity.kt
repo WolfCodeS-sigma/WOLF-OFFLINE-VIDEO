@@ -407,6 +407,9 @@ class WolfOfflineStoryAiActivity : Activity() {
             runOnUiThread {
                 lastOriginalityReport = null
                 lastOriginalitySelection = emptySet()
+                if (::originalityView.isInitialized) {
+                    originalityView.text = "تم تحديث قائمة المراجع؛ أعد فحص الأصالة قبل الاعتماد."
+                }
                 referenceChoicesContainer.removeAllViews()
                 if (entries.isEmpty()) {
                     referenceChoicesContainer.addView(label("لا توجد مراجع مسموح بها بعد. أضف قصصًا إلى المكتبة أو فعّل استخدامها من إعداداتها."))
@@ -746,6 +749,9 @@ class WolfOfflineStoryAiActivity : Activity() {
                             })
                         }.onFailure {
                             session = value.copy(finalText = finalText, approved = false)
+                            lastOriginalityReport = null
+                            lastOriginalitySelection = emptySet()
+                            originalityView.text = "تعذر إكمال الاعتماد. أعد فحص الأصالة قبل المحاولة مرة أخرى."
                             setBusy(false, "تم الاحتفاظ بالنص المعدّل كمسودة إن أمكن؛ تعذر إكمال الاعتماد: ${it.message}")
                         }
                     }
