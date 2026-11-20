@@ -353,6 +353,7 @@ object WolfStoryOriginalityReviewEngine {
             if (positionLimitReached) add("تم تقييد مواضع العبارات شديدة التكرار لتجنب استهلاك الذاكرة؛ قد لا يظهر طول بعض التطابقات المتكررة بالكامل.")
             if (findings.isNotEmpty()) add("التطابق اللفظي مؤشر للمراجعة البشرية وليس دليلًا قاطعًا على النسخ.")
             add("الفحص محلي ويشمل النصوص المرجعية المتاحة والمسموح بها فقط؛ لا يبحث في الإنترنت أو قواعد نشر خارجية.")
+            add("نوع المصدر ووسمه وتاريخه بيانات مسجلة في المكتبة؛ لا يتحقق التطبيق خارجيًا من صحتها أو ملكية المحتوى.")
         }
 
         return Report(
@@ -565,13 +566,15 @@ object WolfStoryOriginalityReviewEngine {
         if (report.checkedSourceVersions.isNotEmpty()) {
             appendLine("المراجع التي تمت مراجعتها:")
             report.checkedSourceVersions.forEach { source ->
-                appendLine("• ${source.title} — ${source.sourceType}")
-                if (source.sourceLabel.isNotBlank()) appendLine("  وصف المصدر: ${source.sourceLabel}")
-                if (source.sourceDate.isNotBlank()) appendLine("  تاريخ المصدر المسجل: ${source.sourceDate}")
+                appendLine("• ${source.title}")
+                appendLine("  النوع المسجل (غير متحقق): ${source.sourceType}")
+                if (source.sourceLabel.isNotBlank()) appendLine("  وصف المصدر المسجل (غير متحقق): ${source.sourceLabel}")
+                if (source.sourceDate.isNotBlank()) appendLine("  تاريخ المصدر المسجل (غير متحقق): ${source.sourceDate}")
                 if (source.usages.isNotEmpty()) appendLine("  استُخدم في: ${source.usages.joinToString("، ")}")
             }
         }
-        appendLine("تغطية العبارات المتطابقة من بصمات النص: ${report.overallOverlapPercent}%")
+        appendLine("نسبة نوافذ العبارات المميزة المتطابقة (ست كلمات): ${report.overallOverlapPercent}%")
+        appendLine("هذه النسبة ليست نسبة كلمات منسوخة ولا احتمالًا للانتحال.")
         appendLine("العبارات الطويلة المتكررة داخل القصة: ${report.internalRepeatedPhraseCount}")
 
         if (report.checkedSources == 0) {
@@ -582,9 +585,9 @@ object WolfStoryOriginalityReviewEngine {
             appendLine()
             appendLine("نتائج المصادر:")
             report.findings.forEach { finding ->
-                appendLine("• ${finding.source.title} — ${finding.source.sourceType}")
+                appendLine("• ${finding.source.title} — النوع المسجل: ${finding.source.sourceType}")
                 appendLine("  المستوى: ${finding.severity.label}")
-                appendLine("  تغطية التطابق: ${finding.coveragePercent}%")
+                appendLine("  نسبة نوافذ العبارات المميزة المتطابقة: ${finding.coveragePercent}%")
                 appendLine("  نوافذ العبارة المتطابقة: ${finding.matchingWindowCount}")
                 appendLine("  أطول تسلسل متصل: ${finding.maximumContinuousMatchWords} كلمة")
                 if (finding.source.usages.isNotEmpty()) {
