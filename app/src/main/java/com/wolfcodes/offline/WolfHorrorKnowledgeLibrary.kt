@@ -75,7 +75,8 @@ object WolfHorrorKnowledgeLibrary {
         val events: List<String> = emptyList(),
         val themes: List<String> = emptyList(),
         val keywords: List<String> = emptyList(),
-        val includeInStoryReferences: Boolean = true
+        val includeInStoryReferences: Boolean = true,
+        val sourceFileName: String = ""
     )
 
     data class Entry(
