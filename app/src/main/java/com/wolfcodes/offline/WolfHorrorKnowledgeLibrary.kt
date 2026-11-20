@@ -169,7 +169,7 @@ object WolfHorrorKnowledgeLibrary {
             throw IllegalStateException("تعذر إنشاء مجلد مكتبة الرعب المحلية")
         }
 
-        val staging = File(entries, ".staging-\${UUID.randomUUID()}")
+        val staging = File(entries, ".staging-${UUID.randomUUID()}")
         if (!staging.mkdirs()) throw IllegalStateException("تعذر تجهيز مساحة استيراد النص")
         try {
             val temporaryContent = File(staging, "content.pending")
@@ -230,7 +230,7 @@ object WolfHorrorKnowledgeLibrary {
         require(directory.isDirectory) { "القصة لم تعد موجودة في المكتبة" }
         val current = readMetadata(directory)
         val safeDraft = normalizeDraft(draft)
-        val pending = File(directory, "content.pending-\${UUID.randomUUID()}")
+        val pending = File(directory, "content.pending-${UUID.randomUUID()}")
         try {
             val stats = reader.use { writeText(it, pending) }
             val duplicate = list(root).firstOrNull {
@@ -451,7 +451,7 @@ object WolfHorrorKnowledgeLibrary {
                 if (length <= 0) continue
                 chars += length
                 require(chars <= MAX_TEXT_CHARS) {
-                    "حجم النص يتجاوز الحد المحلي المدعوم (\${MAX_TEXT_CHARS} حرف)"
+                    "حجم النص يتجاوز الحد المحلي المدعوم (${MAX_TEXT_CHARS} حرف)"
                 }
                 for (index in start until count) {
                     if (!buffer[index].isWhitespace()) nonWhitespace = true
@@ -660,12 +660,12 @@ object WolfHorrorKnowledgeLibrary {
     private fun contentFile(directory: File, fingerprint: String) =
         File(directory, contentFileName(fingerprint))
 
-    private fun contentFileName(fingerprint: String) = "content-\${fingerprint}.txt"
+    private fun contentFileName(fingerprint: String) = "content-${fingerprint}.txt"
 
     private fun indexFile(directory: File, fingerprint: String) =
         File(directory, indexFileName(fingerprint))
 
-    private fun indexFileName(fingerprint: String) = "index-\${fingerprint}.json"
+    private fun indexFileName(fingerprint: String) = "index-${fingerprint}.json"
 
     private fun copyFile(source: File, destination: File) {
         Files.copy(source.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
@@ -693,7 +693,7 @@ object WolfHorrorKnowledgeLibrary {
         if (!parent.exists() && !parent.mkdirs()) {
             throw IllegalStateException("تعذر إنشاء مجلد بيانات المكتبة")
         }
-        val temporary = File(parent, file.name + ".pending-\${UUID.randomUUID()}")
+        val temporary = File(parent, file.name + ".pending-${UUID.randomUUID()}")
         try {
             FileOutputStream(temporary).use { output ->
                 BufferedOutputStream(output).use { buffered ->
