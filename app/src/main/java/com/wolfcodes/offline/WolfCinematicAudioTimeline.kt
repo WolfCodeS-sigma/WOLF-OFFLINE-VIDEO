@@ -27,7 +27,12 @@ data class WolfCinematicAudioTimeline(
             val narrationSeconds = validNarration?.let {
                 ((it + 999L) / 1000L).toInt().coerceAtLeast(1)
             }
-            val bodySeconds = narrationSeconds ?: (requestedDurationSeconds - intro).coerceAtLeast(1)
+            val requestedBodySeconds = (requestedDurationSeconds - intro).coerceAtLeast(1)
+            // Keep the established five-second minimum film duration without extending narration.
+            val bodySeconds = maxOf(
+                narrationSeconds ?: requestedBodySeconds,
+                (5 - intro).coerceAtLeast(1)
+            )
             return WolfCinematicAudioTimeline(
                 introSeconds = intro,
                 narrationSeconds = narrationSeconds,
