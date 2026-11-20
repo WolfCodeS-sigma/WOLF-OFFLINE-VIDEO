@@ -8,7 +8,10 @@ import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import java.io.BufferedOutputStream
 import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -135,8 +138,8 @@ object WolfAudioMixer {
             decoder.configure(format, null, null, 0)
             decoder.start()
             output.parentFile?.mkdirs()
-            RandomAccessFile(output, "rw").use { pcm ->
-                pcm.setLength(0L)
+            FileOutputStream(output).use { fileStream ->
+                BufferedOutputStream(fileStream, 64 * 1024).use { pcm ->
                 val info = MediaCodec.BufferInfo()
                 var inputEnded = false
                 var outputEnded = false
@@ -215,10 +218,10 @@ object WolfAudioMixer {
                                     // Nearest-neighbour fill keeps lower-rate sources continuous when upsampling.
                                     while (lastWrittenSample + 1L < targetIndex && lastWrittenSample + 1L < maxSamples) {
                                         lastWrittenSample++
-                                        writePcmSample(pcm, lastWrittenSample, lastMonoSample)
+                                        writePcmSample(pcm, lastMonoSample)
                                     }
                                     if (targetIndex < maxSamples) {
-                                        writePcmSample(pcm, targetIndex, mono)
+                                        writePcmSample(pcm, mono)
                                         lastWrittenSample = targetIndex
                                         lastMonoSample = mono
                                     }
@@ -232,8 +235,9 @@ object WolfAudioMixer {
                     idleLoops = if (didWork) 0 else idleLoops + 1
                     if (idleLoops > 60000) throw IllegalStateException("انتهت مهلة فك ترميز الصوت")
                 }
-                if (pcm.length() <= 0L) throw IllegalStateException("ملف الصوت لا يحتوي عينات قابلة للقراءة")
-                pcm.fd.sync()
+                if (lastWrittenSample < 0L) throw IllegalStateException("ملف الصوت لا يحتوي عينات قابلة للقراءة")
+                pcm.flush()
+                fileStream.fd.sync()
             }
             success = true
         } finally {
@@ -245,11 +249,7 @@ object WolfAudioMixer {
         }
     }
 
-    private fun writePcmSample(pcm: RandomAccessFile, sampleIndex: Long, sample: Double) {
-        val offset = sampleIndex * 2L
-        // Sequential decoder output already points at this offset; avoid a file-length syscall
-        // for every PCM sample, which would be costly for long-form films.
-        if (pcm.filePointer != offset) pcm.seek(offset)
+    private fun writePcmSample(pcm: OutputStream, sample: Double) {
         val value = (sample.coerceIn(-1.0, 1.0) * 32767.0).toInt()
         pcm.write(value and 0xff)
         pcm.write((value shr 8) and 0xff)
