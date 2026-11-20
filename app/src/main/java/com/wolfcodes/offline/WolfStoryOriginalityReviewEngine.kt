@@ -14,7 +14,7 @@ import kotlin.math.roundToInt
  */
 object WolfStoryOriginalityReviewEngine {
     const val DIRECTORY_NAME = "wolf_story_originality_review"
-    const val MAX_REFERENCES = 20
+    const val MAX_REFERENCES = 40
     const val MAX_LEDGER_REFERENCES = 40
     const val MAX_STORY_CHARS = 4_000_000
     const val MAX_REFERENCE_CHARS = 1_000_000
