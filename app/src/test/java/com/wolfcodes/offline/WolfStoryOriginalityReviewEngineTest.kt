@@ -285,4 +285,28 @@ class WolfStoryOriginalityReviewEngineTest {
         assertTrue(report.sourceLimitReached)
         assertTrue(report.warnings.any { it.contains("الحد الآمن") })
     }
+    
+    @Test fun ledgerRecoversValidBackupWhenCurrentLedgerIsCorrupted() {
+        val root = Files.createTempDirectory("wolf-originality-corrupt-recovery").toFile()
+        val sessionId = "session-12345678"
+        try {
+            val sourceText = "مرجع سليم يجب الحفاظ عليه عند تلف ملف السجل الأساسي"
+            val source = stamp(sourceText)
+            WolfStoryOriginalityReviewEngine.recordSources(root, sessionId, "المخطط", listOf(source))
+
+            val target = File(root, "$sessionId.json")
+            val backup = File(root, "$sessionId.json.backup")
+            assertTrue(Files.copy(target.toPath(), backup.toPath()).toFile().isFile)
+            target.writeText("{ damaged-json", Charsets.UTF_8)
+
+            val restored = WolfStoryOriginalityReviewEngine.loadSources(root, sessionId)
+
+            assertEquals(listOf(source), restored)
+            assertTrue(target.isFile)
+            assertFalse(backup.exists())
+            assertFalse(File(root, "$sessionId.json.corrupt").exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 }
