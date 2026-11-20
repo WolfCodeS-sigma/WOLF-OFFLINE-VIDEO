@@ -140,8 +140,8 @@ object WolfSceneLayerSystem {
                 }
                 val parallax = sin((progress.coerceIn(0f, 1f) * 2.0 * PI + element.phase).toDouble()).toFloat()
                 canvas.translate(
-                    element.anchorX * width + parallax * width * depthDrift,
-                    element.anchorY * height
+                    element.anchorX * width + parallax * width * depthDrift + pose.translateX * width,
+                    element.anchorY * height + pose.translateY * height
                 )
                 canvas.rotate(pose.rotationDegrees)
                 val unit = minOf(width, height) * element.size * depthScale
