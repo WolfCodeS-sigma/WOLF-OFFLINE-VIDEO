@@ -6,6 +6,10 @@ Standalone Android application for local horror-film production. This repository
 
 WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected images, procedural artwork, layered motion, horror typography, procedural sound effects, and an optional approved voice recording. It does not require a large video-generation model.
 
+## Roadmap
+
+The full staged plan, including the new 2.5D cinematic image engine, local TXT horror knowledge library, offline story AI, long-story word-count/structure controls, and originality review, is documented in [WOLF OFFLINE VIDEO Roadmap](docs/WOLF_OFFLINE_VIDEO_ROADMAP.md). Roadmap items are planned work, not claims of completed implementation.
+
 ## Current source layout
 
 - `MainActivity.kt`: independent offline project and production interface.
