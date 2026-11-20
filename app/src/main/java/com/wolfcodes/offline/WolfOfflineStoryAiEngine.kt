@@ -225,10 +225,17 @@ object WolfOfflineStoryAiEngine {
         }
     }
 
-    fun loadLatestSession(root: File): Session? =
-        root.listFiles { f -> f.isFile && f.name.endsWith(".json") }
+    fun loadLatestSession(root: File): Session? {
+        if (!root.isDirectory) return null
+        // Recover a checkpoint if the process stopped after moving the previous file to backup.
+        root.listFiles { f -> f.isFile && f.name.endsWith(".json.backup") }?.forEach { backup ->
+            val target = File(root, backup.name.removeSuffix(".backup"))
+            if (!target.exists()) backup.renameTo(target) else backup.delete()
+        }
+        return root.listFiles { f -> f.isFile && f.name.endsWith(".json") }
             ?.sortedByDescending { it.lastModified() }?.firstOrNull()
             ?.let { runCatching { readSession(JSONObject(it.readText(Charsets.UTF_8))) }.getOrNull() }
+    }
 
     private fun briefJson(v: Brief) = JSONObject().put("title", v.title).put("premise", v.premise)
         .put("genre", v.genre).put("setting", v.setting).put("protagonist", v.protagonist)
