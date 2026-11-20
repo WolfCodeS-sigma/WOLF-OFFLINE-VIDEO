@@ -762,7 +762,11 @@ object OfflineProductionEngine {
                     caption = caption,
                     sceneIndex = scene,
                     shotIndex = safeShotIndex,
-                    progress = t
+                    progress = t,
+                    // Uploaded images already use their own segmentation layers when
+                    // available. Do not paint unrelated procedural props (doors,
+                    // chairs, curtains or branches) over the user's source image.
+                    plannedLayers = emptyList()
                 )
             }
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
