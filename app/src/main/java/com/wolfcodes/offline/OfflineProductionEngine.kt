@@ -978,6 +978,10 @@ object OfflineProductionEngine {
             while(max(bounds.outWidth/sample,bounds.outHeight/sample)>2048) sample*=2
             val options=BitmapFactory.Options().apply { inSampleSize=sample; inPreferredConfig=Bitmap.Config.RGB_565 }
             context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it,null,options) }
-        } catch (_: Exception) { null }
+        } catch (_: OutOfMemoryError) {
+            null
+        } catch (_: Exception) {
+            null
+        }
     }
 }
