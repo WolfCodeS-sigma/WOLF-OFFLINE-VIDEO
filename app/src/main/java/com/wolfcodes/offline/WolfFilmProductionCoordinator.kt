@@ -57,7 +57,11 @@ object WolfFilmProductionCoordinator {
             introFrames = introFrames,
             maxChapterSeconds = chapterSeconds
         )
-        val expectedBodyFrames = framesPerScene.sum()
+        val expectedBodyFramesLong = framesPerScene.sumOf { it.toLong() }
+        require(expectedBodyFramesLong + introFrames.toLong() <= 1_800L * framesPerSecond) {
+            "تجاوزت مدة الفيلم الحد الأقصى البالغ 30 دقيقة"
+        }
+        val expectedBodyFrames = expectedBodyFramesLong.toInt()
         val actualBodyFrames = chapters.sumOf { it.bodyFrameCount }
         val actualIntroFrames = chapters.sumOf { it.introFrameCount }
         require(actualBodyFrames == expectedBodyFrames) { "خطة الفصول أسقطت إطارات من الفيلم" }
@@ -118,10 +122,6 @@ object WolfFilmProductionCoordinator {
         require(actualIntroFrames == introFrames) {
             "لم تحتفظ خطة الفصول بجميع إطارات المقدمة المطلوبة"
         }
-        require(expectedBodyFrames.toLong() + actualIntroFrames.toLong() <= 1_800L * framesPerSecond) {
-            "تجاوزت مدة الفيلم الحد الأقصى البالغ 30 دقيقة"
-        }
-
         return Plan(
             framesPerSecond = framesPerSecond,
             totalFrames = expectedBodyFrames + actualIntroFrames,
