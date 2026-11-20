@@ -29,6 +29,7 @@ object WolfStoryLengthStructureEngine {
         val index: Int,
         val title: String,
         val beat: Beat,
+        val beats: List<Beat>,
         val targetWords: Int,
         val minimumWords: Int,
         val maximumWords: Int,
@@ -96,8 +97,12 @@ object WolfStoryLengthStructureEngine {
         require(tolerance in 0.05..0.40) { "هامش الفصل يجب أن يكون بين 5% و40%" }
         require(chapterTitles.all { it.isNotBlank() && it.length <= 120 }) { "عناوين الفصول مطلوبة وبحد أقصى 120 حرفًا" }
 
-        val beats = chapterTitles.indices.map { beatFor(it, chapterTitles.size) }
-        val weights = beats.map { it.weight.toLong() }
+        val beatGroups = chapterTitles.indices.map { index ->
+            val start = index * Beat.values().size / chapterTitles.size
+            val end = ((index + 1) * Beat.values().size / chapterTitles.size - 1).coerceAtLeast(start)
+            Beat.values().slice(start..end)
+        }
+        val weights = beatGroups.map { group -> group.sumOf { it.weight }.toLong() }
         val totalWeight = weights.sum()
         val raw = weights.map { targetWords.toLong() * it / totalWeight }
         val allocations = raw.map { it.toInt() }.toMutableList()
@@ -114,26 +119,13 @@ object WolfStoryLengthStructureEngine {
             ChapterTarget(
                 index = index,
                 title = title.trim(),
-                beat = beats[index],
+                beat = beatGroups[index].first(),
+                beats = beatGroups[index],
                 targetWords = amount,
                 minimumWords = (amount * (1.0 - tolerance)).roundToInt().coerceAtLeast(1),
                 maximumWords = (amount * (1.0 + tolerance)).roundToInt().coerceAtLeast(1),
                 compactArc = chapterTitles.size == 1
             )
-        }
-    }
-
-    private fun beatFor(index: Int, count: Int): Beat {
-        val progress = if (count <= 1) 0.0 else index.toDouble() / (count - 1)
-        return when {
-            progress < 0.08 -> Beat.HOOK
-            progress < 0.20 -> Beat.SETUP
-            progress < 0.32 -> Beat.INCITING_INCIDENT
-            progress < 0.62 -> Beat.RISING_ACTION
-            progress < 0.74 -> Beat.MIDPOINT
-            progress < 0.87 -> Beat.CRISIS
-            progress < 0.96 -> Beat.CLIMAX
-            else -> Beat.RESOLUTION
         }
     }
 
@@ -146,9 +138,10 @@ object WolfStoryLengthStructureEngine {
             appendLine("وزّع الأحداث وفق الأدوار التالية، ولا تجعل كل الفصول متشابهة الإيقاع:")
             targets.forEach {
                 appendLine(
-                    "الفصل ${it.index + 1} — ${it.title}: ${it.beat.label}؛ " +
+                    "الفصل ${it.index + 1} — ${it.title}: ${it.beats.joinToString(" + ") { beat -> beat.label }}؛ " +
                         "هدف ${it.targetWords} كلمة (نطاق ${it.minimumWords}–${it.maximumWords}). " +
-                        if (it.compactArc) compactArcGuidance() else it.beat.guidance
+                        it.beats.joinToString(" ") { beat -> beat.guidance } +
+                        if (it.compactArc) " " + compactArcGuidance() else ""
                 )
             }
             appendLine("حافظ على السببية واستمرارية الشخصيات، ومهّد للتحولات قبل كشفها.")
@@ -158,8 +151,9 @@ object WolfStoryLengthStructureEngine {
     }
 
     fun chapterGuidance(target: ChapterTarget): String = buildString {
-        appendLine("دور هذا الفصل: ${target.beat.label}.")
-        appendLine(if (target.compactArc) compactArcGuidance() else target.beat.guidance)
+        appendLine("أدوار هذا الفصل: ${target.beats.joinToString(" + ") { it.label }}.")
+        appendLine(target.beats.joinToString(" ") { it.guidance })
+        if (target.compactArc) appendLine(compactArcGuidance())
         appendLine("استهدف ${target.targetWords} كلمة، ضمن ${target.minimumWords}–${target.maximumWords} كلمة تقريبًا.")
         appendLine("لا تلخص الفصل السابق ولا تقفز إلى دور الفصل التالي. اختم بتغير أو سؤال يدفع القارئ للمتابعة.")
     }.trim()
