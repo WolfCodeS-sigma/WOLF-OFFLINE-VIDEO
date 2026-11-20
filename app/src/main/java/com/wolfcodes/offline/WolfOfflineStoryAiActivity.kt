@@ -5,6 +5,8 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.InputFilter
@@ -23,6 +25,9 @@ import java.util.concurrent.Executors
 /** Separate on-device story studio. Model loading, copying and generation never run on the UI thread. */
 class WolfOfflineStoryAiActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
+    private val reportHandler = Handler(Looper.getMainLooper())
+    private var reportTask: Runnable? = null
+    private var reportRevision = 0L
     private val model = WolfOfflineStoryAiEngine.LocalModel()
     private lateinit var status: TextView
     private lateinit var planView: TextView
@@ -138,7 +143,12 @@ class WolfOfflineStoryAiActivity : Activity() {
         storyField.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-            override fun afterTextChanged(s: Editable?) { updateStructureReport() }
+            override fun afterTextChanged(s: Editable?) {
+                reportTask?.let(reportHandler::removeCallbacks)
+                val task = Runnable { updateStructureReport() }
+                reportTask = task
+                reportHandler.postDelayed(task, 700L)
+            }
         })
         root.addView(button("اعتماد القصة النهائية وحفظها في مكتبة المعرفة").apply {
             setOnClickListener { approveAndSave() }
@@ -392,18 +402,26 @@ class WolfOfflineStoryAiActivity : Activity() {
             return
         }
         val displayedText = storyField.text.toString()
-        val report = if (current.isComplete && displayedText.isNotBlank() &&
-            displayedText != formatChapters(current)
-        ) {
-            WolfStoryLengthStructureEngine.analyzeText(
-                current.brief.targetWords, displayedText, current.plan.chapterTitles.size
-            )
-        } else {
-            WolfStoryLengthStructureEngine.analyzeChapters(
-                current.brief.targetWords, current.chapters, current.plan.chapterTitles
-            )
+        val revision = ++reportRevision
+        worker.execute {
+            val report = if (current.isComplete && displayedText.isNotBlank() &&
+                displayedText != formatChapters(current)
+            ) {
+                WolfStoryLengthStructureEngine.analyzeText(
+                    current.brief.targetWords, displayedText, current.plan.chapterTitles.size
+                )
+            } else {
+                WolfStoryLengthStructureEngine.analyzeChapters(
+                    current.brief.targetWords, current.chapters, current.plan.chapterTitles
+                )
+            }
+            val rendered = WolfStoryLengthStructureEngine.formatReport(report)
+            runOnUiThread {
+                if (revision == reportRevision && session?.id == current.id) {
+                    structureView.text = rendered
+                }
+            }
         }
-        structureView.text = WolfStoryLengthStructureEngine.formatReport(report)
     }
 
     private fun formatPlan(value: WolfOfflineStoryAiEngine.Session) = buildString {
@@ -550,6 +568,8 @@ class WolfOfflineStoryAiActivity : Activity() {
     }
 
     override fun onDestroy() {
+        reportTask?.let(reportHandler::removeCallbacks)
+        reportRevision++
         worker.execute { model.close() }
         worker.shutdown()
         super.onDestroy()
