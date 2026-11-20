@@ -42,8 +42,8 @@ object WolfNarrativePatternAudit {
             "manifested", "emerged", "entity", "specter", "shadow"
         )),
         EventType("مطاردة", setOf(
-            "طارد", "طاردت", "لاحق", "لاحقت", "追", "جرى", "جرت", "ركض",
-            "ركضت", " पीछ", "chased", "pursued", "ran", "running", "stalked"
+            "طارد", "طاردت", "لاحق", "لاحقت", "جرى", "جرت", "ركض",
+            "ركضت", "chased", "pursued", "ran", "running", "stalked"
         )),
         EventType("تهديد أو اعتداء", setOf(
             "هاجم", "هاجمت", "ضرب", "ضربت", "خنق", "خنقت", "عض", "عضت",
@@ -84,7 +84,7 @@ object WolfNarrativePatternAudit {
         val segments = splitSegments(story)
         val segmentEvents = segments.map { segment ->
             val tokens = normalizeTokens(segment)
-            eventTypes.filter { type -> type.keywords.any(tokens::contains) }.map { it.label }
+            eventTypes.filter { type -> type.keywords.any { normalizeToken(it) in tokens } }.map { it.label }
         }
         val frequencies = linkedMapOf<String, Int>()
         segmentEvents.forEach { labels ->
@@ -160,15 +160,15 @@ object WolfNarrativePatternAudit {
         return if (sentences.isNotEmpty()) sentences else listOf(text)
     }
 
-    private fun normalizeTokens(text: String): Set<String> {
-        val normalized = text.lowercase(Locale.ROOT)
-            .replace(Regex("\\p{M}+"), "")
-            .replace('أ', 'ا')
-            .replace('إ', 'ا')
-            .replace('آ', 'ا')
-            .replace('ى', 'ي')
-        return Regex("[\\p{L}\\p{N}]+").findAll(normalized)
-            .map { it.value }
+    private fun normalizeTokens(text: String): Set<String> =
+        Regex("[\\p{L}\\p{N}]+").findAll(text)
+            .map { normalizeToken(it.value) }
             .toSet()
-    }
+
+    private fun normalizeToken(value: String): String = value.lowercase(Locale.ROOT)
+        .replace(Regex("\\p{M}+"), "")
+        .replace('أ', 'ا')
+        .replace('إ', 'ا')
+        .replace('آ', 'ا')
+        .replace('ى', 'ي')
 }
