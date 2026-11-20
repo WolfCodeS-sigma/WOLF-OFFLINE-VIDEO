@@ -14,8 +14,15 @@ object WolfLongFilmEngine {
 
     data class SceneSlice(
         val sceneIndex: Int,
+        /** Frame offset within the scene; retained for legacy scene-slice checkpoints. */
         val startFrame: Int,
-        val frameCount: Int
+        val frameCount: Int,
+        /** 0..2 for shot-aligned production slices; -1 for legacy whole-scene slices. */
+        val shotIndex: Int = -1,
+        /** Frame offset within the original shot, used to resume motion without restarting it. */
+        val shotStartFrame: Int = 0,
+        /** Original complete shot frame count, before chapter splitting. */
+        val shotTotalFrames: Int = 0
     )
 
     data class ChapterPlan(
@@ -92,6 +99,79 @@ object WolfLongFilmEngine {
                 sceneOffset += count
                 remaining -= count
                 if (remaining > 0) beginChapter()
+            }
+        }
+
+        return slicesByChapter.mapIndexedNotNull { index, slices ->
+            if (slices.isEmpty()) return@mapIndexedNotNull null
+            ChapterPlan(
+                number = index + 1,
+                slices = slices.toList(),
+                bodyFrameCount = bodyFramesByChapter[index],
+                introFrameCount = if (index == 0) safeIntro else 0
+            )
+        }
+    }
+
+    /**
+     * Builds chapter boundaries on shot edges where possible and records exact shot offsets.
+     * A shot longer than a chapter is split into contiguous segments without resetting its
+     * camera/motion progress when the next chapter resumes.
+     */
+    fun planShotChapters(
+        framesPerScene: List<Int>,
+        framesPerSecond: Int = 12,
+        introFrames: Int = 0,
+        maxChapterSeconds: Int = DEFAULT_CHAPTER_SECONDS
+    ): List<ChapterPlan> {
+        val fps = framesPerSecond.coerceIn(1, 60)
+        val chapterLimit = maxChapterSeconds.coerceAtLeast(1) * fps
+        val safeIntro = introFrames.coerceIn(0, (chapterLimit - 1).coerceAtLeast(0))
+        if (framesPerScene.none { it > 0 }) return emptyList()
+
+        val slicesByChapter = mutableListOf<MutableList<SceneSlice>>()
+        val bodyFramesByChapter = mutableListOf<Int>()
+        var currentIndex = -1
+
+        fun beginChapter() {
+            slicesByChapter.add(mutableListOf())
+            bodyFramesByChapter.add(0)
+            currentIndex++
+        }
+
+        beginChapter()
+        framesPerScene.forEachIndexed { sceneIndex, rawFrames ->
+            val sceneFrames = rawFrames.coerceAtLeast(0)
+            val baseShotFrames = sceneFrames / 3
+            val extraShotFrames = sceneFrames % 3
+            var sceneOffset = 0
+
+            for (shotIndex in 0 until 3) {
+                val shotTotal = baseShotFrames + if (shotIndex < extraShotFrames) 1 else 0
+                var shotOffset = 0
+                while (shotOffset < shotTotal) {
+                    val capacity = if (currentIndex == 0) chapterLimit - safeIntro else chapterLimit
+                    val available = capacity - bodyFramesByChapter[currentIndex]
+                    if (available <= 0) {
+                        beginChapter()
+                        continue
+                    }
+                    val count = minOf(shotTotal - shotOffset, available)
+                    slicesByChapter[currentIndex].add(
+                        SceneSlice(
+                            sceneIndex = sceneIndex,
+                            startFrame = sceneOffset + shotOffset,
+                            frameCount = count,
+                            shotIndex = shotIndex,
+                            shotStartFrame = shotOffset,
+                            shotTotalFrames = shotTotal
+                        )
+                    )
+                    bodyFramesByChapter[currentIndex] += count
+                    shotOffset += count
+                    if (shotOffset < shotTotal) beginChapter()
+                }
+                sceneOffset += shotTotal
             }
         }
 
@@ -289,7 +369,10 @@ object WolfLongFilmCheckpointStore {
                     WolfLongFilmEngine.SceneSlice(
                         sceneIndex = slice.getInt("sceneIndex"),
                         startFrame = slice.getInt("startFrame"),
-                        frameCount = slice.getInt("frameCount")
+                        frameCount = slice.getInt("frameCount"),
+                        shotIndex = slice.optInt("shotIndex", -1),
+                        shotStartFrame = slice.optInt("shotStartFrame", 0),
+                        shotTotalFrames = slice.optInt("shotTotalFrames", 0)
                     )
                 }
                 WolfLongFilmEngine.Checkpoint(
@@ -331,6 +414,9 @@ object WolfLongFilmCheckpointStore {
                     put("sceneIndex", slice.sceneIndex)
                     put("startFrame", slice.startFrame)
                     put("frameCount", slice.frameCount)
+                    put("shotIndex", slice.shotIndex)
+                    put("shotStartFrame", slice.shotStartFrame)
+                    put("shotTotalFrames", slice.shotTotalFrames)
                 })
             }
             val plan = JSONObject().apply {
