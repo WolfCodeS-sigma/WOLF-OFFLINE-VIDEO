@@ -165,7 +165,7 @@ object WolfCinematicMotionEngine {
         canvas.drawRect(x, top, x + doorW, top + doorH, propStroke)
         val saved = canvas.save()
         try {
-            canvas.rotate(pose.doorAngle, x, top + doorH)
+            canvas.rotate(pose.doorAngle, x, top + doorH * 0.5f)
             propPaint.color = Color.argb(205, 13, 12, 17)
             canvas.drawRect(x, top, x + doorW, top + doorH, propPaint)
             propStroke.color = Color.argb(150, 92, 74, 69)
