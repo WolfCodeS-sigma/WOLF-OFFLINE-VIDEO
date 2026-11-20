@@ -94,7 +94,13 @@ object OfflineProductionEngine {
         val scenes = if (useNarrationTiming) {
             StoryDirectorEngine.fitSceneTextsToDuration(rawScenes, bodySeconds)
         } else rawScenes
-        val total = if (useNarrationTiming) bodySeconds else max(requestedTotal, scenes.size * 3).coerceAtMost(1800)
+        val total = if (useNarrationTiming) bodySeconds else {
+            WolfFilmProductionCoordinator.bodyDurationSeconds(
+                requestedDurationSeconds = requestedTotal,
+                introSeconds = introSeconds,
+                sceneCount = scenes.size
+            )
+        }
         val totalVideoSeconds = if (useNarrationTiming) requestedTotal else total + introSeconds
         val totalFrames = total * fps
         val minimumFrames = if (useNarrationTiming) fps else fps * 3
