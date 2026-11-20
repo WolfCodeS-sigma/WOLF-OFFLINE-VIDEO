@@ -293,8 +293,8 @@ object WolfHorrorKnowledgeLibrary {
             updatedAt = System.currentTimeMillis(),
             sourceAddedAt = current.sourceAddedAt
         )
-        val existingTerms = readOrRebuildIndex(root, current)
-        writeIndex(directory, entry, existingTerms)
+        // Content indexes are immutable per content fingerprint. Metadata is searched
+        // directly from the current metadata object, so a rename cannot leave stale tokens.
         writeMetadata(directory, entry)
         entry
     }
@@ -350,7 +350,11 @@ object WolfHorrorKnowledgeLibrary {
             (category.isNullOrBlank() || entry.category.equals(category, ignoreCase = true)) &&
                 (folder.isNullOrBlank() || entry.folder.equals(folder, ignoreCase = true)) &&
                 (!referencesOnly || entry.includeInStoryReferences) &&
-                (queryTerms.isEmpty() || queryTerms.all { it in readOrRebuildIndex(root, entry) })
+                (queryTerms.isEmpty() || run {
+                    val contentTerms = readOrRebuildIndex(root, entry)
+                    val catalogTerms = metadataTerms(entry)
+                    queryTerms.all { it in contentTerms || it in catalogTerms }
+                })
         }
     }
 
@@ -598,13 +602,28 @@ object WolfHorrorKnowledgeLibrary {
     }
 
     private fun writeIndex(directory: File, entry: Entry, contentTerms: Set<String>) {
-        val terms = LinkedHashSet<String>()
-        terms.addAll(contentTerms)
-        terms.addAll(metadataTerms(entry))
+        // This index contains only story-body terms. Catalog fields are evaluated from
+        // the current metadata so metadata edits can never leave stale searchable terms.
         val json = JSONObject()
             .put("fingerprint", entry.contentFingerprint)
-            .put("terms", JSONArray(terms))
+            .put("terms", JSONArray(contentTerms))
         writeJsonAtomic(indexFile(directory, entry.contentFingerprint), json)
+    }
+
+    private fun readContentTerms(directory: File, fingerprint: String): Set<String> {
+        val content = contentFile(directory, fingerprint)
+        if (!content.isFile) return emptySet()
+        val terms = LinkedHashSet<String>()
+        val tokenizer = TokenCollector(terms)
+        content.reader(Charsets.UTF_8).buffered().use { reader ->
+            val buffer = CharArray(8192)
+            while (true) {
+                val count = reader.read(buffer)
+                if (count < 0) break
+                tokenizer.accept(buffer, 0, count)
+            }
+        }
+        return tokenizer.finish()
     }
 
     private fun readOrRebuildIndex(root: File, entry: Entry): Set<String> {
@@ -620,21 +639,9 @@ object WolfHorrorKnowledgeLibrary {
             if (cached != null) return cached
         }
 
-        val content = contentFile(directory, entry.contentFingerprint)
-        if (!content.isFile) return metadataTerms(entry)
-        val terms = LinkedHashSet<String>()
-        val tokenizer = TokenCollector(terms)
-        content.reader(Charsets.UTF_8).buffered().use { reader ->
-            val buffer = CharArray(8192)
-            while (true) {
-                val count = reader.read(buffer)
-                if (count < 0) break
-                tokenizer.accept(buffer, 0, count)
-            }
-        }
-        val contentTerms = tokenizer.finish()
+        val contentTerms = readContentTerms(directory, entry.contentFingerprint)
         writeIndex(directory, entry, contentTerms)
-        return (contentTerms + metadataTerms(entry)).toSet()
+        return contentTerms
     }
 
     private fun readMetadata(directory: File): Entry {
