@@ -256,20 +256,31 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
         )
 
     private fun refreshSuggestions() {
-        val categories = WolfHorrorKnowledgeLibrary.categories(libraryRoot)
-        categoryField.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, categories))
-        categoryFilterField.setAdapter(
-            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, listOf("كل التصنيفات") + categories)
-        )
-        folderField.setAdapter(
-            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, WolfHorrorKnowledgeLibrary.folders(libraryRoot))
-        )
-        folderFilterField.setAdapter(
-            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, WolfHorrorKnowledgeLibrary.folders(libraryRoot))
-        )
-        sourceTypeField.setAdapter(
-            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, WolfHorrorKnowledgeLibrary.SOURCE_TYPES)
-        )
+        worker.execute {
+            val suggestions = runCatching {
+                WolfHorrorKnowledgeLibrary.categories(libraryRoot) to
+                    WolfHorrorKnowledgeLibrary.folders(libraryRoot)
+            }
+            runOnUiThread {
+                suggestions.onSuccess { (categories, folders) ->
+                    categoryField.setAdapter(
+                        ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, categories)
+                    )
+                    categoryFilterField.setAdapter(
+                        ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, listOf("كل التصنيفات") + categories)
+                    )
+                    folderField.setAdapter(
+                        ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, folders)
+                    )
+                    folderFilterField.setAdapter(
+                        ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, folders)
+                    )
+                    sourceTypeField.setAdapter(
+                        ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, WolfHorrorKnowledgeLibrary.SOURCE_TYPES)
+                    )
+                }.onFailure { showError(it) }
+            }
+        }
     }
 
     private fun saveEntry() {
@@ -350,12 +361,13 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
         lastCategoryFilter = categoryFilterField.text.toString().trim()
             .takeIf { it.isNotBlank() && it != "كل التصنيفات" }
         lastFolderFilter = folderFilterField.text.toString().trim().takeIf { it.isNotBlank() }
+        val query = lastQuery
+        val category = lastCategoryFilter
+        val folder = lastFolderFilter
         status.text = "جارٍ البحث في الفهرس المحلي..."
         worker.execute {
             val results = runCatching {
-                WolfHorrorKnowledgeLibrary.search(
-                    libraryRoot, lastQuery, lastCategoryFilter, lastFolderFilter
-                )
+                WolfHorrorKnowledgeLibrary.search(libraryRoot, query, category, folder)
             }
             runOnUiThread {
                 results.onSuccess { renderEntries(it) }.onFailure { showError(it) }
@@ -364,11 +376,12 @@ class WolfHorrorKnowledgeLibraryActivity : Activity() {
     }
 
     private fun refreshEntries() {
+        val query = lastQuery
+        val category = lastCategoryFilter
+        val folder = lastFolderFilter
         worker.execute {
             val results = runCatching {
-                WolfHorrorKnowledgeLibrary.search(
-                    libraryRoot, lastQuery, lastCategoryFilter, lastFolderFilter
-                )
+                WolfHorrorKnowledgeLibrary.search(libraryRoot, query, category, folder)
             }
             runOnUiThread {
                 results.onSuccess { renderEntries(it) }.onFailure { showError(it) }
