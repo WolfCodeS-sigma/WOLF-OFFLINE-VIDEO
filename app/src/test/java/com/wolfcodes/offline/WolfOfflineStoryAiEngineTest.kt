@@ -54,6 +54,22 @@ class WolfOfflineStoryAiEngineTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun loadRecoversCheckpointAfterInterruptedAtomicReplacement() {
+        val root = Files.createTempDirectory("wolf-story-recovery").toFile()
+        try {
+            val brief = brief(500)
+            val plan = WolfOfflineStoryAiEngine.parsePlan("""{"chapter_titles":["البيت"],"continuity_summary":"بداية"}""", brief)
+            val session = WolfOfflineStoryAiEngine.newSession(brief, plan)
+            WolfOfflineStoryAiEngine.saveSession(root, session)
+            val target = File(root, "${session.id}.json")
+            val backup = File(root, "${session.id}.json.backup")
+            assertTrue(target.renameTo(backup))
+            assertNotNull(WolfOfflineStoryAiEngine.loadLatestSession(root))
+            assertTrue(target.isFile)
+            assertFalse(backup.exists())
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun planPromptRequiresOriginalWorkAndNonCopying() {
         val prompt = WolfOfflineStoryAiEngine.buildPlanPrompt(brief(500), listOf("مرجع سياقي"))
         assertTrue(prompt.contains("أصلية"))
