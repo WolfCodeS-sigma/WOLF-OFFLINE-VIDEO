@@ -18,8 +18,8 @@ object WolfStoryOriginalityReviewEngine {
     const val MAX_LEDGER_REFERENCES = 40
     const val MAX_STORY_CHARS = 4_000_000
     const val MAX_REFERENCE_CHARS = 1_000_000
-    const val MAX_REVIEW_WORDS = 200_000
-    const val MAX_TOTAL_REFERENCE_WORDS = 500_000
+    const val MAX_REVIEW_WORDS = 100_000
+    const val MAX_TOTAL_REFERENCE_WORDS = 300_000
     const val SHINGLE_WORDS = 6
 
     private const val LEDGER_VERSION = 1
