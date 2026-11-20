@@ -169,6 +169,20 @@ class WolfStoryOriginalityReviewEngineTest {
         assertFalse(report.storyTruncated)
     }
 
+    @Test fun highlyRepeatedSourcePhrasesTriggerPositionLimitWarning() {
+        val repeated = "الحارس فتح الباب الحديدي ثم عاد إلى الغرفة المظلمة "
+        val reference = repeated.repeat(140)
+        val story = repeated.repeat(40)
+        val source = stamp(reference, id = "repeated-source", title = "مرجع متكرر")
+        val report = WolfStoryOriginalityReviewEngine.analyze(
+            story,
+            sequenceOf(WolfStoryOriginalityReviewEngine.ReferenceText(source, reference))
+        )
+
+        assertEquals(1, report.checkedSources)
+        assertTrue(report.warnings.any { it.contains("تقييد مواضع العبارات") })
+    }
+
     @Test fun reviewFingerprintChangesWhenReviewedTextChanges() {
         val first = WolfStoryOriginalityReviewEngine.fingerprint("قصة أصلية")
         val second = WolfStoryOriginalityReviewEngine.fingerprint("قصة أصلية مختلفة")
@@ -180,7 +194,7 @@ class WolfStoryOriginalityReviewEngineTest {
         val root = Files.createTempDirectory("wolf-originality-ledger").toFile()
         try {
             val text = "هذا نص مرجعي محلي لاختبار سجل المصدر"
-            val source = stamp(text)
+            val source = stamp(text).copy(sourceDate = "2026-11-20")
             WolfStoryOriginalityReviewEngine.recordSources(root, "session-12345678", "المخطط", listOf(source))
             WolfStoryOriginalityReviewEngine.recordSources(root, "session-12345678", "الفصل 1", listOf(source))
 
@@ -188,6 +202,7 @@ class WolfStoryOriginalityReviewEngineTest {
             assertEquals(1, restored.size)
             assertEquals(listOf("المخطط", "الفصل 1"), restored.single().usages)
             assertEquals(source.contentFingerprint, restored.single().contentFingerprint)
+            assertEquals("2026-11-20", restored.single().sourceDate)
         } finally {
             root.deleteRecursively()
         }
