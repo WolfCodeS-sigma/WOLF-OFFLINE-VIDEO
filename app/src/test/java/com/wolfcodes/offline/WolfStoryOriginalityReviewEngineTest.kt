@@ -63,6 +63,33 @@ class WolfStoryOriginalityReviewEngineTest {
         assertEquals(WolfStoryOriginalityReviewEngine.Severity.NONE, report.overallSeverity)
     }
 
+    @Test fun continuousPhraseLengthRequiresAdjacentWindowsInTheSource() {
+        val story = "سقط المطر فوق الباب الخشبي القديم فجأة"
+        val reference = "سقط المطر فوق الباب الخشبي القديم ثم انطفأ المصباح في الممر الطويل وبعد ذلك عاد المطر فوق الباب الخشبي القديم فجأة"
+        val source = stamp(reference)
+        val report = WolfStoryOriginalityReviewEngine.analyze(
+            story,
+            sequenceOf(WolfStoryOriginalityReviewEngine.ReferenceText(source, reference))
+        )
+
+        assertEquals(1, report.checkedSources)
+        assertTrue(report.findings.isNotEmpty())
+        assertEquals(6, report.findings.single().maximumContinuousMatchWords)
+    }
+
+    @Test fun reportRetainsCheckedSourcesEvenWhenNoPhraseWasMatched() {
+        val reference = "المطر يسقط فوق محطة القطار بينما تحمل امرأة حقيبة زرقاء وتنتظر وصول الحافلة الصباحية"
+        val story = "المرآة القديمة تعكس وجها لا يعرفه الطبيب ثم تختفي الساعة من فوق الجدار الخشبي"
+        val source = stamp(reference, id = "no-match-source", title = "مصدر بلا تطابق")
+        val report = WolfStoryOriginalityReviewEngine.analyze(
+            story,
+            sequenceOf(WolfStoryOriginalityReviewEngine.ReferenceText(source, reference))
+        )
+
+        assertEquals(listOf(source), report.checkedSourceVersions)
+        assertTrue(WolfStoryOriginalityReviewEngine.formatReport(report).contains("مصدر بلا تطابق"))
+    }
+
     @Test fun commonStopWordOnlySequencesAreIgnored() {
         val commonText = "في من على الى عن ثم في من على الى عن ثم"
         val source = stamp(commonText)
