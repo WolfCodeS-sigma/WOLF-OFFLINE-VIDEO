@@ -42,6 +42,7 @@ class MainActivity : Activity() {
     private var pendingImageSlot: Int? = null
     private var producing = false
     private var voiceMergePending = false
+    private var voiceRecoveryPending = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -378,7 +379,7 @@ class MainActivity : Activity() {
     }
 
     private fun saveProject() {
-        if (voiceMergePending || voiceRecorder?.isRecording == true) {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
             status.text = "أوقف التسجيل وانتظر اكتمال حفظ مقاطعه قبل حفظ تعديلات المشروع"
             return
         }
@@ -417,7 +418,7 @@ class MainActivity : Activity() {
     }
 
     private fun startVoiceRecording() {
-        if (producing || voiceMergePending) {
+        if (producing || voiceMergePending || voiceRecoveryPending) {
             status.text = "انتظر انتهاء العملية الحالية قبل بدء مقطع صوتي جديد"
             return
         }
@@ -643,7 +644,7 @@ class MainActivity : Activity() {
     }
 
     private fun openProject(item: WolfProject) {
-        if (producing || voiceMergePending || voiceRecorder?.isRecording == true) return
+        if (producing || voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) return
         stopVoicePreview()
         workingProject = item
         titleField.setText(item.title)
@@ -659,9 +660,12 @@ class MainActivity : Activity() {
         status.text = "تم فتح المشروع: " + item.title
         refreshVoiceStatus()
         refreshChapterStatus()
+        voiceRecoveryPending = true
+        status.text = "جارٍ التحقق من مقاطع الراوي واستعادة التسجيل المحفوظ..."
         worker.execute {
             val recovered = runCatching { WolfVoiceSegmentStore.recover(this, item.id) }
             runOnUiThread {
+                voiceRecoveryPending = false
                 recovered.onSuccess { merged ->
                     if (merged != null && workingProject?.id == item.id) {
                         val existing = WolfStoryVoiceStore.read(this, item.id)
@@ -696,7 +700,7 @@ class MainActivity : Activity() {
     }
 
     private fun deleteProject(item: WolfProject) {
-        if (producing || voiceMergePending || voiceRecorder?.isRecording == true) {
+        if (producing || voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
             status.text = "أوقف التسجيل أو انتظر انتهاء العملية الحالية قبل حذف المشروع"
             return
         }
