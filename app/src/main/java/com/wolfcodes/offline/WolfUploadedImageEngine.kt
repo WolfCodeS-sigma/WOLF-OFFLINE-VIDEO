@@ -4,10 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.Shader
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -301,13 +299,14 @@ object WolfUploadedImageEngine {
                 plan.atmosphere == Atmosphere.MIRROR
             ) {
                 val pulse = 0.5f + 0.5f * sin((phase * 1.7f).toDouble()).toFloat()
-                atmospherePaint.shader = RadialGradient(
-                    width * plan.focusX, height * plan.focusY, max(width, height) * 0.62f,
-                    intArrayOf(Color.argb((strength * pulse * 24f).toInt(), 255, 30, 42), Color.TRANSPARENT),
-                    floatArrayOf(0f, 1f), Shader.TileMode.CLAMP
-                )
-                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), atmospherePaint)
+                val glowAlpha = (strength * pulse * 9f).toInt().coerceIn(0, 10)
                 atmospherePaint.shader = null
+                atmospherePaint.style = Paint.Style.FILL
+                atmospherePaint.color = Color.argb(glowAlpha, 210, 18, 36)
+                val glowRadius = max(width, height) * 0.22f
+                canvas.drawCircle(width * plan.focusX, height * plan.focusY, glowRadius, atmospherePaint)
+                atmospherePaint.color = Color.argb((glowAlpha * 0.55f).toInt(), 225, 22, 40)
+                canvas.drawCircle(width * plan.focusX, height * plan.focusY, glowRadius * 0.62f, atmospherePaint)
             }
             drawVignette(canvas, width, height, strength)
         } finally {
@@ -324,19 +323,24 @@ object WolfUploadedImageEngine {
             width * (0.46f + 0.04f * sin((phase * 0.6f).toDouble()).toFloat()) + drift * 0.25f
         )
         val ys = floatArrayOf(height * 0.72f, height * 0.58f, height * 0.86f)
+        atmospherePaint.shader = null
+        atmospherePaint.style = Paint.Style.FILL
         for (index in centers.indices) {
             val radius = width * (0.24f + index * 0.045f)
-            val alpha = (strength * (18f + index * 5f)).toInt().coerceIn(0, 42)
-            atmospherePaint.shader = RadialGradient(
-                centers[index], ys[index], radius,
-                intArrayOf(Color.argb(alpha, 178, 185, 194), Color.TRANSPARENT),
-                floatArrayOf(0f, 1f), Shader.TileMode.CLAMP
-            )
-            canvas.drawCircle(centers[index], ys[index], radius, atmospherePaint)
+            for (band in 0..2) {
+                val spread = 1f + band * 0.24f
+                val alpha = (strength * (7f - band * 1.8f)).toInt().coerceIn(1, 8)
+                atmospherePaint.color = Color.argb(alpha, 178, 185, 194)
+                canvas.drawOval(
+                    centers[index] - radius * spread,
+                    ys[index] - radius * 0.15f * spread,
+                    centers[index] + radius * spread,
+                    ys[index] + radius * 0.15f * spread,
+                    atmospherePaint
+                )
+            }
         }
-        atmospherePaint.shader = null
     }
-
     private fun drawDust(canvas: Canvas, width: Int, height: Int, phase: Float, strength: Float, progress: Float) {
         atmospherePaint.shader = null
         atmospherePaint.color = Color.argb((strength * 34f).toInt().coerceIn(0, 38), 210, 207, 190)
@@ -379,15 +383,15 @@ object WolfUploadedImageEngine {
     }
 
     private fun drawVignette(canvas: Canvas, width: Int, height: Int, strength: Float) {
-        atmospherePaint.shader = RadialGradient(
-            width * 0.5f, height * 0.48f, max(width, height) * 0.76f,
-            intArrayOf(Color.TRANSPARENT, Color.argb((strength * 82f).toInt().coerceIn(0, 88), 0, 0, 0)),
-            floatArrayOf(0.52f, 1f), Shader.TileMode.CLAMP
-        )
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), atmospherePaint)
         atmospherePaint.shader = null
+        atmospherePaint.style = Paint.Style.FILL
+        atmospherePaint.color = Color.argb((strength * 13f).toInt().coerceIn(0, 14), 0, 0, 0)
+        val edge = (minOf(width, height) * 0.045f).coerceAtLeast(2f)
+        canvas.drawRect(0f, 0f, width.toFloat(), edge, atmospherePaint)
+        canvas.drawRect(0f, height - edge, width.toFloat(), height.toFloat(), atmospherePaint)
+        canvas.drawRect(0f, 0f, edge, height.toFloat(), atmospherePaint)
+        canvas.drawRect(width - edge, 0f, width.toFloat(), height.toFloat(), atmospherePaint)
     }
-
     private fun cropForAspect(sourceWidth: Int, sourceHeight: Int, width: Int, height: Int): Rect {
         val targetRatio = width.toFloat() / height.toFloat()
         val sourceRatio = sourceWidth.toFloat() / sourceHeight.toFloat()
