@@ -186,6 +186,8 @@ class WolfOfflineStoryAiActivity : Activity() {
                 require(name.endsWith(WolfOfflineStoryAiEngine.MODEL_EXTENSION, true)) {
                     "اختر ملفًا بصيغة .litertlm متوافقًا مع LiteRT-LM"
                 }
+                if (!target.exists() && backup.exists()) backup.renameTo(target)
+                else if (target.exists() && backup.exists()) backup.delete()
                 model.close()
                 pending.delete()
                 contentResolver.openInputStream(uri)?.use { input ->
@@ -406,6 +408,7 @@ class WolfOfflineStoryAiActivity : Activity() {
     }
 
     private fun approveAndSave() {
+        if (busy) return
         val value = session
         if (value == null || !value.isComplete) {
             status.text = "لا يمكن اعتماد القصة قبل اكتمال جميع الفصول."
