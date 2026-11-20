@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10131b">
+<title>خطة منظومة WOLF Motion Ecosystem</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0e14;--panel:#141a24;--panel2:#1b2431;--line:#2b3748;--text:#edf2f8;--muted:#aab7c8;--accent:#c33b45;--gold:#d8b46a;--green:#75c99b}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 85% 0%,#28202a 0,transparent 38%),var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;line-height:1.85}
+main{width:min(1100px,calc(100% - 32px));margin:32px auto 64px}
+header{padding:36px 28px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(135deg,#211820,#151b27 65%,#111722);box-shadow:0 18px 60px #0007}
+.eyebrow{color:var(--gold);font-size:.86rem;letter-spacing:.04em}h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1.25;margin:8px 0 14px}h2{font-size:1.55rem;margin:0 0 16px}h3{font-size:1.08rem;margin:0 0 8px}.lead{font-size:1.12rem;color:#d8e0ea;max-width:850px}
+.status{display:inline-block;margin-top:14px;padding:5px 12px;border-radius:99px;border:1px solid #846c43;color:#f0d79e;background:#3a3020}
+section{margin-top:24px;padding:24px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(160deg,var(--panel),#10151e)}
+p{margin:8px 0;color:#d6deea}small,.muted{color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:12px}
+.card{padding:16px;border-radius:14px;border:1px solid var(--line);background:var(--panel2)}
+.tag{display:inline-block;font-size:.78rem;padding:2px 9px;border-radius:20px;background:#39252a;color:#ffc3c6;margin:3px 0 8px}
+ul,ol{padding-right:22px;margin:8px 0}li{margin:5px 0;color:#d6deea}
+table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid var(--line);padding:11px;text-align:right;vertical-align:top}th{color:#f0d79e;background:#202a37}
+.flow{display:grid;gap:9px;max-width:760px;margin:16px auto;text-align:center}.node{padding:13px;border:1px solid #43536a;border-radius:12px;background:#1b2736}.down{color:var(--gold);font-size:1.25rem}
+.note{border-right:4px solid var(--gold);padding:12px 16px;background:#292519;border-radius:8px;color:#f2e4c2;margin-top:12px}
+.danger{border-right:4px solid var(--accent);padding:12px 16px;background:#2a1a20;border-radius:8px;color:#ffdadd;margin-top:12px}
+a{color:#9dcaff}footer{padding:24px;text-align:center;color:var(--muted)}
+@media(max-width:600px){main{width:calc(100% - 18px);margin:10px auto 32px}header,section{padding:18px}th,td{padding:8px;font-size:.9rem}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<div class="eyebrow">WOLF OFFLINE VIDEO · وثيقة معمارية مرجعية</div>
+<h1>خطة منظومة WOLF Motion Ecosystem</h1>
+<p class="lead">منظومة إنتاج بصري سينمائي تعمل دون اتصال، توحّد عدة محركات متخصصة تحت إدارة مركزية واحدة، بحيث يؤدي كل محرك المهمة التي يتفوّق فيها، ثم تُجمع النتائج في خط إنتاج فيديو موحّد.</p>
+<div class="status">خطة معتمدة للتنفيذ بعد اكتمال المراجعة الحالية واختبار Debug وتوجيه المستخدم</div>
+</header>
+
+<section>
+<h2>1. حالة الوثيقة وحدودها</h2>
+<ul>
+<li>هذه وثيقة تخطيط معماري مستقبلية وليست إعلانًا عن تنفيذ المحركات.</li>
+<li>موعد بدء التنفيذ: بعد انتهاء المراجعة الحالية، وانتهاء المستخدم من اختبار نسخة Debug، ومناقشة النتائج، ثم صدور توجيه صريح بالبدء.</li>
+<li>لا يُسمح لهذه الخطة بتعطيل أو حذف أو استبدال أي مرحلة أو وظيفة سابقة في WOLF OFFLINE VIDEO.</li>
+<li>التطبيق يظل Offline-first؛ لا بحث تلقائي عن محركات فيديو عبر الإنترنت، ولا تنزيل لها، ولا تشغيل لخدمات توليد فيديو سحابية.</li>
+<li>تظل محركات الإنتاج محلية ومجانية/مفتوحة المصدر وفق التراخيص الفعلية لإصداراتها وتبعياتها، بعد مراجعة قانونية وتقنية قبل الدمج.</li>
+</ul>
+<div class="note">قرار أساسي: نضمّن القدرات المطلوبة داخل التطبيق، لكن لا نشغّل جميع المحركات الثقيلة بالتوازي. يختار مركز التنسيق المحرك المناسب لكل مهمة، ويحرر الموارد بعد انتهاء المهمة.</div>
+</section>
+
+<section>
+<h2>2. توزيع المسؤوليات</h2>
+<div class="grid">
+<article class="card"><span class="tag">3D أساسي</span><h3>Godot Engine</h3><p>المحرك الرئيسي للعوالم ثلاثية الأبعاد: البيئات، الشخصيات، المخلوقات، الكاميرا، الحركة، المشاهد والتفاعل المكاني.</p></article>
+<article class="card"><span class="tag">رسم واقعي متخصص</span><h3>Google Filament</h3><p>الخامات الفيزيائية PBR، الإضاءة والانعكاسات والظلال واللقطات القريبة التي تستفيد من معالجة واقعية متخصصة.</p></article>
+<article class="card"><span class="tag">مؤثرات وجسيمات</span><h3>Cocos Creator / Cocos Engine</h3><p>المؤثرات ثنائية وثلاثية الأبعاد، الجسيمات، الدخان والغبار والشرر والعناصر المتحركة. يجب تثبيت نسخة runtime المناسبة لأندرويد وفصلها عن متطلبات المحرر.</p></article>
+<article class="card"><span class="tag">رسوم برمجية</span><h3>libGDX</h3><p>الحركة الرياضية والمؤثرات المخصصة الخفيفة، المعالجة البرمجية ثنائية الأبعاد، وبعض مهام التركيب التي لا تحتاج محرك مشاهد كاملًا.</p></article>
+<article class="card"><span class="tag">2D وParallax</span><h3>KorGE</h3><p>تحريك طبقات الصور والخلفيات، المشاهد ثنائية الأبعاد، العمق الوهمي والانتقالات المبنية على Kotlin.</p></article>
+<article class="card"><span class="tag">هوية وعناوين</span><h3>Lottie Android</h3><p>الشعارات والعناوين والبطاقات والانتقالات المتجهة، بما فيها عناصر هوية WOLF CODE S وبصمة الذئب السينمائية.</p></article>
+<article class="card"><span class="tag">واجهة معاينة</span><h3>SceneView</h3><p>واجهة Android للمعاينة والتعامل مع المشاهد ثلاثية الأبعاد فوق Filament. ليس محرك رسم مستقلًا إضافيًا ولا ينبغي احتساب تكرار محرك Filament.</p></article>
+<article class="card"><span class="tag">إعداد خارج التطبيق</span><h3>Blender</h3><p>أداة خارجية لإنتاج الأصول: النماذج والشخصيات والهياكل العظمية والتحريك والبيئات والخامات. لا يُضمّن محرر Blender داخل APK.</p></article>
+</div>
+</section>
+
+<section>
+<h2>3. البنية المركزية المقترحة</h2>
+<div class="flow">
+<div class="node"><strong>WOLF Motion Hub</strong><br><small>مدير الإنتاج: تخطيط المهام، اختيار المحرك، إدارة الموارد، التوقيت والاسترداد</small></div>
+<div class="down">↓</div>
+<div class="node"><strong>WOLF Motion Code Library</strong><br><small>الدوال المشتركة: الحركة، الكاميرا، المنحنيات، التحويلات، التوقيت، المؤثرات والحسابات</small></div>
+<div class="down">↓</div>
+<div class="node"><strong>WOLF Scene Contract</strong><br><small>مخطط موحد للمشهد والأوامر والموارد والطبقات ومخرجات الرسم</small></div>
+<div class="down">↓</div>
+<div class="grid">
+<div class="node">Godot · 3D</div><div class="node">Filament · PBR</div>
+<div class="node">Cocos · Particles</div><div class="node">libGDX · Code FX</div>
+<div class="node">KorGE · 2D</div><div class="node">Lottie · Motion UI</div>
+</div>
+<div class="down">↓</div>
+<div class="node"><strong>WOLF Scene Compositor</strong><br><small>توحيد الطبقات، alpha، الألوان، التوقيت، الدقة وترتيب العمق</small></div>
+<div class="down">↓</div>
+<div class="node"><strong>خط إنتاج الفيديو الحالي</strong><br><small>الإطارات، الصوت، الفصول، نقاط الاستكمال، H.264/MP4 والتصدير</small></div>
+</div>
+<p>SceneView يستخدم كواجهة معاينة على Filament. Blender يظل أداة إعداد أصول خارج التطبيق. لا يُفترض أن كل محرك يرسم المشهد الكامل؛ يمكن أن ينتج طبقة أو لقطة أو تسلسل إطارات بحسب المهمة.</p>
+</section>
+
+<section>
+<h2>4. لغة التواصل الموحدة: WOLF Scene Contract</h2>
+<p>لا يمكن تشغيل كود محرك مباشرة داخل محرك آخر. لذلك تُعرّف أوامر محايدة، ثم يترجم Adapter خاص بكل محرك تلك الأوامر إلى واجهته الأصلية.</p>
+<table>
+<thead><tr><th>المكوّن</th><th>البيانات/المسؤولية</th></tr></thead>
+<tbody>
+<tr><td>Scene ID</td><td>معرّف ثابت للمشهد واللقطة والإصدار.</td></tr>
+<tr><td>Timeline</td><td>المدة، معدل الإطارات، نقاط البداية والنهاية وتزامن الحركة والصوت.</td></tr>
+<tr><td>Camera</td><td>الموضع والاتجاه والعدسة/مجال الرؤية وحركة الكاميرا.</td></tr>
+<tr><td>Motion</td><td>تحريك العناصر، المنحنيات، السرعة والتسارع والتوقف.</td></tr>
+<tr><td>Lighting</td><td>مصادر الضوء، اللون، الشدة، الظلال وإعدادات البيئة.</td></tr>
+<tr><td>Effects</td><td>الضباب والمطر والجسيمات والدخان والتشويش والوميض.</td></tr>
+<tr><td>Assets</td><td>معرّفات الأصول، الصيغ، الخامات، التحريكات والاعتماديات.</td></tr>
+<tr><td>Render Target</td><td>الدقة، صيغة اللون، الشفافية، ترتيب الطبقة ووجهة الإخراج.</td></tr>
+<tr><td>Engine Assignment</td><td>المحرك/المحوّل المختار، متطلبات الموارد، بدائل التنفيذ وحدود الزمن.</td></tr>
+</tbody>
+</table>
+<p>صيغة GLB/glTF مرشح أساسي لتبادل الأصول ثلاثية الأبعاد، مع اختبار توافق الخامات والهياكل والتحريكات والخصائص الخاصة بكل محرك. وقد تحتاج بعض الأصول إلى تحويل أو نسخ مبسطة.</p>
+</section>
+
+<section>
+<h2>5. مسار إنتاج اللقطة الواحدة</h2>
+<ol>
+<li>يحلل Hub وصف اللقطة ويحوّله إلى مشهد وأهداف بصرية قابلة للتنفيذ.</li>
+<li>يختار المحرك الأساسي. مثال: Godot لبناء ممر ثلاثي الأبعاد وتحريك الشخصية والكاميرا.</li>
+<li>تُسند المهام المتخصصة فقط: Filament لخامة/إضاءة محددة، Cocos لجسيمات، libGDX لتشويه برمجي، KorGE لطبقات 2D، وLottie للعنوان عند الحاجة.</li>
+<li>تُنتج المحركات مخرجات محددة: إطارات، طبقات شفافة، خامات أو بيانات حركة وفق عقد موحد.</li>
+<li>تجمع محطة التركيب المخرجات وتوحّد التوقيت واللون والشفافية وترتيب الطبقات.</li>
+<li>يمر الناتج إلى خط إنتاج الفيديو الحالي، مع الحفاظ على الصوت والفصول ونقاط الاستكمال والتصدير.</li>
+<li>بعد إتمام المهمة، يحرر Hub موارد المحرك والذاكرة والسياقات الرسومية غير اللازمة.</li>
+</ol>
+<div class="note">مثال إخراجي: Godot يبني الممر والشخصية وحركة الكاميرا؛ Cocos ينتج الغبار؛ libGDX يضيف تشويشًا محسوبًا؛ Filament يتولى لقطة خامة قريبة عند الحاجة؛ ثم يركّب WOLF الناتج في إطار واحد.</div>
+</section>
+
+<section>
+<h2>6. قواعد الإخراج والرعب السينمائي</h2>
+<div class="grid">
+<div class="card"><h3>ما لا نراه</h3><p>الحجب والمساحات الفارغة والظلال المقصودة بدل الكشف الكامل المبكر عن الكيان.</p></div>
+<div class="card"><h3>حركة غير طبيعية</h3><p>حركة دقيقة أو متأخرة أو غير متوافقة مع التوقعات، مع تجنب الحركة العشوائية غير المبررة.</p></div>
+<div class="card"><h3>إضاءة تقود العين</h3><p>توجيه الانتباه بمصادر ضوء محدودة، وتباين محسوب وضباب وظلال متسقة.</p></div>
+<div class="card"><h3>إيقاع وصمت</h3><p>ترك مساحة للترقب، ومزامنة المؤثرات الصوتية مع الحدث بدل ملء كل لحظة بالمؤثرات.</p></div>
+</div>
+</section>
+
+<section>
+<h2>7. الأداء والاستقرار على الهاتف المستهدف</h2>
+<p>الهاتف المرجعي: Realme 7، Android 12، Helio G95، Mali-G76 MC4. يجب قياس نسخة الجهاز الفعلية والذاكرة المتاحة ودعم الرسوميات على الجهاز قبل تثبيت إعدادات الإنتاج.</p>
+<ul>
+<li>لا تشغيل متزامن لعدة محركات 3D ثقيلة إلا إذا أثبت القياس ضرورة ذلك وإمكانية تحمله.</li>
+<li>تفضيل المعالجة المرحلية وإخراج الطبقات/الإطارات ثم تحرير الموارد.</li>
+<li>معاينة منخفضة التكلفة، مع إعدادات إنتاج منفصلة يمكن رفعها تدريجيًا.</li>
+<li>إدارة صارمة للذاكرة، أحجام الأصول، دقة الخامات، الجسيمات، والـrender targets.</li>
+<li>قياس الحرارة والذاكرة ومعدل الإطارات وزمن التصدير واستهلاك البطارية على الهاتف الفعلي.</li>
+<li>المحاكي لا يثبت أداء Helio G95 أو Mali-G76 ولا يحاكي حرارة الجهاز وسياسات الشركة المصنعة بالكامل.</li>
+<li>معدل 24 إطارًا في الثانية هدف اختبار لاحق وليس قرارًا نهائيًا؛ يجب قياسه مقابل معدل 12 إطارًا الحالي وجودة الفيديو ووقت التصدير.</li>
+</ul>
+<div class="danger">لا يُعلن نجاح الأداء أو جودة الفيديو قبل بناء نسخة فعلية واختبارها على الهاتف. لا تكفي اختبارات JVM أو المحاكي لإثبات ذلك.</div>
+</section>
+
+<section>
+<h2>8. المرونة والبدائل عند الفشل</h2>
+<ul>
+<li>لكل مهمة مسار أساسي ومسار بديل أخف، مع الحفاظ على مدة اللقطة وترتيبها.</li>
+<li>إذا فشل محرك أو تجاوز حدود الموارد، يعيد Hub المحاولة بإعدادات أقل أو يختار محولًا بديلًا.</li>
+<li>إذا تعذر إنتاج فيديو متحرك، يستخدم النظام خطة الإطارات المتغيرة والحركة الافتراضية والقص والانتقالات المحلية المعتمدة سابقًا.</li>
+<li>لا يؤدي فشل مؤثر واحد إلى إيقاف الفيلم كاملًا؛ يسجل النظام سبب الفشل ويواصل عبر البديل المتاح.</li>
+<li>كل خطوة إنتاج قابلة للاستئناف، ولا يعاد حساب الناتج الصحيح دون داعٍ.</li>
+</ul>
+</section>
+
+<section>
+<h2>9. الترخيص والحجم والتبعيات</h2>
+<ul>
+<li>يجب التحقق من ترخيص كل إصدار فعلي، وكل إضافة ومكتبة تابعة، ومتطلبات الإشعار وحقوق النشر قبل تضمينها.</li>
+<li>لا يكفي ترخيص المحرك الأساسي وحده لإثبات أن كل الإضافات والأصول حرة أو مناسبة للتوزيع.</li>
+<li>يجب قياس زيادة حجم APK/AAB بعد نموذج دمج حقيقي؛ التقديرات الأولية ليست أرقامًا مضمونة.</li>
+<li>الأصول ثلاثية الأبعاد والخامات والصوت قد تزيد الحجم أكثر من كود بعض المحركات.</li>
+<li>يُراجع توافق ABI، إصدارات Android، OpenGL ES/Vulkan، حجم المكتبات الأصلية، وتعارضات Gradle/NDK.</li>
+<li>لا تُضاف خدمات مدفوعة أو اعتماديات شبكية أو تنزيلات محركات تلقائية.</li>
+</ul>
+</section>
+
+<section>
+<h2>10. مراحل التنفيذ المقترحة بعد المراجعة</h2>
+<ol>
+<li><strong>تثبيت خط الأساس:</strong> استلام ملاحظات Debug والملفات الناتجة، مراجعة العيوب، ثم تحديد نسخة مستقرة لا تتأثر بها المراحل السابقة.</li>
+<li><strong>جرد التوافق:</strong> فحص الإصدارات والتراخيص وطرق تضمين Android وABI ومتطلبات البناء لكل محرك.</li>
+<li><strong>تصميم العقود:</strong> اعتماد WOLF Scene Contract وواجهات المحوّلات وخطة الأصول GLB/glTF.</li>
+<li><strong>بناء الأساس المركزي:</strong> تنفيذ Hub وCode Library وطبقة الموارد والتوقيت والتسجيل والاسترداد.</li>
+<li><strong>نماذج إثبات صغيرة:</strong> اختبار كل محرك منفردًا داخل التطبيق، ثم اختبار نقل مخرجاته إلى محطة التركيب.</li>
+<li><strong>دمج تدريجي:</strong> إضافة المحركات واحدًا بعد الآخر مع اختبارات رجعية لكل مرحلة وعدم كسر خط الفيديو الحالي.</li>
+<li><strong>مشاهد مرجعية:</strong> إنشاء مجموعة لقطات رعب متنوعة تقيس جودة 2D و3D والإضاءة والحركة والمؤثرات.</li>
+<li><strong>اختبار الجهاز:</strong> قياس الأداء والحرارة والذاكرة والتصدير على Realme 7 الفعلي، وضبط مستويات الجودة والبدائل.</li>
+<li><strong>قبول المستخدم:</strong> مراجعة النتائج والملفات والمخرجات قبل الانتقال لأي مرحلة لاحقة أو إعداد Release.</li>
+</ol>
+</section>
+
+<section>
+<h2>11. ما لا يدخل ضمن هذه الخطة</h2>
+<ul>
+<li>لا مولدات فيديو سحابية ولا البحث التلقائي عن محركات فيديو أو تنزيلها.</li>
+<li>لا تشغيل تلقائي لخدمات أو محركات خارجية على مدار الساعة.</li>
+<li>لا تضمين محرر Blender داخل التطبيق.</li>
+<li>لا استبدال محرك الفيديو الحالي قبل إثبات أن البديل يعمل ويجتاز اختبارات التوافق.</li>
+<li>لا دمج أو تعديل لفرع main أو دمج Pull Request دون موافقة صريحة من المستخدم.</li>
+<li>لا بدء تنفيذ هذه الخطة قبل اكتمال المراجعة الحالية وتوجيه المستخدم.</li>
+</ul>
+</section>
+
+<section>
+<h2>12. مراجع تقنية أولية</h2>
+<ul>
+<li><a href="https://docs.godotengine.org/en/stable/tutorials/platform/android/embedding_in_android_projects.html">Godot Android embedding</a></li>
+<li><a href="https://google.github.io/filament/">Google Filament</a></li>
+<li><a href="https://www.cocos.com/en/creator">Cocos Creator</a> · <a href="https://github.com/cocos/cocos-engine">Cocos Engine</a></li>
+<li><a href="https://libgdx.com/">libGDX</a></li>
+<li><a href="https://korge.org/">KorGE</a></li>
+<li><a href="https://github.com/airbnb/lottie-android">Lottie Android</a></li>
+<li><a href="https://sceneview.github.io/docs/">SceneView</a></li>
+<li><a href="https://www.blender.org/">Blender</a> · <a href="https://www.blender.org/about/license/">Blender license</a></li>
+</ul>
+<p class="muted">المراجع للاستكشاف الأولي؛ يجب مراجعة وثائق النسخ المستهدفة وتراخيصها عند بدء التنفيذ، لأن الإصدارات والتبعيات قد تتغير.</p>
+</section>
+
+<footer>WOLF OFFLINE VIDEO · WOLF CODE S<br>وثيقة خطة مستقبلية — لا تعني بدء التنفيذ أو اعتماد أي دمج تقني قبل موافقة المستخدم.</footer>
+</main>
+</body>
+</html>
