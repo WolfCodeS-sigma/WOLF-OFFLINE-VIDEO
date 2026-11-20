@@ -33,12 +33,14 @@ class WolfOfflineStoryAiActivity : Activity() {
     private lateinit var wordsField: EditText
     private lateinit var storyField: EditText
     private lateinit var libraryToggle: CheckBox
+    private lateinit var referenceChoicesContainer: LinearLayout
     private var session: WolfOfflineStoryAiEngine.Session? = null
     private var busy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createScreen()
+        refreshReferenceChoices()
         updateModelStatus()
         setBusy(true, "جارٍ استعادة آخر جلسة تأليف محفوظة...")
         worker.execute {
@@ -103,6 +105,10 @@ class WolfOfflineStoryAiActivity : Activity() {
             setTextColor(0xFFE0E0E8.toInt())
         }
         root.addView(libraryToggle)
+        root.addView(label("اختر حتى 3 مراجع بعينها (اختياري). إذا لم تختر، سيبحث المحرك تلقائيًا في المراجع المسموح بها."))
+        referenceChoicesContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(referenceChoicesContainer)
+        root.addView(button("تحديث قائمة مراجع المكتبة").apply { setOnClickListener { refreshReferenceChoices() } })
         root.addView(button("إنشاء مخطط القصة والشخصيات والأسرار والنهاية").apply {
             setOnClickListener { createPlan() }
         })
@@ -244,11 +250,12 @@ class WolfOfflineStoryAiActivity : Activity() {
             status.text = "استورد نموذج .litertlm محليًا أولًا. التطبيق لا ينزّل نماذج ولا يتصل بالإنترنت."
             return
         }
+        val selectedIds = selectedReferenceIds()
         setBusy(true, "جارٍ تحميل النموذج المحلي وإعداد مخطط القصة...")
         worker.execute {
             val result = runCatching {
                 if (!model.isLoaded()) model.load(WolfOfflineStoryAiEngine.modelFile(this))
-                val refs = loadReferences(brief.premise, brief.useKnowledgeLibrary)
+                val refs = loadReferences(brief.premise, brief.useKnowledgeLibrary, selectedIds)
                 val raw = model.generate(WolfOfflineStoryAiEngine.buildPlanPrompt(brief, refs))
                 val plan = WolfOfflineStoryAiEngine.parsePlan(raw, brief)
                 WolfOfflineStoryAiEngine.newSession(brief, plan).also {
@@ -277,11 +284,12 @@ class WolfOfflineStoryAiActivity : Activity() {
             status.text = "اكتملت كل الفصول. راجع النص النهائي ثم اعتمده."
             return
         }
+        val selectedIds = selectedReferenceIds()
         setBusy(true, "جارٍ توليد الفصل ${current.nextChapterIndex + 1} وحفظ نقطة الاستعادة...")
         worker.execute {
             val result = runCatching {
                 if (!model.isLoaded()) model.load(WolfOfflineStoryAiEngine.modelFile(this))
-                val refs = loadReferences(current.brief.premise, current.brief.useKnowledgeLibrary)
+                val refs = loadReferences(current.brief.premise, current.brief.useKnowledgeLibrary, selectedIds)
                 val chapter = model.generate(WolfOfflineStoryAiEngine.buildChapterPrompt(current, refs))
                 WolfOfflineStoryAiEngine.withChapter(current, chapter).also {
                     WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), it)
@@ -298,20 +306,61 @@ class WolfOfflineStoryAiActivity : Activity() {
         }
     }
 
-    private fun loadReferences(query: String, enabled: Boolean): List<String> {
-        if (!enabled) return emptyList()
-        val root = File(filesDir, "wolf_horror_knowledge_library")
-        val terms = query.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
-        val focusedQuery = terms.take(2).joinToString(" ")
-        val matches = WolfHorrorKnowledgeLibrary.searchStoryReferences(root, focusedQuery)
-            .ifEmpty { WolfHorrorKnowledgeLibrary.searchStoryReferences(root, terms.firstOrNull().orEmpty()) }
-        return matches.take(3)
-            .mapNotNull { entry ->
-                val text = WolfHorrorKnowledgeLibrary.readContent(root, entry.id) ?: return@mapNotNull null
-                "عنوان المرجع: ${entry.title}\nنوع المصدر: ${entry.sourceType}\nملخص: ${entry.summary}\nمقتطف: ${text.take(1_200)}"
+    private fun selectedReferenceIds(): Set<String> =
+        (0 until referenceChoicesContainer.childCount)
+            .mapNotNull { referenceChoicesContainer.getChildAt(it) as? CheckBox }
+            .filter { it.isChecked }
+            .mapNotNull { it.tag as? String }
+            .toSet()
+
+    private fun refreshReferenceChoices() {
+        if (!::referenceChoicesContainer.isInitialized) return
+        worker.execute {
+            val root = File(filesDir, "wolf_horror_knowledge_library")
+            val allAllowed = WolfHorrorKnowledgeLibrary.selectedStoryReferences(root)
+            val entries = allAllowed.take(40)
+            runOnUiThread {
+                referenceChoicesContainer.removeAllViews()
+                if (entries.isEmpty()) {
+                    referenceChoicesContainer.addView(label("لا توجد مراجع مسموح بها بعد. أضف قصصًا إلى المكتبة أو فعّل استخدامها من إعداداتها."))
+                } else {
+                    entries.forEach { entry ->
+                        referenceChoicesContainer.addView(CheckBox(this).apply {
+                            text = "${entry.title} — ${entry.sourceType}"
+                            tag = entry.id
+                            setTextColor(0xFFE0E0E8.toInt())
+                            setOnCheckedChangeListener { view, checked ->
+                                if (checked && selectedReferenceIds().size > 3) {
+                                    view.isChecked = false
+                                    Toast.makeText(this@WolfOfflineStoryAiActivity, "يمكن اختيار 3 مراجع كحد أقصى", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        })
+                    }
+                    if (allAllowed.size > 40) {
+                        referenceChoicesContainer.addView(label("تُعرض أول 40 نتيجة فقط في هذه القائمة."))
+                    }
+                }
             }
+        }
     }
 
+    private fun loadReferences(query: String, enabled: Boolean, selectedIds: Set<String>): List<String> {
+        if (!enabled) return emptyList()
+        val root = File(filesDir, "wolf_horror_knowledge_library")
+        val matches = if (selectedIds.isNotEmpty()) {
+            WolfHorrorKnowledgeLibrary.selectedStoryReferences(root, selectedIds)
+        } else {
+            val terms = query.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+            val focusedQuery = terms.take(2).joinToString(" ")
+            WolfHorrorKnowledgeLibrary.searchStoryReferences(root, focusedQuery)
+                .ifEmpty { WolfHorrorKnowledgeLibrary.searchStoryReferences(root, terms.firstOrNull().orEmpty()) }
+        }
+        return matches.take(3).mapNotNull { entry ->
+            val text = WolfHorrorKnowledgeLibrary.readContent(root, entry.id) ?: return@mapNotNull null
+            "عنوان المرجع: ${entry.title}\nنوع المصدر: ${entry.sourceType}\nملخص: ${entry.summary}\nمقتطف: ${text.take(1_200)}"
+        }
+    }
     private fun formatPlan(value: WolfOfflineStoryAiEngine.Session) = buildString {
         appendLine("المخطط — ${value.brief.title}")
         appendLine(value.plan.logline)
