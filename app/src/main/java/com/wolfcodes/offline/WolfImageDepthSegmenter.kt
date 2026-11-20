@@ -81,11 +81,11 @@ object WolfImageDepthSegmenter {
             val masks = analyze(width, height, pixels)
             val cleanPlate = buildCleanPlate(width, height, pixels, masks.foregroundMask)
             val background = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                .also(allocated::add)
+                .also { allocated.add(it) }
             val midground = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                .also(allocated::add)
+                .also { allocated.add(it) }
             val foreground = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                .also(allocated::add)
+                .also { allocated.add(it) }
             val midPixels = IntArray(pixels.size)
             val frontPixels = IntArray(pixels.size)
 
