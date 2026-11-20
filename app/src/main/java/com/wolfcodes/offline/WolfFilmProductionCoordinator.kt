@@ -29,8 +29,8 @@ object WolfFilmProductionCoordinator {
     ): Plan {
         require(framesPerScene.isNotEmpty()) { "لا توجد مشاهد في خطة الفيلم" }
         require(framesPerScene.size <= MAX_SCENES) { "تجاوزت خطة الفيلم الحد الأقصى البالغ 12 مشهدًا" }
-        require(framesPerScene.all { it >= 0 } && framesPerScene.any { it > 0 }) {
-            "ميزانية إطارات المشاهد غير صالحة"
+        require(framesPerScene.all { it >= SHOTS_PER_SCENE }) {
+            "يجب توفير إطارات كافية للقطات الثلاث في كل مشهد"
         }
         require(framesPerSecond in 1..60) { "معدل الإطارات غير صالح" }
         require(chapterSeconds in 1..DEFAULT_CHAPTER_SECONDS) { "مدة فصل الإنتاج غير صالحة" }
@@ -65,6 +65,38 @@ object WolfFilmProductionCoordinator {
                     slice.shotStartFrame + slice.frameCount <= slice.shotTotalFrames)
                 require(slice.startFrame >= 0 &&
                     slice.startFrame + slice.frameCount <= framesPerScene[slice.sceneIndex])
+            }
+        }
+
+        val orderedSlices = chapters.flatMap { it.slices }
+        val expectedOrder = orderedSlices.sortedWith(
+            compareBy<WolfLongFilmEngine.SceneSlice> { it.sceneIndex }
+                .thenBy { it.shotIndex }
+                .thenBy { it.shotStartFrame }
+        )
+        require(orderedSlices == expectedOrder) { "ترتيب المشاهد واللقطات داخل الفصول غير متسق" }
+        framesPerScene.forEachIndexed { sceneIndex, sceneFrames ->
+            val base = sceneFrames / SHOTS_PER_SCENE
+            val extra = sceneFrames % SHOTS_PER_SCENE
+            var sceneOffset = 0
+            for (shotIndex in 0 until SHOTS_PER_SCENE) {
+                val shotFrames = base + if (shotIndex < extra) 1 else 0
+                val segments = orderedSlices.filter {
+                    it.sceneIndex == sceneIndex && it.shotIndex == shotIndex
+                }
+                require(segments.isNotEmpty()) { "لقطة مفقودة من خطة الفيلم" }
+                require(segments.sumOf { it.frameCount } == shotFrames) {
+                    "ميزانية إطارات اللقطة غير مكتملة"
+                }
+                require(segments.first().shotStartFrame == 0 &&
+                    segments.zipWithNext().all { (a, b) ->
+                        a.shotStartFrame + a.frameCount == b.shotStartFrame
+                    }) { "نقطة استئناف اللقطة غير متصلة" }
+                require(segments.all {
+                    it.shotTotalFrames == shotFrames &&
+                        it.startFrame == sceneOffset + it.shotStartFrame
+                }) { "بيانات حركة اللقطة لا تطابق موضعها في المشهد" }
+                sceneOffset += shotFrames
             }
         }
         require(actualIntroFrames in 0..introFrames.coerceAtLeast(0)) {
