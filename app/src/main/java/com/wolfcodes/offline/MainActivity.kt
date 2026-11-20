@@ -103,6 +103,11 @@ class MainActivity : Activity() {
         root.addView(soundEffectsToggle)
 
         root.addView(button("حفظ المشروع").apply { setOnClickListener { saveProject() } })
+        root.addView(button("فتح WOLF OFFLINE STORY AI").apply {
+            setOnClickListener {
+                startActivity(android.content.Intent(this@MainActivity, WolfOfflineStoryAiActivity::class.java))
+            }
+        })
         root.addView(button("فتح WOLF HORROR KNOWLEDGE LIBRARY").apply {
             setOnClickListener {
                 startActivity(android.content.Intent(this@MainActivity, WolfHorrorKnowledgeLibraryActivity::class.java))

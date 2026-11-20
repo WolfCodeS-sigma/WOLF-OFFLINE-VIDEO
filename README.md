@@ -10,6 +10,7 @@ WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected
 
 - `MainActivity.kt`: independent offline project and production interface.
 - `WolfProjectStore.kt`: durable local project records with atomic file replacement.
+- `WolfOfflineStoryAiEngine.kt` and `WolfOfflineStoryAiActivity.kt`: local LiteRT-LM story planning, chapter-by-chapter generation, resumable checkpoints, and explicit final approval.
 - `WolfHorrorKnowledgeLibrary.kt` and `WolfHorrorKnowledgeLibraryActivity.kt`: private on-device TXT library, categorized/foldered/tagged entries, per-entry local search indexes, source metadata, duplicate detection, original-text preservation, and reference opt-out.
 - `StoryDirectorEngine.kt` and `OfflineSupportEngines.kt`: deterministic story segmentation, shot planning, pacing, and local visual helpers.
 - `WolfSceneArtEngine.kt`, `WolfSceneAssetStore.kt`, and `WolfProceduralMotionEngine.kt`: scene artwork, optional image slots, procedural character/environment motion, fog, particles, rain, spectral silhouettes, and visual effects.
