@@ -123,11 +123,14 @@ object WolfProceduralMotionEngine {
         caption: String,
         sceneIndex: Int,
         shotIndex: Int,
-        progress: Float
+        progress: Float,
+        plannedFeatures: SceneFeatures? = null,
+        environment: WolfProceduralSceneProductionEngine.Environment? = null,
+        plannedLayers: List<WolfSceneLayerSystem.Element>? = null
     ) {
         if (width <= 0 || height <= 0) return
         val t = progress.coerceIn(0f, 1f)
-        val features = featuresFor(caption)
+        val features = plannedFeatures ?: featuresFor(caption)
 
         drawAtDepth(canvas, width, height, sceneIndex, t, 0.16f) {
             drawAtmosphere(this, width, height, sceneIndex, t)
@@ -154,6 +157,13 @@ object WolfProceduralMotionEngine {
                 drawSignalDistortion(this, width, height, sceneIndex, t)
             }
         }
+
+        // Independent object layers are composed after atmosphere and before typography.
+        val resolvedEnvironment = environment
+            ?: WolfProceduralSceneProductionEngine.classifyEnvironment(caption)
+        val objectLayers = plannedLayers
+            ?: WolfSceneLayerSystem.plan(resolvedEnvironment, features, sceneIndex)
+        WolfSceneLayerSystem.render(canvas, width, height, objectLayers, t)
     }
 
     private inline fun drawAtDepth(
@@ -170,11 +180,14 @@ object WolfProceduralMotionEngine {
         val driftY = cos((phase * 0.61f + 1.2f).toDouble()).toFloat() * height * 0.009f * factor
         val scale = 1.012f + 0.019f * factor * progress
         val saved = canvas.save()
-        canvas.translate(width * 0.5f + driftX, height * 0.5f + driftY)
-        canvas.scale(scale, scale)
-        canvas.translate(-width * 0.5f, -height * 0.5f)
-        draw.invoke(canvas)
-        canvas.restoreToCount(saved)
+        try {
+            canvas.translate(width * 0.5f + driftX, height * 0.5f + driftY)
+            canvas.scale(scale, scale)
+            canvas.translate(-width * 0.5f, -height * 0.5f)
+            draw.invoke(canvas)
+        } finally {
+            canvas.restoreToCount(saved)
+        }
     }
 
     fun featuresFor(caption: String): SceneFeatures {
