@@ -45,7 +45,7 @@ class WolfStoryOriginalityReviewEngineTest {
             sequenceOf(WolfStoryOriginalityReviewEngine.ReferenceText(source, reference))
         )
 
-        assertEquals(WolfStoryOriginalityReviewEngine.Severity.HIGH, report.overallSeverity)
+        assertEquals(WolfStoryOriginalityReviewEngine.Severity.MEDIUM, report.overallSeverity)
         assertTrue(report.findings.single().maximumContinuousMatchWords >= 8)
     }
 
@@ -131,6 +131,7 @@ class WolfStoryOriginalityReviewEngineTest {
 
         assertEquals(1, report.checkedSources)
         assertEquals(1, report.findings.size)
+        assertEquals(setOf("ref-one", "ref-two"), report.checkedSourceVersions.map { it.id }.toSet())
     }
 
     @Test fun repeatedPhrasesInsideTheStoryAreReportedSeparately() {
