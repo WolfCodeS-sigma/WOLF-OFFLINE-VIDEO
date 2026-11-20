@@ -4,7 +4,7 @@
 A standalone Arabic horror-story authoring studio using an on-device language model. It creates an outline (logline, characters, secrets, ending, continuity notes and chapter titles), then writes one chapter per user action so long stories can be resumed safely.
 
 ## Local model runtime
-- Uses Google's LiteRT-LM Android Kotlin runtime, pinned to version 0.18.0.
+- Uses Google's LiteRT-LM Android Kotlin runtime, pinned to version 0.18.0. The project Kotlin Gradle plugin is aligned to 2.3.21 because this runtime publishes Kotlin 2.4 metadata; the selected compiler/runtime combination is checked by CI.
 - The user imports a compatible .litertlm model file. The app copies it to app-private storage; model weights are never bundled in the APK and are never downloaded by the app.
 - Inference is on-device. No Internet permission, API key, account, cloud endpoint, paid API, remote model call, or background service is added.
 - Engine initialization and generation run on a single background executor. One owner controls the engine and conversation and closes them in dependency order.
