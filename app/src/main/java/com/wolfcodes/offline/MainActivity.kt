@@ -663,6 +663,21 @@ class MainActivity : Activity() {
         storyField.setText(item.story)
         durationField.setText(item.durationSeconds.toString())
         voiceUri = item.audioUri
+        val persistedVoice = WolfStoryVoiceStore.read(this, item.id)
+        val approvedVoicePath = persistedVoice?.voiceFilePath
+        if (persistedVoice?.voiceApproved == true &&
+            persistedVoice.scriptApproved &&
+            persistedVoice.finalStory == item.story &&
+            persistedVoice.recordingStoryHash == WolfStoryVoiceStateMachine.storyFingerprint(item.story) &&
+            !approvedVoicePath.isNullOrBlank() &&
+            File(approvedVoicePath).isFile
+        ) {
+            voiceUri = Uri.fromFile(File(approvedVoicePath)).toString()
+            if (item.audioUri != voiceUri) {
+                workingProject = item.copy(audioUri = voiceUri)
+                WolfProjectStore.save(this, workingProject!!)
+            }
+        }
         selectedImageUris.clear()
         selectedImageUris.addAll(item.imageUris)
         selectedAspectRatio = item.aspectRatio.substringBefore(" ")
