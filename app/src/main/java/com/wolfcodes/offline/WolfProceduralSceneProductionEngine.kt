@@ -55,12 +55,15 @@ object WolfProceduralSceneProductionEngine {
             Environment.HAUNTED_HOUSE -> "منزل مهجور"
         }
 
+        val features = WolfProceduralMotionEngine.featuresFor(caption)
+        val visualCue = if (features.hasGhost) "$cue — شبح" else cue
+
         return ScenePlan(
             sceneIndex = sceneIndex,
             caption = caption,
             environment = environment,
-            visualCaption = "$cue — $caption",
-            features = WolfProceduralMotionEngine.featuresFor(caption)
+            visualCaption = visualCue,
+            features = features
         )
     }
 
