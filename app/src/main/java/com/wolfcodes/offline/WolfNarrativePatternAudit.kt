@@ -26,7 +26,7 @@ object WolfNarrativePatternAudit {
     private const val MAX_AUDIT_WORDS = 100_000
 
     private data class Segmentation(val values: List<String>, val truncated: Boolean)
-    private data class Tokenization(val words: Set<String>, val truncated: Boolean)
+    private data class Tokenization(val words: Set<String>, val wordCount: Int, val truncated: Boolean)
 
     private data class EventType(
         val label: String,
@@ -99,7 +99,7 @@ object WolfNarrativePatternAudit {
                 break
             }
             val tokenized = normalizeTokens(segment, remainingWords)
-            remainingWords -= tokenized.words.size
+            remainingWords -= tokenized.wordCount
             if (tokenized.truncated) tokenLimitReached = true
             segmentEvents += eventTypes.filter { type ->
                 type.keywords.any { normalizeToken(it) in tokenized.words }
@@ -205,15 +205,17 @@ object WolfNarrativePatternAudit {
     private fun normalizeTokens(text: String, maximumWords: Int): Tokenization {
         val words = HashSet<String>()
         var truncated = false
+        var wordCount = 0
         val iterator = Regex("[\\p{L}\\p{N}]+").findAll(text).iterator()
         while (iterator.hasNext()) {
-            if (words.size >= maximumWords) {
+            if (wordCount >= maximumWords) {
                 truncated = true
                 break
             }
             words += normalizeToken(iterator.next().value)
+            wordCount++
         }
-        return Tokenization(words, truncated)
+        return Tokenization(words, wordCount, truncated)
     }
 
     private fun normalizeToken(value: String): String = value.lowercase(Locale.ROOT)
