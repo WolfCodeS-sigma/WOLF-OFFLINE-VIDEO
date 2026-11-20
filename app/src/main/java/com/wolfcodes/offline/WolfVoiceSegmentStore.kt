@@ -137,6 +137,16 @@ object WolfVoiceSegmentStore {
         return "$projectId-segment-${index.toString().padStart(4, '0')}.m4a"
     }
 
+    internal fun mergeStateMatches(
+        expectedSegmentCount: Int,
+        mergedSegmentCount: Int,
+        expectedFileLength: Long,
+        actualFileLength: Long,
+        isValidAac: Boolean
+    ): Boolean = isValidAac && expectedSegmentCount > 0 &&
+        mergedSegmentCount == expectedSegmentCount &&
+        expectedFileLength > 1024L && expectedFileLength == actualFileLength
+
     internal fun totalDurationMs(durations: List<Long>): Long {
         require(durations.isNotEmpty() && durations.all { it in 1L..MAX_DURATION_MS }) {
             "مدد مقاطع الراوي غير صالحة"
@@ -350,8 +360,13 @@ object WolfVoiceSegmentStore {
         if (!isValidAac(merged)) return false
         return runCatching {
             val json = JSONObject(manifestFile(directory, projectId).readText(Charsets.UTF_8))
-            json.optInt("mergedSegmentCount", 0) == entries.size &&
-                json.optLong("mergedFileLength", -1L) == merged.length()
+            mergeStateMatches(
+                expectedSegmentCount = entries.size,
+                mergedSegmentCount = json.optInt("mergedSegmentCount", 0),
+                expectedFileLength = json.optLong("mergedFileLength", -1L),
+                actualFileLength = merged.length(),
+                isValidAac = true
+            )
         }.getOrDefault(false)
     }
 
