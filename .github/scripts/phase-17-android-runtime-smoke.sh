@@ -15,10 +15,9 @@ adb shell settings put global airplane_mode_on 1
 adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true
 
 # Some Google APIs emulator images have no telephony service at all.
-# In that case mobile data is unavailable by design; do not fail the smoke test
-# by invoking svc data against a non-existent phone service.
+# In that case mobile data is unavailable by design; do not call svc data.
 PHONE_SERVICE="$(adb shell service check phone 2>&1 | tr -d '\r')"
-if printf '%s' "$PHONE_SERVICE" | grep -qi 'found'; then
+if printf '%s' "$PHONE_SERVICE" | grep -qiE 'Service phone:[[:space:]]*found[[:space:]]*$'; then
   adb shell svc data disable
   echo "Telephony service found; mobile data disabled."
 else
