@@ -290,9 +290,13 @@ object WolfImageDepthSegmenter {
         val queue = IntArray(source.size)
         var head = 0
         var tail = 0
-        for (index in source.indices) if (!foreground[index]) {
-            nearest[index] = index
-            queue[tail++] = index
+        for (index in source.indices) {
+            // Transparent holes are not valid clean-plate seeds; propagate the
+            // nearest visible background color through them instead.
+            if (!foreground[index] && (source[index] ushr 24) > 20) {
+                nearest[index] = index
+                queue[tail++] = index
+            }
         }
         while (head < tail) {
             val index = queue[head++]
