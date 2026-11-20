@@ -21,6 +21,21 @@ object WolfFilmProductionCoordinator {
             get() = totalFrames / framesPerSecond.coerceAtLeast(1)
     }
 
+    /** Keeps the requested film duration inclusive of the optional opening intro. */
+    fun bodyDurationSeconds(
+        requestedDurationSeconds: Int,
+        introSeconds: Int,
+        sceneCount: Int
+    ): Int {
+        require(requestedDurationSeconds in 1..1_800)
+        require(introSeconds in 0..3)
+        require(sceneCount in 1..MAX_SCENES)
+        val minimumBody = sceneCount * 3
+        val maximumBody = (1_800 - introSeconds).coerceAtLeast(minimumBody)
+        val requestedBody = (requestedDurationSeconds - introSeconds).coerceAtLeast(1)
+        return requestedBody.coerceAtLeast(minimumBody).coerceAtMost(maximumBody)
+    }
+
     fun createPlan(
         framesPerScene: List<Int>,
         framesPerSecond: Int,
