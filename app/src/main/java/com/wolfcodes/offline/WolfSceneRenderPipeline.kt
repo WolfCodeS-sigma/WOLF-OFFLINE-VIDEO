@@ -59,6 +59,41 @@ object WolfSceneRenderPipeline {
     }
 
     /**
+     * Exercises the real backend-dispatch state machine independently of Android Canvas.
+     * The production render entry point supplies the actual image/procedural drawing calls.
+     */
+    internal fun renderPreparedShot(
+        preparedShot: PreparedShot,
+        renderProcedural: () -> Unit,
+        renderUploadedImage: () -> WolfUploadedImageEngine.Result,
+        onFallback: (String) -> Unit = {}
+    ): Backend {
+        if (preparedShot.backend == Backend.PROCEDURAL) {
+            renderProcedural()
+            return Backend.PROCEDURAL
+        }
+
+        val result = try {
+            renderUploadedImage()
+        } catch (failure: OutOfMemoryError) {
+            reportFallback(onFallback, "ImageRenderOutOfMemory")
+            WolfUploadedImageEngine.Result.SAFE_FRAME
+        } catch (failure: Exception) {
+            reportFallback(onFallback, failure.javaClass.simpleName)
+            WolfUploadedImageEngine.Result.SAFE_FRAME
+        }
+
+        if (result == WolfUploadedImageEngine.Result.SAFE_FRAME) {
+            reportFallback(onFallback, "ImageRenderSafeFrame")
+            preparedShot.switchToProcedural()
+            renderProcedural()
+            return Backend.PROCEDURAL
+        }
+
+        return Backend.UPLOADED_IMAGE
+    }
+
+    /**
      * Prepares one shot without eagerly planning procedural artwork for a valid image.
      * A null image or an unsuccessful analysis selects the procedural route immediately.
      */
@@ -121,53 +156,31 @@ object WolfSceneRenderPipeline {
         preparedShot: PreparedShot,
         onFallback: (String) -> Unit = {}
     ): Backend {
-        if (preparedShot.backend == Backend.PROCEDURAL) {
-            WolfProceduralSceneProductionEngine.render(
-                canvas = canvas,
-                width = width,
-                height = height,
-                plan = preparedShot.requireProceduralPlan(),
-                shotIndex = shotIndex,
-                progress = progress
-            )
-            return Backend.PROCEDURAL
-        }
-
-        val image = preparedShot.image
-        if (image == null) {
-            reportFallback(onFallback, "PreparedImageUnavailable")
-            preparedShot.switchToProcedural()
-            renderProcedural(canvas, width, height, shotIndex, progress, preparedShot)
-            return Backend.PROCEDURAL
-        }
-
-        val result = try {
-            WolfUploadedImageEngine.render(
-                canvas = canvas,
-                width = width,
-                height = height,
-                sceneIndex = sceneIndex,
-                shotIndex = shotIndex,
-                progress = progress,
-                caption = caption,
-                prepared = image
-            )
-        } catch (failure: OutOfMemoryError) {
-            reportFallback(onFallback, "ImageRenderOutOfMemory")
-            WolfUploadedImageEngine.Result.SAFE_FRAME
-        } catch (failure: Exception) {
-            reportFallback(onFallback, failure.javaClass.simpleName)
-            WolfUploadedImageEngine.Result.SAFE_FRAME
-        }
-
-        if (result == WolfUploadedImageEngine.Result.SAFE_FRAME) {
-            reportFallback(onFallback, "ImageRenderSafeFrame")
-            preparedShot.switchToProcedural()
-            renderProcedural(canvas, width, height, shotIndex, progress, preparedShot)
-            return Backend.PROCEDURAL
-        }
-
-        return Backend.UPLOADED_IMAGE
+        return renderPreparedShot(
+            preparedShot = preparedShot,
+            renderProcedural = {
+                renderProcedural(canvas, width, height, shotIndex, progress, preparedShot)
+            },
+            renderUploadedImage = {
+                val image = preparedShot.image
+                if (image == null) {
+                    reportFallback(onFallback, "PreparedImageUnavailable")
+                    WolfUploadedImageEngine.Result.SAFE_FRAME
+                } else {
+                    WolfUploadedImageEngine.render(
+                        canvas = canvas,
+                        width = width,
+                        height = height,
+                        sceneIndex = sceneIndex,
+                        shotIndex = shotIndex,
+                        progress = progress,
+                        caption = caption,
+                        prepared = image
+                    )
+                }
+            },
+            onFallback = onFallback
+        )
     }
 
     private fun renderProcedural(
