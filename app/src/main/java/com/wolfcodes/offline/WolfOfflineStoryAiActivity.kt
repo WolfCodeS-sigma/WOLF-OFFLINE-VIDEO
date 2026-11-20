@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.InputFilter
 import android.view.Gravity
 import android.widget.Button
 import android.widget.CheckBox
@@ -73,31 +74,31 @@ class WolfOfflineStoryAiActivity : Activity() {
             setOnClickListener { chooseModel() }
         })
         root.addView(label("عنوان القصة"))
-        titleField = field("عنوان مبدئي")
+        titleField = field("عنوان مبدئي", 180)
         root.addView(titleField)
         root.addView(label("الفكرة الأساسية"))
         premiseField = field("اكتب فكرة القصة في سطرين أو أكثر").apply { minLines = 4; gravity = Gravity.TOP }
         root.addView(premiseField)
         root.addView(label("نوع الرعب"))
-        genreField = field("رعب نفسي / خارق / غموض / هلوسة / واقعي / فولكلور")
+        genreField = field("رعب نفسي / خارق / غموض / هلوسة / واقعي / فولكلور", 80)
         genreField.setText(WolfOfflineStoryAiEngine.Genre.PSYCHOLOGICAL.label)
         root.addView(genreField)
         root.addView(label("المكان والزمن"))
-        settingField = field("مثال: قرية مصرية معزولة في شتاء 1998")
+        settingField = field("مثال: قرية مصرية معزولة في شتاء 1998", 500)
         root.addView(settingField)
         root.addView(label("الشخصية الرئيسية"))
-        protagonistField = field("الاسم والخلفية والدافع")
+        protagonistField = field("الاسم والخلفية والدافع", 500)
         root.addView(protagonistField)
         root.addView(label("النبرة"))
-        toneField = field("سينمائية مظلمة، توتر نفسي وتصاعد تدريجي")
+        toneField = field("سينمائية مظلمة، توتر نفسي وتصاعد تدريجي", 500)
         toneField.setText("سينمائية مظلمة، توتر نفسي وتصاعد تدريجي")
         root.addView(toneField)
         root.addView(label("شكل النهاية"))
-        endingField = field("صادمة / مفتوحة / مأساوية / ملتوية")
+        endingField = field("صادمة / مفتوحة / مأساوية / ملتوية", 500)
         endingField.setText("صادمة ومتماسكة مع تمهيد سابق")
         root.addView(endingField)
         root.addView(label("الطول المستهدف بالكلمات (500 إلى 50,000)"))
-        wordsField = field("مثال: 3000").apply { setText("3000") }
+        wordsField = field("مثال: 3000", 6).apply { setText("3000") }
         root.addView(wordsField)
         libraryToggle = CheckBox(this).apply {
             text = "استخدام المراجع المسموح بها من WOLF HORROR KNOWLEDGE LIBRARY"
@@ -122,7 +123,7 @@ class WolfOfflineStoryAiActivity : Activity() {
         planView = label("لم يتم إنشاء مخطط بعد")
         root.addView(planView)
         root.addView(label("النص النهائي — يمكنك مراجعته وتعديله قبل الاعتماد"))
-        storyField = field("ستظهر الفصول هنا بالتتابع").apply {
+        storyField = field("ستظهر الفصول هنا بالتتابع", WolfOfflineStoryAiEngine.MAX_STORY_CHARS).apply {
             minLines = 12
             gravity = Gravity.TOP
             isEnabled = false
@@ -136,7 +137,8 @@ class WolfOfflineStoryAiActivity : Activity() {
         setContentView(scroll)
     }
 
-    private fun field(hintText: String) = EditText(this).apply {
+    private fun field(hintText: String, maxLength: Int = 4_000) = EditText(this).apply {
+        filters = arrayOf(InputFilter.LengthFilter(maxLength))
         hint = hintText
         textSize = 15f
         setTextColor(0xFFFFFFFF.toInt())
