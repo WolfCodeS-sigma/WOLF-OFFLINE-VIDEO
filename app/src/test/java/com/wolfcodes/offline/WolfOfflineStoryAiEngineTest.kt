@@ -55,6 +55,29 @@ class WolfOfflineStoryAiEngineTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun reviewedFinalTextAndApprovalSurviveSessionRestore() {
+        val root = Files.createTempDirectory("wolf-story-final-review").toFile()
+        try {
+            val brief = brief(500)
+            val plan = WolfOfflineStoryAiEngine.parsePlan(
+                """{"chapter_titles":["البيت"],"continuity_summary":"بداية"}""", brief
+            )
+            val generated = WolfOfflineStoryAiEngine.withChapter(
+                WolfOfflineStoryAiEngine.newSession(brief, plan),
+                "الفصل الأصلي الذي كتبه النموذج. ".repeat(8)
+            )
+            val reviewedText = "النص النهائي بعد مراجعة المستخدم وتعديلاته. ".repeat(20)
+            val approved = generated.copy(finalText = reviewedText, approved = true)
+            WolfOfflineStoryAiEngine.saveSession(root, approved)
+
+            val restored = WolfOfflineStoryAiEngine.loadLatestSession(root)
+            assertNotNull(restored)
+            assertEquals(reviewedText, restored!!.finalText)
+            assertTrue(restored.approved)
+            assertEquals(generated.chapters, restored.chapters)
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun loadRecoversCheckpointAfterInterruptedAtomicReplacement() {
         val root = Files.createTempDirectory("wolf-story-recovery").toFile()
         try {
