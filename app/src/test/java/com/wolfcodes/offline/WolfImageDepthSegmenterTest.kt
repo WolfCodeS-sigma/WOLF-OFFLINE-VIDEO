@@ -174,8 +174,29 @@ class WolfImageDepthSegmenterTest {
 
         assertTrue(result.separated)
         assertTrue(result.midgroundMask[30 * width + 30])
+        assertFalse(result.midgroundMask[5 * width + 5])
+        assertFalse(result.midgroundMask[6 * width + 6])
         assertFalse(result.foregroundPlaneMask[5 * width + 5])
         assertFalse(result.foregroundPlaneMask[6 * width + 6])
+    }
+
+
+    @Test
+    fun scatteredTinyNoiseWithoutARealSubjectIsRejected() {
+        val width = 100
+        val height = 100
+        val pixels = IntArray(width * height) { 0xFF101010.toInt() }
+        // More than the minimum foreground ratio, but every component is isolated.
+        for (y in 10 until 70 step 2) for (x in 10 until 70 step 2) {
+            pixels[y * width + x] = 0xFFFFFFFF.toInt()
+        }
+
+        val result = WolfImageDepthSegmenter.analyze(width, height, pixels)
+
+        assertFalse(result.separated)
+        assertEquals(0f, result.confidence, 0f)
+        assertFalse(result.midgroundMask.any { it })
+        assertFalse(result.foregroundPlaneMask.any { it })
     }
 
     @Test
