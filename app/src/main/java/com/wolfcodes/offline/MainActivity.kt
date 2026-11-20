@@ -142,6 +142,7 @@ class MainActivity : Activity() {
         })
 
         root.addView(label("التعليق الصوتي"))
+        root.addView(label("يمكنك تسجيل الراوي على أجزاء؛ إيقاف الجزء يحفظه، والضغط مجددًا يستكمل من الجزء التالي."))
         root.addView(button("تسجيل جزء جديد / استكمال التعليق الصوتي").apply {
             setOnClickListener { startVoiceRecording() }
         })
@@ -632,11 +633,13 @@ class MainActivity : Activity() {
     private fun refreshVoiceStatus() {
         val project = workingProject ?: return
         val session = WolfStoryVoiceStore.read(this, project.id)
+        val parts = WolfVoiceSegmentStore.segmentCount(this, project.id)
         val message = when {
-            session == null -> "جلسة الراوي لم تبدأ بعد"
+            session == null -> if (parts > 0) "توجد $parts أجزاء محفوظة تنتظر الاستعادة" else "جلسة الراوي لم تبدأ بعد"
             !session.scriptApproved -> "نص القصة غير معتمد"
             session.voiceApproved -> "التسجيل معتمد — " + (session.audioDurationMs / 1000) + " ثانية"
-            session.voiceFilePath != null -> "يوجد تسجيل يحتاج إلى المراجعة والاعتماد"
+            session.voiceFilePath != null -> "يوجد تسجيل من $parts أجزاء يحتاج إلى المراجعة والاعتماد"
+            parts > 0 -> "توجد $parts أجزاء محفوظة — افتح المشروع لاستعادتها"
             else -> "النص معتمد — لم يتم تسجيل الراوي بعد"
         }
         status.text = message
