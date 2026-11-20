@@ -39,6 +39,35 @@ object WolfVoiceSegmentStore {
         File(directory, segmentFileName(projectId, entries.size + 1))
     }
 
+    /** Migrates a previously approved single-take recording into the segment ledger once. */
+    fun importExistingTake(
+        context: Context,
+        projectId: String,
+        existingFile: File?,
+        durationMs: Long
+    ) = synchronized(lock) {
+        if (!validProjectId(projectId) || existingFile == null) return@synchronized
+        val directory = voiceDirectory(context).canonicalFile
+        val source = existingFile.canonicalFile
+        if (!source.isFile || source.length() <= 1024L ||
+            !source.path.startsWith(directory.path + File.separator)
+        ) return@synchronized
+        val entries = readEntries(directory, projectId)
+        if (entries.isNotEmpty()) return@synchronized
+        val duration = readDurationMs(source).takeIf { it in 1_000L..MAX_DURATION_MS } ?: durationMs
+        if (duration !in 1_000L..MAX_DURATION_MS) return@synchronized
+        val destination = File(directory, segmentFileName(projectId, 1))
+        if (source != destination) {
+            if (destination.exists()) destination.delete()
+            Os.rename(source.absolutePath, destination.absolutePath)
+        }
+        writeEntries(directory, projectId, listOf(Entry(destination.name, duration)))
+    }
+
+    fun segmentCount(context: Context, projectId: String): Int = synchronized(lock) {
+        if (!validProjectId(projectId)) 0 else readEntries(voiceDirectory(context), projectId).size
+    }
+
     fun appendAndMerge(
         context: Context,
         projectId: String,
@@ -88,6 +117,9 @@ object WolfVoiceSegmentStore {
         if (!validProjectId(projectId)) return@synchronized
         val directory = voiceDirectory(context)
         readEntries(directory, projectId).forEach { File(directory, it.fileName).delete() }
+        directory.listFiles()?.filter {
+            it.name.startsWith("$projectId-segment-") && it.name.endsWith(".m4a")
+        }?.forEach { it.delete() }
         listOf(
             manifestFile(directory, projectId),
             File(directory, "$projectId-segments.json.tmp"),
