@@ -509,19 +509,26 @@ class WolfOfflineStoryAiActivity : Activity() {
                     }.toMutableList()
 
                 val candidates = linkedMapOf<String, Pair<WolfStoryOriginalityReviewEngine.SourceStamp, WolfHorrorKnowledgeLibrary.Entry>>()
-                historicalSources.forEach { source ->
-                    val entry = permittedEntries[source.id] ?: return@forEach
+                permittedEntries.values.filter { it.id in selectedIds }.forEach { entry ->
+                    val previous = historicalSources.firstOrNull {
+                        it.id == entry.id && it.contentFingerprint == entry.contentFingerprint
+                    }
+                    val source = if (previous == null) {
+                        WolfStoryOriginalityReviewEngine.SourceStamp(
+                            id = entry.id,
+                            title = entry.title,
+                            sourceType = entry.sourceType,
+                            sourceLabel = entry.sourceLabel,
+                            contentFingerprint = entry.contentFingerprint,
+                            usages = listOf("اختير للمراجعة الحالية")
+                        )
+                    } else {
+                        previous.copy(usages = (previous.usages + "اختير للمراجعة الحالية").distinct())
+                    }
                     candidates["${source.id}|${source.contentFingerprint}"] = source to entry
                 }
-                permittedEntries.values.filter { it.id in selectedIds }.forEach { entry ->
-                    val source = WolfStoryOriginalityReviewEngine.SourceStamp(
-                        id = entry.id,
-                        title = entry.title,
-                        sourceType = entry.sourceType,
-                        sourceLabel = entry.sourceLabel,
-                        contentFingerprint = entry.contentFingerprint,
-                        usages = listOf("اختير للمراجعة الحالية")
-                    )
+                historicalSources.forEach { source ->
+                    val entry = permittedEntries[source.id] ?: return@forEach
                     candidates.putIfAbsent(
                         "${source.id}|${source.contentFingerprint}",
                         source to entry
