@@ -27,7 +27,7 @@ class WolfOfflineStoryAiActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     private val reportHandler = Handler(Looper.getMainLooper())
     private var reportTask: Runnable? = null
-    private var reportRevision = 0L
+    @Volatile private var reportRevision = 0L
     private val model = WolfOfflineStoryAiEngine.LocalModel()
     private lateinit var status: TextView
     private lateinit var planView: TextView
@@ -404,6 +404,7 @@ class WolfOfflineStoryAiActivity : Activity() {
         val displayedText = storyField.text.toString()
         val revision = ++reportRevision
         worker.execute {
+            if (revision != reportRevision) return@execute
             val report = if (current.isComplete && displayedText.isNotBlank() &&
                 displayedText != formatChapters(current)
             ) {
