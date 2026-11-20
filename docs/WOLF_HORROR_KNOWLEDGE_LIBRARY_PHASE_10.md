@@ -15,10 +15,11 @@ The implementation is local-only. It adds no network permission, API, account, c
 - Track content kind separately from category: personal account, fictional story, verified information, informational reference, user-submitted content, or app-authored story.
 - Store source label, source date, imported file name, and library-added timestamp.
 - Store summary separately from the original and current story text.
-- Maintain separate fields for characters, places, events, themes, and keywords. These fields are user-entered metadata; this phase does not claim AI extraction.
+- Maintain separate fields for characters, places, events, related stories, themes, and keywords. These fields are user-entered metadata; this phase does not claim AI extraction.
 - Edit story text and metadata, delete an entry, and view a bounded preview of the preserved original text.
 - Search title, content, source metadata, categories, folders, tags, summaries, and structured metadata. Story-body terms are held in a fingerprinted index; current catalog fields are matched against current metadata to prevent stale results after renaming or reclassification.
-- Exclude any entry from future story-reference retrieval without deleting it.
+- Exclude any entry from future story-reference retrieval without deleting it, and expose APIs to retrieve either all allowed references or an explicit selected subset.
+- Save app-authored stories only when an explicit final-approved flag is supplied to the future Phase 11 hook.
 - Turn automatic saving of final app-authored stories on or off.
 
 ## Storage model and recovery behavior
@@ -47,7 +48,7 @@ The app does not load all story bodies into memory for listing or searching. It 
 
 The searchStoryReferences API returns only entries whose includeInStoryReferences flag is enabled. The user can keep an entry in the library while excluding it from future reference retrieval.
 
-The saveFinalAppAuthoredStory API is the stable auto-save hook for the local story-authoring component planned in Phase 11. It saves only text supplied to that API as a final approved app-authored story and respects the library auto-save setting. Phase 10 does not create an AI story generator and does not claim that an existing manual story approval is app-authored. User-written text can be added separately as user-submitted content.
+The saveFinalAppAuthoredStory API is the stable auto-save hook for the local story-authoring component planned in Phase 11. It requires an explicit final-approved flag, saves only text supplied to that API as an approved app-authored story, and respects the library auto-save setting. Phase 10 does not create an AI story generator and does not claim that an existing manual story approval is app-authored. User-written text can be added separately as user-submitted content.
 
 Imported source labels and source types are provenance metadata, not independent verification. A personal account remains a personal account; it must not be presented as a verified fact. Users are responsible for importing material they own or are allowed to use. The library does not scrape websites or automatically copy protected sources.
 
@@ -57,7 +58,7 @@ JVM unit tests cover:
 
 1. Persisting imported story text and source metadata.
 2. Editing the working copy while preserving the original text.
-3. Metadata-only updates reflected in search without changing either story-text version.
+3. Metadata-only updates reflected in search without changing either story-text version; explicit reference-subset selection; invalid UTF-8 rejection.
 4. Duplicate detection on insert and edit.
 5. Reference opt-out behavior.
 6. Deletion and removal from search.
