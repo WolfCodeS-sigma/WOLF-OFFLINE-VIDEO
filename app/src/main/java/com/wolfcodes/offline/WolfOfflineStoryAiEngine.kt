@@ -200,7 +200,7 @@ object WolfOfflineStoryAiEngine {
 
     private fun formatReferences(refs: List<String>, emptyLabel: String): String =
         refs.take(3).map { it.take(5_000).replace("<", "‹").replace(">", "›") }
-            .joinToString("\\n---\\n").ifBlank { emptyLabel }
+            .joinToString("\n---\n").ifBlank { emptyLabel }
 
     fun updateContinuity(previous: String, chapter: String): String =
         listOf(previous.trim().take(1_200), chapter.trim().takeLast(1_800))
