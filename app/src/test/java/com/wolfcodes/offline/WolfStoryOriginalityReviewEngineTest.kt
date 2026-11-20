@@ -75,6 +75,7 @@ class WolfStoryOriginalityReviewEngineTest {
         assertEquals(1, report.checkedSources)
         assertTrue(report.findings.isNotEmpty())
         assertEquals(6, report.findings.single().maximumContinuousMatchWords)
+        assertEquals(WolfStoryOriginalityReviewEngine.Severity.LOW, report.findings.single().severity)
     }
 
     @Test fun reportRetainsCheckedSourcesEvenWhenNoPhraseWasMatched() {
