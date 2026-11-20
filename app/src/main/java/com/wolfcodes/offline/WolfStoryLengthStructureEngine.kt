@@ -195,8 +195,14 @@ object WolfStoryLengthStructureEngine {
                 if (actual < target.minimumWords) add("الفصل ${index + 1} (${target.title}) أقصر من نطاقه: $actual كلمة مقابل ${target.minimumWords} كحد أدنى.")
                 if (actual > target.maximumWords) add("الفصل ${index + 1} (${target.title}) أطول من نطاقه: $actual كلمة مقابل ${target.maximumWords} كحد أقصى.")
             }
-            if (chapters.size == chapterTitles.size && total in (targetWords * 0.85).roundToInt()..(targetWords * 1.15).roundToInt()) {
-                add("الطول الإجمالي للفصول داخل النطاق المقبول (±15%).")
+            if (chapters.size == chapterTitles.size) {
+                val minimumTotal = (targetWords * 0.85).roundToInt()
+                val maximumTotal = (targetWords * 1.15).roundToInt()
+                when {
+                    total < minimumTotal -> add("الطول الإجمالي للفصول أقل من النطاق المستهدف: $total كلمة مقابل $minimumTotal كلمة كحد أدنى.")
+                    total > maximumTotal -> add("الطول الإجمالي للفصول أعلى من النطاق المستهدف: $total كلمة مقابل $maximumTotal كلمة كحد أقصى.")
+                    else -> add("الطول الإجمالي للفصول داخل النطاق المقبول (±15%).")
+                }
             }
             add("توزيع الأدوار مبني على ترتيب الفصول؛ التحقق من تحقق الأحداث فعليًا يحتاج مراجعة بشرية.")
         }
