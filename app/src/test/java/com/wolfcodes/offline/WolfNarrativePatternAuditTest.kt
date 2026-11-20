@@ -54,4 +54,10 @@ class WolfNarrativePatternAuditTest {
 
         assertTrue(report.distinctEventCount >= 5)
     }
+
+    @Test fun repeatedTokensStillRespectTheTotalWordBudget() {
+        val report = WolfNarrativePatternAudit.analyze("word ".repeat(100_100))
+        assertTrue(report.analysisTruncated)
+        assertTrue(report.warnings.any { it.contains("100,000 كلمة") })
+    }
 }
