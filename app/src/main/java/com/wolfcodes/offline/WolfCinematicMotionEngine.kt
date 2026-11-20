@@ -160,9 +160,6 @@ object WolfCinematicMotionEngine {
         val top = h * 0.18f
         val doorW = w * 0.28f
         val doorH = h * 0.62f
-        propStroke.color = Color.argb(110, 190, 184, 176)
-        propStroke.strokeWidth = max(2f, w * 0.004f)
-        canvas.drawRect(x, top, x + doorW, top + doorH, propStroke)
         val saved = canvas.save()
         try {
             canvas.rotate(pose.doorAngle, x, top + doorH * 0.5f)
@@ -177,6 +174,10 @@ object WolfCinematicMotionEngine {
         } finally {
             canvas.restoreToCount(saved)
         }
+        // Keep the stationary frame visible while the door panel swings.
+        propStroke.color = Color.argb(110, 190, 184, 176)
+        propStroke.strokeWidth = max(2f, w * 0.004f)
+        canvas.drawRect(x, top, x + doorW, top + doorH, propStroke)
     }
 
     private fun drawCurtains(canvas: Canvas, w: Int, h: Int, pose: Pose) {
