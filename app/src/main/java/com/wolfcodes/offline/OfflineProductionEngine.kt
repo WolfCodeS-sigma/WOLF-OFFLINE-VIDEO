@@ -225,39 +225,35 @@ object OfflineProductionEngine {
                 }
             }
         } else null
-        if(audioUri!=null || generatedAudio!=null) {
-            val mixedFile=File(tempDir,name)
-            var convertedAudioFile: File? = null
-            var layeredAudioFile: File? = null
+        if (audioUri != null || generatedAudio != null) {
+            val mixedFile = File(tempDir, name)
+            val totalTimelineUs = totalVideoSeconds.toLong() * 1_000_000L
             try {
-                if (audioUri != null && generatedAudio != null) {
-                    layeredAudioFile = File(tempDir, "layered_$name.m4a")
-                    WolfAudioMixer.mix(
-                        context, audioUri, generatedAudio, layeredAudioFile,
-                        narrationLimitUs, narrationGain = 0.92, effectsGain = 0.30
-                    )
-                    muxAudio(context, silentFile, null, layeredAudioFile, mixedFile, narrationLimitUs, fps)
-                } else {
-                    convertedAudioFile = audioUri?.let { source ->
-                        WolfAudioTranscoder.transcodeToAacIfNeeded(
-                            context, source, File(tempDir, "converted_$name.m4a"),
-                            narrationLimitUs
-                        )
-                    }
-                    val muxAudioUri = if (convertedAudioFile == null) audioUri else null
-                    val muxAudioFile = convertedAudioFile ?: generatedAudio
-                    muxAudio(context,silentFile,muxAudioUri,muxAudioFile,mixedFile,narrationLimitUs, fps)
-                }
+                // Narration begins after the branded intro. SFX already contains the intro sound bed.
+                WolfAudioMixer.mix(
+                    context = context,
+                    narrationUri = audioUri,
+                    effectsFile = generatedAudio,
+                    outputFile = mixedFile,
+                    maxDurationUs = totalTimelineUs,
+                    narrationGain = 0.92,
+                    effectsGain = 0.30,
+                    narrationOffsetUs = introSeconds.toLong() * 1_000_000L
+                )
+                muxAudio(context, silentFile, null, mixedFile, File(tempDir, "muxed_$name"), totalTimelineUs, fps)
+                val muxedFile = File(tempDir, "muxed_$name")
                 silentFile.delete()
-                tempFile=mixedFile
-            } catch(e:Exception) {
                 mixedFile.delete()
+                tempFile = muxedFile
+            } catch (e: Exception) {
+                mixedFile.delete()
+                File(tempDir, "muxed_$name").delete()
                 silentFile.delete()
-                throw IllegalStateException("تعذر تجهيز أو دمج ملف الصوت: ${e.message ?: "صيغة غير مدعومة"}",e)
+                throw IllegalStateException(
+                    "تعذر تجهيز أو دمج ملف الصوت: ${e.message ?: "صيغة غير مدعومة"}", e
+                )
             } finally {
                 generatedAudio?.delete()
-                convertedAudioFile?.delete()
-                layeredAudioFile?.delete()
             }
         } else {
             // Surface-backed Canvas frames can inherit wall-clock timestamps from slow devices.
