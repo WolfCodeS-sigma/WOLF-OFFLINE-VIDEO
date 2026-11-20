@@ -33,10 +33,19 @@ class WolfCinematicAudioTimelineTest {
     }
 
     @Test
-    fun narrationIsCappedSoTheIntroAndFilmNeverExceedThirtyMinutes() {
-        val plan = WolfCinematicAudioTimeline.create(1800, true, 1_800_000L)
-        assertEquals(1797, plan.narrationSeconds)
+    fun fullThirtyMinuteNarrationIsPreservedWhenIntroIsDisabled() {
+        val plan = WolfCinematicAudioTimeline.create(1800, false, 1_800_000L)
+        assertEquals(1800, plan.narrationSeconds)
         assertEquals(1800, plan.totalVideoSeconds)
-        assertEquals(1_797_000_000L, plan.narrationLimitUs)
+        assertEquals(1_800_000_000L, plan.narrationLimitUs)
+    }
+
+    @Test
+    fun narrationIsNeverSilentlyCutToMakeRoomForTheIntro() {
+        val failure = runCatching {
+            WolfCinematicAudioTimeline.create(1800, true, 1_800_000L)
+        }
+        assertTrue(failure.isFailure)
+        assertTrue(failure.exceptionOrNull()?.message?.contains("تجاوز") == true)
     }
 }
