@@ -233,6 +233,9 @@ object WolfOfflineStoryAiEngine {
         validateBrief(s.brief)
         require(s.plan.chapterTitles.size == chapterCount(s.brief.targetWords))
         require(s.plan.chapterTitles.all { it.isNotBlank() && it.length <= 120 })
+        require(s.plan.logline.length <= 2_000 && s.plan.characters.length <= 6_000)
+        require(s.plan.secrets.length <= 6_000 && s.plan.ending.length <= 4_000)
+        require(s.plan.continuitySummary.length <= 2_000 && s.plan.raw.length <= 30_000)
         require(s.chapters.size <= s.plan.chapterTitles.size && s.chapters.all { it.length <= 100_000 })
         require(s.chapters.sumOf { it.length.toLong() } <= MAX_STORY_CHARS)
         require(s.finalText.length <= MAX_STORY_CHARS) { "النص النهائي يتجاوز الحد المحلي الآمن البالغ 4 ملايين حرف" }
@@ -300,15 +303,27 @@ object WolfOfflineStoryAiEngine {
         validateBrief(brief)
         val titles = (0 until (p.optJSONArray("chapterTitles")?.length() ?: 0))
             .map { p.getJSONArray("chapterTitles").getString(it) }
-        require(titles.isNotEmpty() && titles.size <= MAX_CHAPTERS)
+        require(titles.size == chapterCount(brief.targetWords))
         require(titles.all { it.isNotBlank() && it.length <= 120 })
+        val logline = p.optString("logline")
+        val characters = p.optString("characters")
+        val secrets = p.optString("secrets")
+        val ending = p.optString("ending")
+        val planContinuity = p.optString("continuitySummary")
+        val rawPlan = p.optString("raw")
+        require(logline.length <= 2_000 && characters.length <= 6_000)
+        require(secrets.length <= 6_000 && ending.length <= 4_000)
+        require(planContinuity.length <= 2_000 && rawPlan.length <= 30_000)
         val chapters = (0 until a.length()).map { a.getString(it) }
         require(chapters.size <= titles.size && chapters.all { it.length <= 100_000 })
         require(chapters.sumOf { it.length.toLong() } <= MAX_STORY_CHARS)
         require(j.optString("finalText").length <= MAX_STORY_CHARS)
-        val plan = Plan(p.optString("logline"), p.optString("characters"), p.optString("secrets"),
-            p.optString("ending"), p.optString("continuitySummary"), titles, p.optString("raw"))
-        return Session(j.getString("id"), brief, plan, chapters, j.optString("continuitySummary"),
+        val plan = Plan(logline, characters, secrets, ending, planContinuity, titles, rawPlan)
+        val id = j.getString("id")
+        require(id.matches(Regex("[A-Za-z0-9-]{8,64}")))
+        val continuity = j.optString("continuitySummary")
+        require(continuity.length <= 3_000)
+        return Session(id, brief, plan, chapters, continuity,
             j.optBoolean("approved"), j.optLong("createdAt"), j.optLong("updatedAt"),
             j.optString("finalText"))
     }
