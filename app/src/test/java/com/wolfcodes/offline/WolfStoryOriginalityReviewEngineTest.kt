@@ -81,14 +81,20 @@ class WolfStoryOriginalityReviewEngineTest {
     @Test fun reportRetainsCheckedSourcesEvenWhenNoPhraseWasMatched() {
         val reference = "المطر يسقط فوق محطة القطار بينما تحمل امرأة حقيبة زرقاء وتنتظر وصول الحافلة الصباحية"
         val story = "المرآة القديمة تعكس وجها لا يعرفه الطبيب ثم تختفي الساعة من فوق الجدار الخشبي"
-        val source = stamp(reference, id = "no-match-source", title = "مصدر بلا تطابق")
+        val source = stamp(reference, id = "no-match-source", title = "مصدر بلا تطابق").copy(
+            sourceLabel = "مرجع أضافه المستخدم",
+            sourceDate = "2026-11-20"
+        )
         val report = WolfStoryOriginalityReviewEngine.analyze(
             story,
             sequenceOf(WolfStoryOriginalityReviewEngine.ReferenceText(source, reference))
         )
 
         assertEquals(listOf(source), report.checkedSourceVersions)
-        assertTrue(WolfStoryOriginalityReviewEngine.formatReport(report).contains("مصدر بلا تطابق"))
+        val formatted = WolfStoryOriginalityReviewEngine.formatReport(report)
+        assertTrue(formatted.contains("مصدر بلا تطابق"))
+        assertTrue(formatted.contains("مرجع أضافه المستخدم"))
+        assertTrue(formatted.contains("2026-11-20"))
     }
 
     @Test fun commonStopWordOnlySequencesAreIgnored() {
