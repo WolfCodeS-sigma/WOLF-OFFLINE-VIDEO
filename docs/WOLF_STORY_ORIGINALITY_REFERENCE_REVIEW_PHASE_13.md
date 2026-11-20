@@ -24,8 +24,10 @@ Older sessions created before Phase 13 have no source-use ledger. They can still
 - Text is tokenized for Arabic and English without splitting on Arabic combining marks or tatweel.
 - Arabic alef variants are normalized to alef, alef maqsura is normalized to ya, and English case and punctuation differences are ignored.
 - The reviewer creates overlapping six-word shingles. Windows dominated by common Arabic or English stop words are excluded to reduce accidental matches.
-- Matching shingle hashes are grouped into continuous runs. The report includes the source, approximate story coverage, matching window count, longest continuous run, and a few normalized phrase samples.
-- Severity is a deterministic triage label based on overlap coverage and continuous-run length. It is not a probability of copying.
+- A continuous phrase is counted only when consecutive story windows also begin at consecutive positions in the same reference; separate matches scattered through a source are not combined into one long quotation.
+- Matching shingle hashes are measured per source. The report includes the source, approximate story coverage, matching window count, longest verified continuous run, and bounded normalized phrase excerpts (up to 40 words / 500 characters per excerpt).
+- Severity is a deterministic triage label based on overlap coverage, minimum distinct-window counts for short stories, and verified continuous-run length. It is not a probability of copying.
+- To limit memory use, source positions are retained only for phrases also present in the story; positions for any one extremely repetitive phrase are capped at 128 and the report discloses when this limit is reached.
 - Repeated meaningful six-word phrases within the story are listed separately from cross-reference overlap.
 
 ## Bounds and failure handling
@@ -33,7 +35,7 @@ Older sessions created before Phase 13 have no source-use ledger. They can still
 - The reference ledger is private app storage under filesDir/wolf_story_originality_review; it is separate from the Phase 11 story checkpoint format.
 - The ledger is versioned and uses pending/backup atomic replacement so an interrupted write can recover the prior record.
 - A session may record at most 40 distinct source versions; each generation operation records no more than three.
-- A review compares at most 20 references, at most 1,000,000 characters from any one reference, at most 200,000 words from the story, at most 200,000 words from a single reference, and at most 500,000 reference words in total.
+- A review processes at most 20 reference entries (including duplicate entries), at most 1,000,000 characters from any one reference, at most 200,000 words from the story, at most 200,000 words from a single reference, and at most 500,000 reference words in total.
 - Every truncation or source-limit condition is disclosed in the report. The reviewer never labels a truncated or unexamined source as fully checked.
 - The story text is bounded by the existing four-million-character final-story limit.
 - A source is compared only when its current full-text SHA-256 matches the recorded fingerprint. Missing or changed contents are listed as unavailable instead.
