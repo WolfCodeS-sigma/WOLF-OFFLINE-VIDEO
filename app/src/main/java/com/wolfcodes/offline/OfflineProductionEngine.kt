@@ -329,7 +329,7 @@ object OfflineProductionEngine {
             frames = framesPerScene.sum() + introFrames,
             savedLocation = savedLocation,
             mediaUri = finalReference,
-            durationSeconds = if (useNarrationTiming) requestedTotal else totalVideoSeconds,
+            durationSeconds = totalVideoSeconds,
             framesPerSecond = fps,
             videoWidth = outputWidth,
             videoHeight = outputHeight,
