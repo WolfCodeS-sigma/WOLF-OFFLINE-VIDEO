@@ -74,14 +74,18 @@ object WolfImageDepthSegmenter {
             Bitmap.createScaledBitmap(source, width, height, true)
         }
 
+        val allocatedLayers = mutableListOf<Bitmap>()
         try {
             val pixels = IntArray(width * height)
             working.getPixels(pixels, 0, width, 0, 0, width, height)
             val masks = analyze(width, height, pixels)
             val backgroundPixels = buildCleanPlate(width, height, pixels, masks.foregroundMask)
             val background = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                .also { allocatedLayers.add(it) }
             val midground = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                .also { allocatedLayers.add(it) }
             val foreground = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                .also { allocatedLayers.add(it) }
             val midPixels = IntArray(pixels.size)
             val frontPixels = IntArray(pixels.size)
 
@@ -109,8 +113,11 @@ object WolfImageDepthSegmenter {
                 confidence = masks.confidence,
                 separated = masks.separated
             )
-        } catch (error: Exception) {
-            if (working !== source && !working.isRecycled) working.recycle()
+        } catch (error: Throwable) {
+            allocatedLayers.forEach { layer ->
+                if (!layer.isRecycled) runCatching { layer.recycle() }
+            }
+            if (working !== source && !working.isRecycled) runCatching { working.recycle() }
             throw error
         }
     }
@@ -237,7 +244,7 @@ object WolfImageDepthSegmenter {
             midgroundMask = midMask,
             foregroundPlaneMask = frontMask,
             confidence = if (totalAssigned == 0) 0f else confidence,
-            separated = totalAssigned > 0 && confidence >= 0.30f
+            separated = totalAssigned > 0 && confidence >= 0.12f
         )
     }
 

@@ -10,7 +10,6 @@ import android.provider.MediaStore
 import android.graphics.Canvas
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Rect
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -553,7 +552,8 @@ object OfflineProductionEngine {
             }
             for (s in scenes.indices) {
                 WolfResourceGuard.ensureSafeToContinue(context)
-                val proceduralPlan = WolfProceduralSceneProductionEngine.plan(scenes[s], s)
+                // Build procedural scene state only if a shot has no usable uploaded image.
+                var proceduralPlan: WolfProceduralSceneProductionEngine.ScenePlan? = null
                 val sceneFrames = framesPerScene[s]
                 val baseShotFrames = sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE
                 val extraShotFrames = sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE
@@ -563,34 +563,37 @@ object OfflineProductionEngine {
                     val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
-                    val imageLayers = WolfImageDepthSegmenter.attemptSegmentation(
-                        operation = { image?.let { WolfImageDepthSegmenter.segment(it) } },
-                        onFailure = { segmentationError ->
+                    val shotProceduralPlan = if (image == null) {
+                        proceduralPlan ?: WolfProceduralSceneProductionEngine.plan(scenes[s], s)
+                            .also { proceduralPlan = it }
+                    } else null
+                    val preparedImage = image?.let { sourceImage ->
+                        WolfUploadedImageEngine.prepare(sourceImage) { segmentationError ->
                             WolfDiagnostics.record(
                                 context,
                                 "استعادة فصل الصور",
-                                "WOLF IMAGE INTELLIGENCE",
+                                "WOLF UPLOADED IMAGE ENGINE",
                                 "WARNING",
-                                "تعذر فصل الصورة؛ سيُستخدم الأصل كما هو مع استمرار الحركة الإجرائية للعناصر والمؤثرات الأخرى",
+                                "تعذر تحليل الصورة؛ سيُستخدم الأصل دون فصل طبقات مع استمرار بقية إنتاج الفيلم",
                                 segmentationError.javaClass.simpleName
                             )
                         }
-                    )
+                    }
                     try {
                         for (f in 0 until shotFrames) {
                             if (f % (fps * 5) == 0) WolfResourceGuard.ensureSafeToContinue(context)
                             val shotProgress = f.toFloat() / max(1, shotFrames - 1)
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
-                                w, h, scenes[s], s, shotIndex, shotProgress, image, imageLayers, includeWatermark,
-                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps, proceduralPlan
+                                w, h, scenes[s], s, shotIndex, shotProgress, image, preparedImage, includeWatermark,
+                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps, shotProceduralPlan
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
                             track = drained.first
                             started = drained.second
                         }
                     } finally {
-                        imageLayers?.recycle()
+                        preparedImage?.recycle()
                         if (image != null && !image.isRecycled) image.recycle()
                     }
                     sceneFrameOffset += shotFrames
@@ -651,122 +654,37 @@ object OfflineProductionEngine {
 
     private fun draw(
         surface: Surface, w: Int, h: Int, caption: String, scene: Int,
-        shotIndex: Int, t: Float, bitmap: Bitmap?, imageLayers: WolfImageDepthSegmenter.Layers?,
+        shotIndex: Int, t: Float, bitmap: Bitmap?, preparedImage: WolfUploadedImageEngine.PreparedImage?,
         includeWatermark: Boolean, typographyCue: WolfHorrorTypographyEngine.Cue?,
         sceneFrameIndex: Int, fps: Int,
-        proceduralPlan: WolfProceduralSceneProductionEngine.ScenePlan
+        proceduralPlan: WolfProceduralSceneProductionEngine.ScenePlan?
     ) {
         val c: Canvas = surface.lockCanvas(null)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         val safeShotIndex = shotIndex.coerceIn(0, WolfSceneAssetStore.SHOTS_PER_SCENE - 1)
         try {
             if(bitmap != null && !bitmap.isRecycled) {
-                c.drawColor(android.graphics.Color.BLACK)
-                val source=Rect(0,0,bitmap.width,bitmap.height)
-                val targetRatio=w.toFloat()/h.toFloat()
-                val imageRatio=bitmap.width.toFloat()/bitmap.height.toFloat()
-                if(imageRatio>targetRatio) {
-                    val cropWidth=(bitmap.height*targetRatio).toInt().coerceAtLeast(1)
-                    source.left=(bitmap.width-cropWidth)/2
-                    source.right=source.left+cropWidth
-                } else {
-                    val cropHeight=(bitmap.width/targetRatio).toInt().coerceAtLeast(1)
-                    source.top=(bitmap.height-cropHeight)/2
-                    source.bottom=source.top+cropHeight
-                }
-                // Three virtual camera setups per scene, derived from the same still image.
-                // This is a local motion fallback, not three independent generated photographs.
-                val shotProgress = t.coerceIn(0f, 1f)
-                val baseLeft=source.left
-                val baseTop=source.top
-                val baseWidth=source.width()
-                val baseHeight=source.height()
-                val cropScale=when(shotIndex) { 0 -> 1f; 1 -> 0.78f; else -> 0.60f }
-                val cropWidth=(baseWidth*cropScale).toInt().coerceAtLeast(1)
-                val cropHeight=(baseHeight*cropScale).toInt().coerceAtLeast(1)
-                val focusX=when(shotIndex) { 0 -> 0.50f; 1 -> 0.34f+0.30f*shotProgress; else -> 0.62f-0.24f*shotProgress }
-                val focusY=when(shotIndex) { 0 -> 0.50f; 1 -> 0.45f; else -> 0.40f+0.12f*shotProgress }
-                source.left=(baseLeft+(baseWidth-cropWidth)*focusX).toInt().coerceIn(baseLeft,baseLeft+baseWidth-cropWidth)
-                source.top=(baseTop+(baseHeight-cropHeight)*focusY).toInt().coerceIn(baseTop,baseTop+baseHeight-cropHeight)
-                source.right=source.left+cropWidth
-                source.bottom=source.top+cropHeight
-                val camera = OfflineMotionEngine.cameraFrame(shotProgress, scene, caption, safeShotIndex)
-                val baseZoom = when (shotIndex) {
-                    0 -> 1.012f
-                    1 -> 1.034f
-                    else -> 1.058f
-                }
-                // Keep a small overscan margin so camera movement never exposes black edges.
-                val scale = (baseZoom + camera.zoom).coerceAtLeast(1.006f)
-                val dw = w * scale
-                val dh = h * scale
-                val shiftX = camera.offsetX * w
-                val shiftY = camera.offsetY * h
-                val destination = RectF(
-                    (w - dw) / 2f + shiftX,
-                    (h - dh) / 2f + shiftY,
-                    (w + dw) / 2f + shiftX,
-                    (h + dh) / 2f + shiftY
+                val imageEngine = preparedImage ?: WolfUploadedImageEngine.prepare(bitmap)
+                WolfUploadedImageEngine.render(
+                    canvas = c,
+                    width = w,
+                    height = h,
+                    sceneIndex = scene,
+                    shotIndex = safeShotIndex,
+                    progress = t,
+                    caption = caption,
+                    prepared = imageEngine
                 )
-                p.alpha = 255
-                if (imageLayers != null && imageLayers.separated) {
-                    val layerScale = imageLayers.sourceScale
-                    val layerLeft = (source.left * layerScale).toInt()
-                        .coerceIn(0, imageLayers.background.width - 1)
-                    val layerTop = (source.top * layerScale).toInt()
-                        .coerceIn(0, imageLayers.background.height - 1)
-                    val layerRight = (source.right * layerScale).toInt()
-                        .coerceIn(layerLeft + 1, imageLayers.background.width)
-                    val layerBottom = (source.bottom * layerScale).toInt()
-                        .coerceIn(layerTop + 1, imageLayers.background.height)
-                    val layerSource = Rect(layerLeft, layerTop, layerRight, layerBottom)
-                    WolfSceneDepthComposer.renderImageLayers(
-                        canvas = c,
-                        width = w,
-                        height = h,
-                        sceneIndex = scene,
-                        progress = shotProgress,
-                        layers = imageLayers,
-                        source = layerSource,
-                        destination = destination,
-                        rotationDegrees = camera.rotationDegrees
-                    )
-                } else {
-                    val cameraSave = c.save()
-                    c.rotate(camera.rotationDegrees, w / 2f, h / 2f)
-                    c.drawBitmap(bitmap, source, destination, p)
-                    c.restoreToCount(cameraSave)
-                }
-                p.color=android.graphics.Color.argb(46,0,0,0)
-                c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
-                if(shotProgress<0.08f) {
-                    val fade=((0.08f-shotProgress)/0.08f*36f).toInt().coerceIn(0,36)
-                    p.color=android.graphics.Color.argb(fade,0,0,0)
-                    c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
-                }
+                p.color = android.graphics.Color.argb(46, 0, 0, 0)
+                c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
             } else {
                 WolfProceduralSceneProductionEngine.render(
                     canvas = c,
                     width = w,
                     height = h,
-                    plan = proceduralPlan,
+                    plan = proceduralPlan ?: throw IllegalStateException("خطة المشهد الإجرائي غير متاحة"),
                     shotIndex = safeShotIndex,
                     progress = t
-                )
-            }
-            if (bitmap != null && !bitmap.isRecycled) {
-                WolfProceduralMotionEngine.renderDepthAware(
-                    canvas = c,
-                    width = w,
-                    height = h,
-                    caption = caption,
-                    sceneIndex = scene,
-                    shotIndex = safeShotIndex,
-                    progress = t,
-                    // Uploaded images already use their own segmentation layers when
-                    // available. Do not paint unrelated procedural props (doors,
-                    // chairs, curtains or branches) over the user's source image.
-                    plannedLayers = emptyList()
                 )
             }
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
