@@ -161,6 +161,14 @@ class WolfStoryOriginalityReviewEngineTest {
         assertTrue(report.warnings.any { it.contains("حد الذاكرة الآمن") })
     }
 
+    @Test fun exactReviewWordLimitWithOnlyTrailingWhitespaceIsNotMarkedTruncated() {
+        val story = "كلمة ".repeat(WolfStoryOriginalityReviewEngine.MAX_REVIEW_WORDS).trimEnd() + "   ..."
+        val report = WolfStoryOriginalityReviewEngine.analyze(story, emptySequence())
+
+        assertEquals(WolfStoryOriginalityReviewEngine.MAX_REVIEW_WORDS, report.storyWords)
+        assertFalse(report.storyTruncated)
+    }
+
     @Test fun reviewFingerprintChangesWhenReviewedTextChanges() {
         val first = WolfStoryOriginalityReviewEngine.fingerprint("قصة أصلية")
         val second = WolfStoryOriginalityReviewEngine.fingerprint("قصة أصلية مختلفة")
