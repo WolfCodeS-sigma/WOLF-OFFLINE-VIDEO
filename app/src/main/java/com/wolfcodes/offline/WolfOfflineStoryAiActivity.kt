@@ -122,7 +122,11 @@ class WolfOfflineStoryAiActivity : Activity() {
         planView = label("لم يتم إنشاء مخطط بعد")
         root.addView(planView)
         root.addView(label("النص النهائي — يمكنك مراجعته وتعديله قبل الاعتماد"))
-        storyField = field("ستظهر الفصول هنا بالتتابع").apply { minLines = 12; gravity = Gravity.TOP }
+        storyField = field("ستظهر الفصول هنا بالتتابع").apply {
+            minLines = 12
+            gravity = Gravity.TOP
+            isEnabled = false
+        }
         root.addView(storyField)
         root.addView(button("اعتماد القصة النهائية وحفظها في مكتبة المعرفة").apply {
             setOnClickListener { approveAndSave() }
@@ -269,6 +273,7 @@ class WolfOfflineStoryAiActivity : Activity() {
                     session = it
                     planView.text = formatPlan(it)
                     storyField.setText("")
+                    storyField.isEnabled = false
                     setBusy(false, "تم إنشاء المخطط. راجعه ثم ابدأ توليد الفصل الأول.")
                 }.onFailure { setBusy(false, "تعذر إنشاء المخطط: ${it.message}") }
             }
@@ -301,6 +306,7 @@ class WolfOfflineStoryAiActivity : Activity() {
                 result.onSuccess {
                     session = it
                     storyField.setText(formatChapters(it))
+                    storyField.isEnabled = it.isComplete
                     setBusy(false, if (it.isComplete) "اكتملت الفصول. راجع القصة واعتمدها عند رضاك."
                     else "تم حفظ الفصل ${it.chapters.size} من ${it.plan.chapterTitles.size}. يمكنك المتابعة لاحقًا.")
                 }.onFailure { setBusy(false, "تعذر توليد الفصل: ${it.message}") }
@@ -393,6 +399,7 @@ class WolfOfflineStoryAiActivity : Activity() {
         libraryToggle.isChecked = value.brief.useKnowledgeLibrary
         planView.text = formatPlan(value)
         storyField.setText(value.finalText.ifBlank { formatChapters(value) })
+        storyField.isEnabled = value.isComplete
         status.text = "تم استعادة جلسة محفوظة: ${value.chapters.size} / ${value.plan.chapterTitles.size} فصل"
     }
 
@@ -417,6 +424,10 @@ class WolfOfflineStoryAiActivity : Activity() {
         val finalText = storyField.text.toString().trim()
         if (finalText.length < 500) {
             status.text = "النص النهائي قصير جدًا؛ راجع الفصول وأكملها أولًا."
+            return
+        }
+        if (finalText.length > WolfOfflineStoryAiEngine.MAX_STORY_CHARS) {
+            status.text = "النص النهائي تجاوز الحد المحلي الآمن البالغ 4 ملايين حرف."
             return
         }
         AlertDialog.Builder(this)
@@ -462,6 +473,30 @@ class WolfOfflineStoryAiActivity : Activity() {
             }
             .setNegativeButton("مراجعة لاحقًا", null)
             .show()
+    }
+
+    override fun onPause() {
+        // Preserve completed-story edits even if the user leaves before pressing Approve.
+        val current = session
+        val reviewedText = if (::storyField.isInitialized) storyField.text.toString().trim() else ""
+        if (!busy && current != null && current.isComplete &&
+            reviewedText.length in 500..WolfOfflineStoryAiEngine.MAX_STORY_CHARS
+        ) {
+            val unchangedApprovedText = current.approved && reviewedText == current.finalText
+            val draft = current.copy(
+                finalText = reviewedText,
+                approved = unchangedApprovedText,
+                updatedAt = System.currentTimeMillis()
+            )
+            runCatching {
+                worker.execute {
+                    runCatching {
+                        WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), draft)
+                    }
+                }
+            }
+        }
+        super.onPause()
     }
 
     private fun setBusy(value: Boolean, message: String) {
