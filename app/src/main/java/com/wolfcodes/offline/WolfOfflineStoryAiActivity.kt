@@ -396,13 +396,13 @@ class WolfOfflineStoryAiActivity : Activity() {
     }
     private fun updateStructureReport() {
         if (!::structureView.isInitialized || !::storyField.isInitialized) return
+        val revision = ++reportRevision
         val current = session
         if (current == null) {
             structureView.text = "أنشئ مخططًا لعرض أهداف الكلمات."
             return
         }
         val displayedText = storyField.text.toString()
-        val revision = ++reportRevision
         worker.execute {
             if (revision != reportRevision) return@execute
             val report = if (current.isComplete && displayedText.isNotBlank() &&
