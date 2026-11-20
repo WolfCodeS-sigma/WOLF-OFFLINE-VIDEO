@@ -42,6 +42,7 @@ The app does not load all story bodies into memory for listing or searching. It 
 - Indexing is streamed in bounded character chunks; the index stores up to 60,000 distinct tokens per entry.
 - Search normalizes case, Arabic alef/hamza forms, common Arabic diacritics, tatweel, and alif-maqsura. Multiple query terms are matched with AND semantics.
 - Large entries are not fully injected into the editor. The editor loads at most 250,000 characters; larger entries allow metadata-only editing. The original-text dialog shows at most 40,000 characters.
+- The screen renders at most 50 result cards at a time and adds more on demand, avoiding a large view tree when the library grows.
 - Duplicate detection uses an exact SHA-256 fingerprint of the UTF-8 text stored by the library. Exact repeated content is reported and not inserted a second time. This is not fuzzy or semantic similarity detection.
 
 ## Story-reference and authorship boundaries
