@@ -694,8 +694,14 @@ class MainActivity : Activity() {
                                 status.text = "تم استعادة ${merged.segmentCount} مقطعًا محفوظًا للراوي؛ راجع التسجيل واعتمده."
                                 refreshVoiceStatus()
                                 refreshProjectList()
+                            } else {
+                                refreshVoiceStatus()
                             }
+                        } else {
+                            refreshVoiceStatus()
                         }
+                    } else if (merged == null && workingProject?.id == item.id) {
+                        refreshVoiceStatus()
                     }
                 }.onFailure { status.text = "تعذر استعادة مقاطع الراوي: " + (it.message ?: "خطأ غير معروف") }
             }
