@@ -29,7 +29,10 @@ object WolfProceduralSceneProductionEngine {
         val scale: Float,
         val offsetX: Float,
         val offsetY: Float,
-        val rotationDegrees: Float
+        val rotationDegrees: Float,
+        /** Normalized source point that the virtual camera keeps near frame center. */
+        val focusX: Float,
+        val focusY: Float
     )
 
     data class ScenePlan(
@@ -94,19 +97,25 @@ object WolfProceduralSceneProductionEngine {
                 scale = 1.0f,
                 offsetX = 0f,
                 offsetY = 0f,
-                rotationDegrees = 0f
+                rotationDegrees = 0f,
+                focusX = 0.50f,
+                focusY = 0.50f
             )
             1 -> ShotComposition(
-                scale = 1.075f,
-                offsetX = -0.018f,
-                offsetY = 0.008f,
-                rotationDegrees = -0.12f
+                scale = 1.10f,
+                offsetX = 0f,
+                offsetY = 0f,
+                rotationDegrees = -0.04f,
+                focusX = 0.46f,
+                focusY = 0.48f
             )
             else -> ShotComposition(
-                scale = 1.15f,
-                offsetX = 0.022f,
-                offsetY = -0.012f,
-                rotationDegrees = 0.16f
+                scale = 1.24f,
+                offsetX = 0f,
+                offsetY = 0f,
+                rotationDegrees = 0.06f,
+                focusX = 0.56f,
+                focusY = 0.44f
             )
         }
     }
@@ -133,16 +142,19 @@ object WolfProceduralSceneProductionEngine {
             )
             canvas.rotate(shot.rotationDegrees)
             canvas.scale(shot.scale, shot.scale)
-            canvas.translate(-width * 0.5f, -height * 0.5f)
+            canvas.translate(-width * shot.focusX, -height * shot.focusY)
 
-            // The scene index and shot index seed deterministic but distinct artwork.
+            // Keep the full story context for presence cues, while routing the
+            // already-classified environment explicitly to avoid keyword collisions.
             WolfSceneArtEngine.draw(
                 canvas = canvas,
                 width = width,
                 height = height,
-                caption = plan.visualCaption,
+                caption = plan.caption,
                 scene = plan.sceneIndex * 3 + safeShot,
-                progress = t
+                progress = t,
+                environmentOverride = plan.environment.name,
+                presenceCaption = plan.caption
             )
         } finally {
             canvas.restoreToCount(saved)
