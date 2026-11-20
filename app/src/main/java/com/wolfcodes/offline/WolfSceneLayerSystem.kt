@@ -128,9 +128,23 @@ object WolfSceneLayerSystem {
             val pose = pose(element, progress)
             val saved = canvas.save()
             try {
-                canvas.translate(element.anchorX * width, element.anchorY * height)
+                val depthScale = when (element.depth) {
+                    Depth.BACKGROUND -> 0.78f
+                    Depth.MIDGROUND -> 1.0f
+                    Depth.FOREGROUND -> 1.18f
+                }
+                val depthDrift = when (element.depth) {
+                    Depth.BACKGROUND -> 0.003f
+                    Depth.MIDGROUND -> 0.010f
+                    Depth.FOREGROUND -> 0.018f
+                }
+                val parallax = sin((progress.coerceIn(0f, 1f) * 2.0 * PI + element.phase).toDouble()).toFloat()
+                canvas.translate(
+                    element.anchorX * width + parallax * width * depthDrift,
+                    element.anchorY * height
+                )
                 canvas.rotate(pose.rotationDegrees)
-                val unit = minOf(width, height) * element.size
+                val unit = minOf(width, height) * element.size * depthScale
                 canvas.scale(unit / 100f * pose.scale, unit / 100f * pose.scale)
                 drawElement(canvas, paint, element.kind, pose.alpha)
             } finally {
