@@ -301,8 +301,11 @@ class WolfOfflineStoryAiActivity : Activity() {
     private fun loadReferences(query: String, enabled: Boolean): List<String> {
         if (!enabled) return emptyList()
         val root = File(filesDir, "wolf_horror_knowledge_library")
-        return WolfHorrorKnowledgeLibrary.searchStoryReferences(root, query)
-            .take(3)
+        val terms = query.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        val focusedQuery = terms.take(2).joinToString(" ")
+        val matches = WolfHorrorKnowledgeLibrary.searchStoryReferences(root, focusedQuery)
+            .ifEmpty { WolfHorrorKnowledgeLibrary.searchStoryReferences(root, terms.firstOrNull().orEmpty()) }
+        return matches.take(3)
             .mapNotNull { entry ->
                 val text = WolfHorrorKnowledgeLibrary.readContent(root, entry.id) ?: return@mapNotNull null
                 "عنوان المرجع: §{entry.title}\nنوع المصدر: §{entry.sourceType}\nملخص: §{entry.summary}\nمقتطف: §{text.take(1_200)}"
