@@ -9,6 +9,13 @@ class WolfFilmProductionCoordinatorTest {
         assertEquals(listOf(5, 10, 15, 20, 25, 30), WolfFilmProductionCoordinator.durationPresetsMinutes)
     }
 
+    @Test fun keepsIntroInsideFiveAndThirtyMinuteDurationPresets() {
+        assertEquals(297, WolfFilmProductionCoordinator.bodyDurationSeconds(300, 3, 12))
+        assertEquals(1_797, WolfFilmProductionCoordinator.bodyDurationSeconds(1_800, 3, 12))
+        assertEquals(1_800, WolfFilmProductionCoordinator.bodyDurationSeconds(1_800, 0, 12))
+        assertEquals(36, WolfFilmProductionCoordinator.bodyDurationSeconds(5, 3, 12))
+    }
+
     @Test fun plansThreeShotsForEverySceneAndKeepsAllFrames() {
         val frames = List(12) { 1_797 }
         val plan = WolfFilmProductionCoordinator.createPlan(frames, 12, 36)
