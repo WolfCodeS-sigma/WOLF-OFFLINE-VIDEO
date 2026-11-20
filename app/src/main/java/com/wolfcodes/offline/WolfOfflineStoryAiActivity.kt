@@ -311,6 +311,7 @@ class WolfOfflineStoryAiActivity : Activity() {
                 val raw = model.generate(WolfOfflineStoryAiEngine.buildPlanPrompt(brief, refs.prompts))
                 val plan = WolfOfflineStoryAiEngine.parsePlan(raw, brief)
                 val created = WolfOfflineStoryAiEngine.newSession(brief, plan)
+                WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), created)
                 val ledgerWarning = runCatching {
                     WolfStoryOriginalityReviewEngine.recordSources(
                         File(filesDir, WolfStoryOriginalityReviewEngine.DIRECTORY_NAME),
@@ -319,7 +320,6 @@ class WolfOfflineStoryAiActivity : Activity() {
                         refs.sources
                     )
                 }.exceptionOrNull()?.message
-                WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), created)
                 created to ledgerWarning
             }
             runOnUiThread {
@@ -360,6 +360,7 @@ class WolfOfflineStoryAiActivity : Activity() {
                 val refs = loadReferences(current.brief.premise, current.brief.useKnowledgeLibrary, selectedIds)
                 val chapter = model.generate(WolfOfflineStoryAiEngine.buildChapterPrompt(current, refs.prompts))
                 val updated = WolfOfflineStoryAiEngine.withChapter(current, chapter)
+                WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), updated)
                 val ledgerWarning = runCatching {
                     WolfStoryOriginalityReviewEngine.recordSources(
                         File(filesDir, WolfStoryOriginalityReviewEngine.DIRECTORY_NAME),
@@ -368,7 +369,6 @@ class WolfOfflineStoryAiActivity : Activity() {
                         refs.sources
                     )
                 }.exceptionOrNull()?.message
-                WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), updated)
                 updated to ledgerWarning
             }
             runOnUiThread {
@@ -416,6 +416,7 @@ class WolfOfflineStoryAiActivity : Activity() {
                             text = "${entry.title} — ${entry.sourceType}"
                             tag = entry.id
                             setTextColor(0xFFE0E0E8.toInt())
+                            isEnabled = !busy
                             setOnCheckedChangeListener { view, checked ->
                                 if (checked && selectedReferenceIds().size > 3) {
                                     view.isChecked = false
@@ -731,7 +732,6 @@ class WolfOfflineStoryAiActivity : Activity() {
                     runOnUiThread {
                         result.onSuccess { (approved, saved) ->
                             session = approved
-                            storyField.setText(approved.finalText)
                             setBusy(false, when {
                                 saved == null -> "تم اعتماد النص وحفظه داخل جلسة التأليف. الحفظ التلقائي في المكتبة معطّل من إعداداتها."
                                 saved.duplicateOfExisting -> "تم الاعتماد؛ المحتوى موجود بالفعل في المكتبة."
@@ -774,6 +774,15 @@ class WolfOfflineStoryAiActivity : Activity() {
 
     private fun setBusy(value: Boolean, message: String) {
         busy = value
+        if (::storyField.isInitialized) {
+            storyField.isEnabled = !value && session?.isComplete == true
+        }
+        if (::referenceChoicesContainer.isInitialized) {
+            for (index in 0 until referenceChoicesContainer.childCount) {
+                referenceChoicesContainer.getChildAt(index).isEnabled = !value
+            }
+        }
+        if (::libraryToggle.isInitialized) libraryToggle.isEnabled = !value
         status.text = message
     }
 
