@@ -41,6 +41,7 @@ object WolfStoryOriginalityReviewEngine {
         val sourceType: String,
         val sourceLabel: String,
         val contentFingerprint: String,
+        val sourceDate: String = "",
         val usages: List<String> = emptyList()
     )
 
@@ -165,6 +166,7 @@ object WolfStoryOriginalityReviewEngine {
                 sourceType = item.getString("sourceType"),
                 sourceLabel = item.optString("sourceLabel"),
                 contentFingerprint = item.getString("contentFingerprint"),
+                sourceDate = item.optString("sourceDate"),
                 usages = (0 until usages.length()).mapNotNull { position ->
                     usages.optString(position).takeIf { it.isNotBlank() }
                 }
@@ -191,6 +193,7 @@ object WolfStoryOriginalityReviewEngine {
                     .put("sourceType", source.sourceType)
                     .put("sourceLabel", source.sourceLabel)
                     .put("contentFingerprint", source.contentFingerprint)
+                    .put("sourceDate", source.sourceDate)
                     .put("usages", JSONArray(source.usages.take(80)))
             )
         }
@@ -229,6 +232,7 @@ object WolfStoryOriginalityReviewEngine {
         require(source.title.isNotBlank() && source.title.length <= 240) { "عنوان المرجع غير صالح" }
         require(source.sourceType.isNotBlank() && source.sourceType.length <= 120) { "نوع مصدر المرجع غير صالح" }
         require(source.sourceLabel.length <= 500) { "وصف مصدر المرجع طويل جدًا" }
+        require(source.sourceDate.length <= 80) { "تاريخ مصدر المرجع غير صالح" }
         require(source.contentFingerprint.matches(Regex("[a-f0-9]{64}"))) { "بصمة محتوى المرجع غير صالحة" }
         require(source.usages.size <= 80 && source.usages.all { it.isNotBlank() && it.length <= 100 }) {
             "سجل استخدام المرجع غير صالح"
@@ -549,6 +553,8 @@ object WolfStoryOriginalityReviewEngine {
             appendLine("المراجع التي تمت مراجعتها:")
             report.checkedSourceVersions.forEach { source ->
                 appendLine("• ${source.title} — ${source.sourceType}")
+                if (source.sourceLabel.isNotBlank()) appendLine("  وصف المصدر: ${source.sourceLabel}")
+                if (source.sourceDate.isNotBlank()) appendLine("  تاريخ المصدر المسجل: ${source.sourceDate}")
                 if (source.usages.isNotEmpty()) appendLine("  استُخدم في: ${source.usages.joinToString("، ")}")
             }
         }
