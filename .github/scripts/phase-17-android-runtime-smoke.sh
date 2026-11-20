@@ -10,12 +10,12 @@ SCREENSHOT="${GITHUB_WORKSPACE}/wolf-phase17.png"
 test -s "$APK"
 adb install -r "$APK"
 
+# Airplane mode is a protected system operation. Ask ConnectivityService to
+# change it so Android itself publishes the protected state-change broadcast.
+adb shell cmd connectivity airplane-mode enable
 adb shell svc wifi disable
-adb shell settings put global airplane_mode_on 1
-adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true
 
-# Some Google APIs emulator images have no telephony service at all.
-# In that case mobile data is unavailable by design; do not call svc data.
+# Some Google APIs emulator images have no telephony service or mobile radio.
 PHONE_SERVICE="$(adb shell service check phone 2>&1 | tr -d '\r')"
 if printf '%s' "$PHONE_SERVICE" | grep -qiE 'Service phone:[[:space:]]*found[[:space:]]*$'; then
   adb shell svc data disable
@@ -24,6 +24,7 @@ else
   echo "No telephony service on this emulator; mobile data radio is unavailable."
 fi
 
+test "$(adb shell cmd connectivity airplane-mode | tr -d '\r')" = "enabled"
 test "$(adb shell settings get global airplane_mode_on | tr -d '\r')" = "1"
 test "$(adb shell settings get global wifi_on | tr -d '\r')" = "0"
 
