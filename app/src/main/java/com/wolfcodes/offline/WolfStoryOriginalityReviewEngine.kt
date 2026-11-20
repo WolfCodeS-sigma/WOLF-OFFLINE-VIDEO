@@ -497,8 +497,25 @@ object WolfStoryOriginalityReviewEngine {
 
     private fun phraseSample(words: List<String>, start: Int, end: Int): String {
         val selected = words.subList(start, end)
-        val sample = selected.take(40).joinToString(" ").take(500)
-        return if (selected.size > 40 || selected.joinToString(" ").length > 500) "$sample …" else sample
+        val pieces = ArrayList<String>(minOf(40, selected.size))
+        var usedCharacters = 0
+        var truncated = selected.size > 40
+        for (word in selected.take(40)) {
+            val allowance = 500 - usedCharacters - if (pieces.isEmpty()) 0 else 1
+            if (allowance <= 0) {
+                truncated = true
+                break
+            }
+            val piece = word.take(allowance)
+            pieces += piece
+            usedCharacters += piece.length + if (pieces.size == 1) 0 else 1
+            if (piece.length < word.length) {
+                truncated = true
+                break
+            }
+        }
+        val sample = pieces.joinToString(" ")
+        return if (truncated) "$sample …" else sample
     }
 
     private fun isInformativeShingle(words: List<String>, start: Int): Boolean {
