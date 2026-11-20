@@ -1,6 +1,7 @@
 package com.wolfcodes.offline
 
 import android.content.Context
+import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
@@ -311,11 +312,9 @@ object WolfVoiceSegmentStore {
         })
         val target = manifestFile(directory, projectId)
         val temporary = File(directory, "$projectId-segments.json.tmp")
-        temporary.writeText(json.toString(), Charsets.UTF_8)
-        runCatching {
-            val stream = java.io.FileOutputStream(temporary, true)
+        java.io.FileOutputStream(temporary).use { stream ->
+            stream.write(json.toString().toByteArray(Charsets.UTF_8))
             stream.fd.sync()
-            stream.close()
         }
         Os.rename(temporary.absolutePath, target.absolutePath)
     }
