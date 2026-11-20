@@ -315,8 +315,8 @@ object WolfStoryOriginalityReviewEngine {
             val coverage = ((distinctMatched.toDouble() / uniqueStoryShingles.size) * 100.0)
                 .roundToInt().coerceIn(0, 100)
             val severity = when {
-                coverage >= 15 || maximumContinuousWords >= 18 -> Severity.HIGH
-                coverage >= 5 || maximumContinuousWords >= 10 -> Severity.MEDIUM
+                maximumContinuousWords >= 18 || (coverage >= 15 && distinctMatched >= 10) -> Severity.HIGH
+                maximumContinuousWords >= 10 || (coverage >= 5 && distinctMatched >= 4) -> Severity.MEDIUM
                 else -> Severity.LOW
             }
             findings += SourceFinding(
