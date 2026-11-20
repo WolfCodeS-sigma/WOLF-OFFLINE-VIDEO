@@ -11,9 +11,20 @@ test -s "$APK"
 adb install -r "$APK"
 
 adb shell svc wifi disable
-adb shell svc data disable
 adb shell settings put global airplane_mode_on 1
 adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true
+
+# Some Google APIs emulator images have no telephony service at all.
+# In that case mobile data is unavailable by design; do not fail the smoke test
+# by invoking svc data against a non-existent phone service.
+PHONE_SERVICE="$(adb shell service check phone 2>&1 | tr -d '\r')"
+if printf '%s' "$PHONE_SERVICE" | grep -qi 'found'; then
+  adb shell svc data disable
+  echo "Telephony service found; mobile data disabled."
+else
+  echo "No telephony service on this emulator; mobile data radio is unavailable."
+fi
+
 test "$(adb shell settings get global airplane_mode_on | tr -d '\r')" = "1"
 test "$(adb shell settings get global wifi_on | tr -d '\r')" = "0"
 
