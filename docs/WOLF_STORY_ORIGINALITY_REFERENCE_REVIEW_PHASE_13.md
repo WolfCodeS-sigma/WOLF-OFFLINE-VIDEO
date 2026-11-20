@@ -35,7 +35,7 @@ Older sessions created before Phase 13 have no source-use ledger. They can still
 - The reference ledger is private app storage under filesDir/wolf_story_originality_review; it is separate from the Phase 11 story checkpoint format.
 - The ledger is versioned and uses pending/backup atomic replacement so an interrupted write can recover the prior record.
 - A session may record at most 40 distinct source versions; each generation operation records no more than three.
-- A review processes at most 20 reference entries (including duplicate entries), at most 1,000,000 characters from any one reference, at most 100,000 words from the story, at most 100,000 words from a single reference, and at most 300,000 reference words in total.
+- A review processes at most 40 reference entries (including duplicate entries), at most 1,000,000 characters from any one reference, at most 100,000 words from the story, at most 100,000 words from a single reference, and at most 300,000 reference words in total.
 - Every truncation or source-limit condition is disclosed in the report. The reviewer never labels a truncated or unexamined source as fully checked.
 - The story text is bounded by the existing four-million-character final-story limit.
 - A source is compared only when its current full-text SHA-256 matches the recorded fingerprint. Missing or changed contents are listed as unavailable instead.
