@@ -47,5 +47,8 @@ class WolfFilmProductionCoordinatorTest {
         assertTrue(runCatching {
             WolfFilmProductionCoordinator.createPlan(listOf(100), 12, 0, 301)
         }.isFailure)
+        assertTrue(runCatching {
+            WolfFilmProductionCoordinator.createPlan(listOf(100), 12, -1)
+        }.isFailure)
     }
 }
