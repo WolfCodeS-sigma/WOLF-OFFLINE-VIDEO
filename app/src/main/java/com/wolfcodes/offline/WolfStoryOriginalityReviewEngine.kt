@@ -73,6 +73,7 @@ object WolfStoryOriginalityReviewEngine {
         val sourceTruncationCount: Int,
         val referenceWordCount: Int,
         val sourceLimitReached: Boolean,
+        val narrativeAudit: WolfNarrativePatternAudit.Report,
         val warnings: List<String>
     )
 
@@ -381,6 +382,7 @@ object WolfStoryOriginalityReviewEngine {
             ((allMatchedStoryShingles.size.toDouble() / uniqueStoryShingles.size) * 100.0)
                 .roundToInt().coerceIn(0, 100)
         val overallSeverity = findings.maxByOrNull { it.severity.rank }?.severity ?: Severity.NONE
+        val narrativeAudit = WolfNarrativePatternAudit.analyze(story)
         val warnings = buildList {
             if (checkedSources == 0) add("لم تتم مقارنة النص بأي محتوى مرجعي صالح؛ لا يمكن اعتبار ذلك إثباتًا للأصالة.")
             if (unavailable.isNotEmpty()) add("تعذر فحص ${unavailable.size} مرجعًا أو استُبعدت نسخته المتغيرة.")
@@ -394,6 +396,8 @@ object WolfStoryOriginalityReviewEngine {
             if (sourceLimitReached) add("توقف الفحص عند الحد الآمن لعدد المراجع أو الكلمات؛ توجد مصادر أخرى لم تدخل هذه الجولة.")
             if (positionLimitReached) add("تم تقييد مواضع العبارات شديدة التكرار لتجنب استهلاك الذاكرة؛ قد لا يظهر طول بعض التطابقات المتكررة بالكامل.")
             if (findings.isNotEmpty()) add("التطابق اللفظي مؤشر للمراجعة البشرية وليس دليلًا قاطعًا على النسخ.")
+            narrativeAudit.warnings.forEach { add(it) }
+            add("فحص الأحداث والبنية السردية إجرائي يعتمد على مجموعات كلمات وقرائن موضعية؛ لا يفهم المعنى الكامل ولا يحكم على جودة القصة حكمًا بشريًا.")
             add("الفحص محلي ويشمل النصوص المرجعية المتاحة والمسموح بها فقط؛ لا يبحث في الإنترنت أو قواعد نشر خارجية.")
             add("نوع المصدر ووسمه وتاريخه بيانات مسجلة في المكتبة؛ لا يتحقق التطبيق خارجيًا من صحتها أو ملكية المحتوى.")
         }
@@ -417,6 +421,7 @@ object WolfStoryOriginalityReviewEngine {
             sourceTruncationCount = sourceTruncationCount,
             referenceWordCount = referenceWordCount,
             sourceLimitReached = sourceLimitReached,
+            narrativeAudit = narrativeAudit,
             warnings = warnings
         )
     }
@@ -618,6 +623,21 @@ object WolfStoryOriginalityReviewEngine {
         appendLine("نسبة نوافذ العبارات المميزة المتطابقة (ست كلمات): ${report.overallOverlapPercent}%")
         appendLine("هذه النسبة ليست نسبة كلمات منسوخة ولا احتمالًا للانتحال.")
         appendLine("العبارات الطويلة المتكررة داخل القصة: ${report.internalRepeatedPhraseCount}")
+        appendLine()
+        appendLine("مراجعة تنوع الأحداث والبنية السردية (قرائن آلية إرشادية):")
+        appendLine("الأحداث المصنفة: ${report.narrativeAudit.detectedEventCount}")
+        appendLine("أنواع الأحداث المختلفة: ${report.narrativeAudit.distinctEventCount} من ${report.narrativeAudit.eventTypeCount}")
+        appendLine("مؤشر تنوع الأحداث: ${report.narrativeAudit.diversityPercent}%")
+        if (report.narrativeAudit.eventSequence.isNotEmpty()) {
+            appendLine("تسلسل الأحداث المرصود: ${report.narrativeAudit.eventSequence.joinToString(" ← ")}")
+        }
+        if (report.narrativeAudit.repeatedEventTypes.isNotEmpty()) {
+            appendLine("أنماط أحداث متكررة بكثافة: ${report.narrativeAudit.repeatedEventTypes.joinToString("، ")}")
+        }
+        if (report.narrativeAudit.structuralWarnings.isNotEmpty()) {
+            appendLine("ملاحظات البنية: ")
+            report.narrativeAudit.structuralWarnings.forEach { appendLine("• $it") }
+        }
 
         if (report.checkedSources == 0) {
             appendLine("لم تتم مقارنة أي مرجع صالح؛ لا يمكن استنتاج عدم وجود تطابق.")
