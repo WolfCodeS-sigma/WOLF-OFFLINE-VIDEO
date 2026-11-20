@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - 'development/**'
+      - 'feature/**'
   workflow_dispatch:
 
 permissions:
