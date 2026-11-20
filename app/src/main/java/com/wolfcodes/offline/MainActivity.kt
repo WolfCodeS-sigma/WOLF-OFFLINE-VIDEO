@@ -747,7 +747,7 @@ class MainActivity : Activity() {
                     },
                     onChapterProgress = { current, total, message ->
                         runOnUiThread {
-                            progress.progress = (current * 95 / total.coerceAtLeast(1)).coerceIn(0, 95)
+                            // Shot progress is more granular and monotonic; chapter callbacks update text only.
                             status.text = "الفصل $current من $total — $message"
                         }
                     }
