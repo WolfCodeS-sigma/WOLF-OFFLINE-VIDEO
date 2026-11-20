@@ -36,8 +36,8 @@ object WolfNarrativePatternAudit {
             "حقق", "حققت", "قرأ", "قرات", "فحص", "فحصت", "investigated",
             "searched", "followed", "questioned", "examined", "read"
         )),
-        EventType("ظهور خارق", setOf(
-            "ظهر", "ظهرت", "تجسد", "تجسدت", "بان", "برز", "خرج", "خرجت",
+        EventType("ظهور مفاجئ", setOf(
+            "ظهر", "ظهرت", "تجسد", "تجسدت", "بان", "برز",
             "شبح", "شبحا", "طيف", "ظل", "كيان", "ghost", "appeared",
             "manifested", "emerged", "entity", "specter", "shadow"
         )),
