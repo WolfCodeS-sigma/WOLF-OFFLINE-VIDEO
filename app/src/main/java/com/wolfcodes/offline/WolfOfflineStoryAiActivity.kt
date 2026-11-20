@@ -519,30 +519,50 @@ class WolfOfflineStoryAiActivity : Activity() {
                     }.toMutableList()
 
                 val candidates = linkedMapOf<String, Pair<WolfStoryOriginalityReviewEngine.SourceStamp, WolfHorrorKnowledgeLibrary.Entry>>()
+                fun sourceStampForEntry(
+                    entry: WolfHorrorKnowledgeLibrary.Entry,
+                    previous: WolfStoryOriginalityReviewEngine.SourceStamp?,
+                    selectedNow: Boolean
+                ): WolfStoryOriginalityReviewEngine.SourceStamp {
+                    val metadataChanged = previous != null && (
+                        previous.title != entry.title ||
+                            previous.sourceType != entry.sourceType ||
+                            previous.sourceLabel != entry.sourceLabel ||
+                            previous.sourceDate != entry.sourceDate
+                        )
+                    val usages = buildList {
+                        addAll(previous?.usages.orEmpty())
+                        if (metadataChanged) add("تم تحديث بيانات المصدر في المكتبة بعد استخدامه")
+                        if (selectedNow) add("اختير للمراجعة الحالية")
+                    }.distinct()
+                    return WolfStoryOriginalityReviewEngine.SourceStamp(
+                        id = entry.id,
+                        title = entry.title,
+                        sourceType = entry.sourceType,
+                        sourceLabel = entry.sourceLabel,
+                        contentFingerprint = entry.contentFingerprint,
+                        sourceDate = entry.sourceDate,
+                        usages = usages
+                    )
+                }
+
                 permittedEntries.values.filter { it.id in selectedIds }.forEach { entry ->
                     val previous = historicalSources.firstOrNull {
                         it.id == entry.id && it.contentFingerprint == entry.contentFingerprint
                     }
-                    val source = if (previous == null) {
-                        WolfStoryOriginalityReviewEngine.SourceStamp(
-                            id = entry.id,
-                            title = entry.title,
-                            sourceType = entry.sourceType,
-                            sourceLabel = entry.sourceLabel,
-                            contentFingerprint = entry.contentFingerprint,
-                            sourceDate = entry.sourceDate,
-                            usages = listOf("اختير للمراجعة الحالية")
-                        )
-                    } else {
-                        previous.copy(usages = (previous.usages + "اختير للمراجعة الحالية").distinct())
-                    }
+                    val source = sourceStampForEntry(entry, previous, selectedNow = true)
                     candidates["${source.id}|${source.contentFingerprint}"] = source to entry
                 }
                 historicalSources.forEach { source ->
                     val entry = permittedEntries[source.id] ?: return@forEach
+                    val sourceForReport = if (source.contentFingerprint == entry.contentFingerprint) {
+                        sourceStampForEntry(entry, source, selectedNow = false)
+                    } else {
+                        source
+                    }
                     candidates.putIfAbsent(
                         "${source.id}|${source.contentFingerprint}",
-                        source to entry
+                        sourceForReport to entry
                     )
                 }
 
@@ -738,6 +758,14 @@ class WolfOfflineStoryAiActivity : Activity() {
                                 ?: error("تغيرت صلاحية مرجع ${source.title} منذ الفحص. أعد مراجعة الأصالة قبل الاعتماد.")
                             require(entry.contentFingerprint == source.contentFingerprint) {
                                 "تغير محتوى مرجع ${source.title} منذ الفحص. أعد مراجعة الأصالة قبل الاعتماد."
+                            }
+                            require(
+                                entry.title == source.title &&
+                                    entry.sourceType == source.sourceType &&
+                                    entry.sourceLabel == source.sourceLabel &&
+                                    entry.sourceDate == source.sourceDate
+                            ) {
+                                "تغيرت بيانات مرجع ${source.title} منذ الفحص. أعد مراجعة الأصالة قبل الاعتماد."
                             }
                             val currentText = WolfHorrorKnowledgeLibrary.readContent(libraryRoot, source.id)
                                 ?: error("تعذر قراءة مرجع ${source.title}. أعد مراجعة الأصالة قبل الاعتماد.")
