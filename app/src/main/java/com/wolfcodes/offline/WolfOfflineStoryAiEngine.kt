@@ -263,8 +263,10 @@ object WolfOfflineStoryAiEngine {
             if (!target.exists()) backup.renameTo(target) else backup.delete()
         }
         return root.listFiles { f -> f.isFile && f.name.endsWith(".json") }
-            ?.sortedByDescending { it.lastModified() }?.firstOrNull()
-            ?.let { runCatching { readSession(JSONObject(it.readText(Charsets.UTF_8))) }.getOrNull() }
+            ?.sortedByDescending { it.lastModified() }
+            ?.firstNotNullOfOrNull { file ->
+                runCatching { readSession(JSONObject(file.readText(Charsets.UTF_8))) }.getOrNull()
+            }
     }
 
     private fun briefJson(v: Brief) = JSONObject().put("title", v.title).put("premise", v.premise)
