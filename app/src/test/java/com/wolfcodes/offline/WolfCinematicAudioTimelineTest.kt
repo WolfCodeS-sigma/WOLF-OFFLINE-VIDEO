@@ -34,6 +34,15 @@ class WolfCinematicAudioTimelineTest {
     }
 
     @Test
+    fun veryShortNarrationStillProducesTheMinimumFiveSecondFilm() {
+        val plan = WolfCinematicAudioTimeline.create(5, true, 1_000L)
+        assertEquals(3, plan.introSeconds)
+        assertEquals(1, plan.narrationSeconds)
+        assertEquals(5, plan.totalVideoSeconds)
+        assertEquals(1_000_000L, plan.narrationLimitUs)
+    }
+
+    @Test
     fun fullThirtyMinuteNarrationIsPreservedWhenIntroIsDisabled() {
         val plan = WolfCinematicAudioTimeline.create(1800, false, 1_800_000L)
         assertEquals(1800, plan.narrationSeconds)
