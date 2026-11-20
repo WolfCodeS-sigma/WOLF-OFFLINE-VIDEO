@@ -7,7 +7,6 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
 import kotlin.math.max
-import kotlin.math.min
 
 /**
  * Isolated offline pipeline for user-supplied still images.
@@ -80,7 +79,7 @@ object WolfUploadedImageEngine {
         } catch (_: Exception) {
             try {
                 canvas.drawColor(Color.BLACK)
-                drawOriginal(canvas, width, height, prepared.source, shotIndex, progress, caption)
+                drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, caption)
                 Result.ORIGINAL_IMAGE
             } catch (_: Exception) {
                 safeFrame(canvas, width, height)
@@ -114,12 +113,15 @@ object WolfUploadedImageEngine {
                 (shotCrop.bottom * scale).toInt().coerceIn(1, layers.background.height)
             )
             if (layerSource.width() <= 0 || layerSource.height() <= 0) {
-                drawOriginal(canvas, width, height, source, shotIndex, progress, caption)
+                drawOriginal(canvas, width, height, source, sceneIndex, shotIndex, progress, caption)
             } else {
-                WolfSceneDepthComposer.renderImageLayers(
-                    canvas, width.toFloat(), height.toFloat(), sceneIndex, progress,
-                    layers, layerSource, destination, cameraRotation(sceneIndex, progress, shotIndex)
-                )
+                canvas.drawColor(Color.BLACK)
+                drawDepthPlane(canvas, width, height, sceneIndex, progress, layers.background,
+                    layerSource, destination, cameraRotation(sceneIndex, progress, shotIndex), 0.16f, 1.018f, 0.006f)
+                drawDepthPlane(canvas, width, height, sceneIndex, progress, layers.midground,
+                    layerSource, destination, cameraRotation(sceneIndex, progress, shotIndex), 0.54f, 1.038f, 0.012f)
+                drawDepthPlane(canvas, width, height, sceneIndex, progress, layers.foreground,
+                    layerSource, destination, cameraRotation(sceneIndex, progress, shotIndex), 1.0f, 1.058f, 0.019f)
             }
         } else {
             canvas.drawColor(Color.BLACK)
@@ -133,17 +135,52 @@ object WolfUploadedImageEngine {
         height: Int,
         source: Bitmap,
         shotIndex: Int,
+        sceneIndex: Int,
+        shotIndex: Int,
         progress: Float,
         caption: String
     ) {
         val crop = shotCrop(cropForAspect(source.width, source.height, width, height), shotIndex, progress)
-        val target = destination(width, height, shotIndex, progress, 0, caption)
+        val target = destination(width, height, shotIndex, progress, sceneIndex, caption)
         val save = canvas.save()
         try {
-            canvas.rotate(cameraRotation(0, progress, shotIndex), width / 2f, height / 2f)
+            canvas.rotate(cameraRotation(sceneIndex, progress, shotIndex), width / 2f, height / 2f)
             canvas.drawBitmap(source, crop, target, imagePaint)
         } finally {
             canvas.restoreToCount(save)
+        }
+    }
+
+    /** Private image-only compositor; it does not share the procedural depth compositor. */
+    private fun drawDepthPlane(
+        canvas: Canvas,
+        width: Int,
+        height: Int,
+        sceneIndex: Int,
+        progress: Float,
+        bitmap: Bitmap,
+        source: Rect,
+        destination: RectF,
+        rotationDegrees: Float,
+        parallax: Float,
+        baseScale: Float,
+        travel: Float
+    ) {
+        if (bitmap.isRecycled) return
+        val t = progress.coerceIn(0f, 1f)
+        val phase = sceneIndex * 0.73f + t * 6.2831853f
+        val dx = kotlin.math.sin(phase.toDouble()).toFloat() * width * 0.018f * parallax
+        val dy = kotlin.math.sin((phase * 0.61f + 1.2f).toDouble()).toFloat() * height * 0.009f * parallax
+        val scale = baseScale + travel * t
+        val saved = canvas.save()
+        try {
+            canvas.translate(width * 0.5f + dx, height * 0.5f + dy)
+            canvas.scale(scale, scale)
+            canvas.rotate(rotationDegrees, 0f, 0f)
+            canvas.translate(-width * 0.5f, -height * 0.5f)
+            canvas.drawBitmap(bitmap, source, destination, imagePaint)
+        } finally {
+            canvas.restoreToCount(saved)
         }
     }
 
