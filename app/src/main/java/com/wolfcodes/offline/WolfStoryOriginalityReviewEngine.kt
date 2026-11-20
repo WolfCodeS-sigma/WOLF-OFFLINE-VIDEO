@@ -475,12 +475,13 @@ object WolfStoryOriginalityReviewEngine {
         sourceShingles: Shingles
     ): ContinuousMatch {
         var previousRuns = HashMap<Int, Int>()
+        var currentRuns = HashMap<Int, Int>()
         var bestWindows = 0
         val bestSamples = ArrayList<String>()
 
         storyHashes.forEachIndexed { storyStart, hash ->
+            currentRuns.clear()
             val sourceStarts = sourceShingles.sourcePositions[hash]
-            val currentRuns = HashMap<Int, Int>()
             if (hash != HASH_SENTINEL && sourceStarts != null) {
                 sourceStarts.forEach { sourceStart ->
                     val runWindows = (previousRuns[sourceStart - 1] ?: 0) + 1
@@ -503,7 +504,9 @@ object WolfStoryOriginalityReviewEngine {
                     }
                 }
             }
+            val previousBuffer = previousRuns
             previousRuns = currentRuns
+            currentRuns = previousBuffer
         }
         return ContinuousMatch(
             wordCount = if (bestWindows == 0) 0 else bestWindows + SHINGLE_WORDS - 1,
