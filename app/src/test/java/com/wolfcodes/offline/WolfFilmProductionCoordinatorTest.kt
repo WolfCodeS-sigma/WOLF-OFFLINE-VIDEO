@@ -28,6 +28,33 @@ class WolfFilmProductionCoordinatorTest {
         assertTrue(plan.chapters.flatMap { it.slices }.all { it.shotIndex in 0..2 })
     }
 
+    @Test fun keepsWholeShotsAtChapterBoundariesWhenTheyFitAChapter() {
+        val plan = WolfFilmProductionCoordinator.createPlan(
+            framesPerScene = listOf(1_200),
+            framesPerSecond = 1,
+            introFrames = 0,
+            chapterSeconds = 700
+        )
+
+        assertEquals(3, plan.chapters.size)
+        plan.chapters.forEach { chapter ->
+            assertEquals(1, chapter.slices.size)
+            assertEquals(0, chapter.slices.single().shotStartFrame)
+            assertEquals(400, chapter.slices.single().frameCount)
+        }
+    }
+
+    @Test fun rejectsAnIntroThatCannotFitInsideTheFirstChapter() {
+        assertTrue(runCatching {
+            WolfFilmProductionCoordinator.createPlan(
+                framesPerScene = listOf(600),
+                framesPerSecond = 12,
+                introFrames = 3_600,
+                chapterSeconds = 300
+            )
+        }.isFailure)
+    }
+
     @Test fun splitShotResumesAtExactOffsetAndPreservesOriginalMotionDuration() {
         val plan = WolfFilmProductionCoordinator.createPlan(listOf(21_600), 12, 0)
         val slices = plan.chapters.flatMap { it.slices }.filter { it.shotIndex == 0 }
