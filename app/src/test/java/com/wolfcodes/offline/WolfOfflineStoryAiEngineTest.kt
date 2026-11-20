@@ -100,6 +100,27 @@ class WolfOfflineStoryAiEngineTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun invalidRestoredChapterCountIsRejectedAndOlderSessionSurvives() {
+        val root = Files.createTempDirectory("wolf-story-invalid-plan").toFile()
+        try {
+            val brief = brief(1_600)
+            val validPlan = WolfOfflineStoryAiEngine.parsePlan(
+                """{"chapter_titles":["الأول","الثاني"]}""", brief
+            )
+            val valid = WolfOfflineStoryAiEngine.newSession(brief, validPlan)
+            WolfOfflineStoryAiEngine.saveSession(root, valid)
+            val invalidJson = File(root, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.json")
+            invalidJson.writeText(
+                """{"id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","brief":{"title":"اختبار","premise":"قصة عن باب يظهر في منزل مهجور كل ليلة","genre":"رعب نفسي","setting":"","protagonist":"","tone":"مظلم","ending":"مفتوحة","targetWords":1600},"plan":{"chapterTitles":["فصل واحد"]},"chapters":[],"continuitySummary":"","finalText":""}""",
+                Charsets.UTF_8
+            )
+            invalidJson.setLastModified(System.currentTimeMillis() + 10_000)
+            val restored = WolfOfflineStoryAiEngine.loadLatestSession(root)
+            assertNotNull(restored)
+            assertEquals(valid.id, restored!!.id)
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun latestCorruptSessionDoesNotHideOlderValidCheckpoint() {
         val root = Files.createTempDirectory("wolf-story-latest-fallback").toFile()
         try {
