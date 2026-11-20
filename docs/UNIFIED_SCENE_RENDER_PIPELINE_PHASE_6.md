@@ -13,16 +13,18 @@
 
 ## Runtime fallback
 - If the uploaded-image renderer returns `SAFE_FRAME` or throws while rendering, the same frame is redrawn through `WolfProceduralSceneProductionEngine`.
+- The shot switches permanently to the procedural backend after that failure, so later frames do not repeatedly invoke the failing image renderer.
 - The procedural renderer clears and redraws the frame, so a partially drawn image frame is not left under the fallback scene.
 - Fallback reporting is best-effort: exceptions from the optional diagnostics callback are contained and cannot interrupt image-to-procedural routing.
 - Runtime fallback events are recorded through `WolfDiagnostics` when diagnostics storage is available.
 - The caller retains ownership of the decoded source bitmap. The prepared shot releases only its generated segmentation layers; the encoder releases the source bitmap in its existing `finally` lifecycle.
 
-## No-image verification
-- JVM test `missingUploadedImageSelectsProceduralBackendAndBuildsACompletePlan` invokes the production pipeline preparation API with a null image and asserts that the procedural backend is selected, a complete scene plan is produced for the requested scene, and the fallback reason is recorded.
+## No-image and recovery verification
+- JVM test `missingUploadedImageSelectsAndRendersThroughProceduralBackend` invokes the production preparation API with a null image, then exercises the same backend-dispatch state machine used by the Canvas render entry point. It asserts the procedural callback runs once and the uploaded-image callback is never invoked.
+- JVM test `safeImageFrameSwitchesToProceduralAndStaysThereForTheRestOfTheShot` verifies that a safe-frame result switches the shot to the procedural backend and that subsequent frames bypass the uploaded-image renderer.
 - JVM test `missingImageStillSelectsProceduralBackendWhenDiagnosticsCallbackFails` verifies that an unavailable diagnostics callback cannot interrupt the no-image route.
-- Additional tests verify that failed/unusable analysis selects the procedural route and that usable partial depth layers retain the uploaded-image route.
-- CI runs Android lint and JVM unit tests. No APK, emulator, or physical-device test is performed.
+- Additional tests verify failed/unusable analysis routing and acceptance of usable partial depth layers.
+- CI runs Android lint and JVM unit tests. The dispatch tests do not execute Android Canvas rasterization, encode a full MP4, or replace device testing.
 
 ## Continuity boundary
 - The no-image and failed-analysis route no longer depends on the uploaded-image renderer.
