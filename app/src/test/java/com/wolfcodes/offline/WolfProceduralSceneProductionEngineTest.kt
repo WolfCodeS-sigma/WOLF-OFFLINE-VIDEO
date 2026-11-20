@@ -46,6 +46,11 @@ class WolfProceduralSceneProductionEngineTest {
         val second = WolfProceduralSceneProductionEngine.plan(caption, 4)
 
         assertEquals(first, second)
+        assertEquals(first.objectLayers, second.objectLayers)
+        assertEquals(
+            WolfSceneLayerSystem.plan(first.environment, first.features, first.sceneIndex),
+            first.objectLayers
+        )
         assertEquals(WolfProceduralSceneProductionEngine.Environment.DOOR, first.environment)
         assertTrue(first.visualCaption.contains("باب"))
         assertEquals(caption, first.caption)
