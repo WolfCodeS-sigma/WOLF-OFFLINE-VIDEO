@@ -96,7 +96,16 @@ object WolfOfflineStoryAiEngine {
         }
     }
 
-    fun modelFile(context: Context) = File(context.filesDir, "$MODEL_DIRECTORY/story-model$MODEL_EXTENSION")
+    fun modelFile(context: Context): File = recoverModelFile(File(context.filesDir, MODEL_DIRECTORY))
+
+    internal fun recoverModelFile(directory: File): File {
+        val target = File(directory, "story-model$MODEL_EXTENSION")
+        val backup = File(directory, "model.previous")
+        if (!target.exists() && backup.isFile) backup.renameTo(target)
+        else if (target.isFile && backup.exists()) backup.delete()
+        return target
+    }
+
     fun sessionRoot(context: Context) = File(context.filesDir, SESSION_DIRECTORY)
 
     fun chapterCount(words: Int): Int {
@@ -280,6 +289,7 @@ object WolfOfflineStoryAiEngine {
         val titles = (0 until (p.optJSONArray("chapterTitles")?.length() ?: 0))
             .map { p.getJSONArray("chapterTitles").getString(it) }
         require(titles.isNotEmpty() && titles.size <= MAX_CHAPTERS)
+        require(titles.all { it.isNotBlank() && it.length <= 120 })
         val chapters = (0 until a.length()).map { a.getString(it) }
         require(chapters.size <= titles.size && chapters.all { it.length <= 100_000 })
         require(chapters.sumOf { it.length.toLong() } <= MAX_STORY_CHARS)
