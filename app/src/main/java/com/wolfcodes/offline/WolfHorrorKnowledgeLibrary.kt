@@ -276,6 +276,57 @@ object WolfHorrorKnowledgeLibrary {
     fun updateFromText(root: File, id: String, draft: Draft, text: String): SaveResult =
         update(root, id, draft, text.reader())
 
+    /** Updates catalog fields without loading a large TXT file into the editor. */
+    fun updateMetadata(root: File, id: String, draft: Draft): Entry = synchronized(lock) {
+        require(isSafeId(id)) { "معرّف القصة غير صالح" }
+        val directory = entryDirectory(root, id)
+        require(directory.isDirectory) { "القصة لم تعد موجودة في المكتبة" }
+        val current = readMetadata(directory)
+        val safeDraft = normalizeDraft(draft)
+        val entry = entryFromDraft(
+            id = id,
+            draft = safeDraft.copy(sourceFileName = safeDraft.sourceFileName.ifBlank { current.sourceFileName }),
+            fingerprint = current.contentFingerprint,
+            chars = current.contentChars,
+            bytes = current.contentBytes,
+            createdAt = current.createdAt,
+            updatedAt = System.currentTimeMillis(),
+            sourceAddedAt = current.sourceAddedAt
+        )
+        val existingTerms = readOrRebuildIndex(root, current)
+        writeIndex(directory, entry, existingTerms)
+        writeMetadata(directory, entry)
+        entry
+    }
+
+    /** Bounded preview helpers keep very large imported stories out of EditText and dialogs. */
+    fun readContentPreview(root: File, id: String, maxChars: Int = 250_000): String? =
+        readPreview(root, id, "content", maxChars)
+
+    fun readOriginalPreview(root: File, id: String, maxChars: Int = 40_000): String? =
+        readPreview(root, id, "original", maxChars)
+
+    private fun readPreview(root: File, id: String, kind: String, maxChars: Int): String? = synchronized(lock) {
+        if (!isSafeId(id) || maxChars <= 0) return@synchronized null
+        val entry = load(root, id) ?: return@synchronized null
+        val directory = entryDirectory(root, id)
+        val file = if (kind == "original") File(directory, "original.txt")
+            else contentFile(directory, entry.contentFingerprint)
+        if (!file.isFile) return@synchronized null
+        runCatching {
+            file.reader(Charsets.UTF_8).use { reader ->
+                val output = StringBuilder(minOf(maxChars, 8192))
+                val buffer = CharArray(8192)
+                while (output.length < maxChars) {
+                    val count = reader.read(buffer, 0, minOf(buffer.size, maxChars - output.length))
+                    if (count < 0) break
+                    output.append(buffer, 0, count)
+                }
+                output.toString()
+            }
+        }.getOrNull()
+    }
+
     fun delete(root: File, id: String): Boolean = synchronized(lock) {
         if (!isSafeId(id)) return@synchronized false
         val directory = entryDirectory(root, id)
