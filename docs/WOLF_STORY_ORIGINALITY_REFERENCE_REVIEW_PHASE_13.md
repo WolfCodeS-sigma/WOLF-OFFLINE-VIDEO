@@ -33,7 +33,7 @@ Older sessions created before Phase 13 have no source-use ledger. They can still
 
 ## Narrative diversity and structure screening
 
-The final review also runs `WolfNarrativePatternAudit`, a deterministic offline heuristic over sentence/paragraph segments. It groups Arabic and English synonym cues into ten event families: discovery, investigation, supernatural appearance, pursuit, threat/attack, confrontation, revelation, escape/survival, loss/disappearance, and return/resolution. The report shows detected event families in order, the number of distinct families, a transparent diversity ratio, and event families appearing in three or more segments.
+The final review also runs `WolfNarrativePatternAudit`, a deterministic offline heuristic over sentence/paragraph segments. It groups Arabic and English synonym cues into ten event families: discovery, investigation, sudden appearance, pursuit, threat/attack, confrontation, revelation, escape/survival, loss/disappearance, and return/resolution. The report shows detected event families in order, the number of distinct families, a transparent diversity ratio, and event families appearing in three or more segments.
 
 The same pass raises advisory checks for too few detectable events, low event variety, repeated event families, missing mid-story escalation cues, missing late-story climax cues, and missing ending/consequence cues. These are warnings for the writer, not automatic rejection rules; deliberate repetition and open endings may be valid artistic choices.
 
