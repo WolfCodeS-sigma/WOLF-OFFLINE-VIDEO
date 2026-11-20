@@ -113,11 +113,11 @@ object WolfImageDepthSegmenter {
                 confidence = masks.confidence,
                 separated = masks.separated
             )
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
             allocatedLayers.forEach { layer ->
                 if (!layer.isRecycled) runCatching { layer.recycle() }
             }
-            if (working !== source && !working.isRecycled) working.recycle()
+            if (working !== source && !working.isRecycled) runCatching { working.recycle() }
             throw error
         }
     }

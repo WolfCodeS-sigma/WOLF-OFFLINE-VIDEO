@@ -552,7 +552,8 @@ object OfflineProductionEngine {
             }
             for (s in scenes.indices) {
                 WolfResourceGuard.ensureSafeToContinue(context)
-                val proceduralPlan = WolfProceduralSceneProductionEngine.plan(scenes[s], s)
+                // Build procedural scene state only if a shot has no usable uploaded image.
+                var proceduralPlan: WolfProceduralSceneProductionEngine.ScenePlan? = null
                 val sceneFrames = framesPerScene[s]
                 val baseShotFrames = sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE
                 val extraShotFrames = sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE
@@ -562,6 +563,10 @@ object OfflineProductionEngine {
                     val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
+                    val shotProceduralPlan = if (image == null) {
+                        proceduralPlan ?: WolfProceduralSceneProductionEngine.plan(scenes[s], s)
+                            .also { proceduralPlan = it }
+                    } else null
                     val preparedImage = image?.let { sourceImage ->
                         WolfUploadedImageEngine.prepare(sourceImage) { segmentationError ->
                             WolfDiagnostics.record(
@@ -581,7 +586,7 @@ object OfflineProductionEngine {
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
                                 w, h, scenes[s], s, shotIndex, shotProgress, image, preparedImage, includeWatermark,
-                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps, proceduralPlan
+                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps, shotProceduralPlan
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
                             track = drained.first
@@ -652,7 +657,7 @@ object OfflineProductionEngine {
         shotIndex: Int, t: Float, bitmap: Bitmap?, preparedImage: WolfUploadedImageEngine.PreparedImage?,
         includeWatermark: Boolean, typographyCue: WolfHorrorTypographyEngine.Cue?,
         sceneFrameIndex: Int, fps: Int,
-        proceduralPlan: WolfProceduralSceneProductionEngine.ScenePlan
+        proceduralPlan: WolfProceduralSceneProductionEngine.ScenePlan?
     ) {
         val c: Canvas = surface.lockCanvas(null)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -677,24 +682,9 @@ object OfflineProductionEngine {
                     canvas = c,
                     width = w,
                     height = h,
-                    plan = proceduralPlan,
+                    plan = proceduralPlan ?: throw IllegalStateException("خطة المشهد الإجرائي غير متاحة"),
                     shotIndex = safeShotIndex,
                     progress = t
-                )
-            }
-            if (bitmap != null && !bitmap.isRecycled) {
-                WolfProceduralMotionEngine.renderDepthAware(
-                    canvas = c,
-                    width = w,
-                    height = h,
-                    caption = caption,
-                    sceneIndex = scene,
-                    shotIndex = safeShotIndex,
-                    progress = t,
-                    // Uploaded images already use their own segmentation layers when
-                    // available. Do not paint unrelated procedural props (doors,
-                    // chairs, curtains or branches) over the user's source image.
-                    plannedLayers = emptyList()
                 )
             }
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)

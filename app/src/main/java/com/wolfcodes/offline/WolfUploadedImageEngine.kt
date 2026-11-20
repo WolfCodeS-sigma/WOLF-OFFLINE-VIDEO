@@ -50,6 +50,8 @@ object WolfUploadedImageEngine {
                 candidate.recycle()
                 PreparedImage(source, null, 0f)
             }
+        } catch (failure: OutOfMemoryError) {
+            PreparedImage(source, null, 0f, "OutOfMemoryError")
         } catch (failure: Exception) {
             runCatching { onFailure(failure) }
             PreparedImage(source, null, 0f, failure.javaClass.simpleName)
@@ -76,11 +78,15 @@ object WolfUploadedImageEngine {
         return try {
             renderImage(canvas, width, height, sceneIndex, shotIndex, progress, caption, prepared)
             if (prepared.layers != null) Result.DEPTH_LAYERS else Result.ORIGINAL_IMAGE
+        } catch (_: OutOfMemoryError) {
+            safeFrame(canvas, width, height)
         } catch (_: Exception) {
             try {
                 canvas.drawColor(Color.BLACK)
                 drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, caption)
                 Result.ORIGINAL_IMAGE
+            } catch (_: OutOfMemoryError) {
+                safeFrame(canvas, width, height)
             } catch (_: Exception) {
                 safeFrame(canvas, width, height)
             }
