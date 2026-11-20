@@ -17,11 +17,14 @@ WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected
 - `StoryDirectorEngine.kt` and `OfflineSupportEngines.kt`: deterministic story segmentation, shot planning, pacing, and local visual helpers.
 - `WolfSceneArtEngine.kt`, `WolfSceneAssetStore.kt`, and `WolfProceduralMotionEngine.kt`: scene artwork, optional image slots, procedural character/environment motion, fog, particles, rain, spectral silhouettes, and visual effects.
 - `OfflineProductionEngine.kt`: local frame rendering, H.264 MP4 encoding, audio integration, long-film chapter handling, checkpoint support, recovery paths, and export quality inspection.
-- `WolfStoryVoiceEngine.kt`, `WolfAudioMixer.kt`, `WolfAudioTranscoder.kt`, and `WolfSoundFxEngine.kt`: local narration recording, approval state, audio processing, and procedural sound effects.
+- `WolfStoryVoiceEngine.kt` and `WolfVoiceSegmentStore.kt`: approved-script-bound narration, independently saved recording parts, recovery and ordered AAC/M4A assembly.
+- `WolfAudioMixer.kt`, `WolfAudioTranscoder.kt`, and `WolfSoundFxEngine.kt`: local narration cleanup, voice-aware effects ducking, AAC mixing, and deterministic procedural sound effects.
+- `WolfCinematicAudioTimeline.kt` and `WolfCinematicIdentity.kt`: shared intro/narration/video timing and the approved WOLF CODE S cinematic identity.
 - `WolfLongFilmEngine.kt`: chapter planning and resumable chapter checkpoints.
 - `WolfFilmProductionCoordinator.kt`: Phase 14 orchestration for 12-scene/36-shot plans, shot-aligned five-minute chapters, resumable motion offsets, and ordered film assembly.
 - `WolfDiagnostics.kt`, `WolfResourceGuard.kt`, `WolfMemoryManager.kt`, and `WolfFilmQualityInspector.kt`: diagnostics, resource protection, memory safeguards, and output inspection.
 - `app/src/test`: offline unit tests.
+- `docs/WOLF_AUDIO_CINEMATIC_IDENTITY_PHASE_15.md`: Phase 15 implementation notes and verification boundaries.
 
 ## Build requirements
 
