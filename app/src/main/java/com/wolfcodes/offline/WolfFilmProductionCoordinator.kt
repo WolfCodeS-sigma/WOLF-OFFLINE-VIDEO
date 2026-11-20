@@ -115,8 +115,8 @@ object WolfFilmProductionCoordinator {
                 sceneOffset += shotFrames
             }
         }
-        require(actualIntroFrames in 0..introFrames.coerceAtLeast(0)) {
-            "ميزانية المقدمة غير متسقة"
+        require(actualIntroFrames == introFrames) {
+            "لم تحتفظ خطة الفصول بجميع إطارات المقدمة المطلوبة"
         }
         require(expectedBodyFrames.toLong() + actualIntroFrames.toLong() <= 1_800L * framesPerSecond) {
             "تجاوزت مدة الفيلم الحد الأقصى البالغ 30 دقيقة"
