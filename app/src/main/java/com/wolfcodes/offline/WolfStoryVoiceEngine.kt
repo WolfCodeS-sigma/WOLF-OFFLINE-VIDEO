@@ -208,6 +208,7 @@ object WolfStoryVoiceStore {
             current, newStory, System.currentTimeMillis()
         )
         current.voiceFilePath?.let { File(it).delete() }
+        WolfVoiceSegmentStore.clearProject(context, projectId)
         writeUnlocked(context, updated)
         updated
     }
