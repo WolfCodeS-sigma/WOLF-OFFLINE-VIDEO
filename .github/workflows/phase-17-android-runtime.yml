@@ -66,39 +66,7 @@ jobs:
           disable-linux-hw-accel: true
           emulator-boot-timeout: 1800
           working-directory: ${{ github.workspace }}
-          script: |
-            set -euo pipefail
-            APK="$GITHUB_WORKSPACE/app/build/outputs/apk/debug/app-debug.apk"
-            test -s "$APK"
-            adb install -r "$APK"
-            adb shell svc wifi disable
-            adb shell svc data disable
-            adb shell settings put global airplane_mode_on 1
-            adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true
-            test "$(adb shell settings get global airplane_mode_on | tr -d '\r')" = "1"
-            test "$(adb shell settings get global wifi_on | tr -d '\r')" = "0"
-            adb shell am force-stop com.wolfcodes.offline
-            adb shell am start -W -n com.wolfcodes.offline/.MainActivity
-            for attempt in $(seq 1 30); do
-              if adb shell pidof com.wolfcodes.offline >/dev/null 2>&1; then
-                break
-              fi
-              sleep 1
-            done
-            adb shell pidof com.wolfcodes.offline
-            for attempt in $(seq 1 30); do
-              adb shell uiautomator dump /sdcard/wolf-window.xml >/dev/null 2>&1 || true
-              adb pull /sdcard/wolf-window.xml "$GITHUB_WORKSPACE/wolf-window.xml" >/dev/null 2>&1 || true
-              if test -s "$GITHUB_WORKSPACE/wolf-window.xml" && grep -q "WOLF OFFLINE VIDEO" "$GITHUB_WORKSPACE/wolf-window.xml"; then
-                break
-              fi
-              sleep 1
-            done
-            test -s "$GITHUB_WORKSPACE/wolf-window.xml"
-            grep -q "WOLF OFFLINE VIDEO" "$GITHUB_WORKSPACE/wolf-window.xml"
-            adb shell screencap -p /sdcard/wolf-phase17.png
-            adb pull /sdcard/wolf-phase17.png "$GITHUB_WORKSPACE/wolf-phase17.png"
-            test -s "$GITHUB_WORKSPACE/wolf-phase17.png"
+          script: bash "$GITHUB_WORKSPACE/.github/scripts/phase-17-android-runtime-smoke.sh"
 
       - name: Upload debug APK
         if: always()
