@@ -74,14 +74,18 @@ object WolfImageDepthSegmenter {
             Bitmap.createScaledBitmap(source, width, height, true)
         }
 
+        val allocatedLayers = mutableListOf<Bitmap>()
         try {
             val pixels = IntArray(width * height)
             working.getPixels(pixels, 0, width, 0, 0, width, height)
             val masks = analyze(width, height, pixels)
             val backgroundPixels = buildCleanPlate(width, height, pixels, masks.foregroundMask)
             val background = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                .also(allocatedLayers::add)
             val midground = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                .also(allocatedLayers::add)
             val foreground = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                .also(allocatedLayers::add)
             val midPixels = IntArray(pixels.size)
             val frontPixels = IntArray(pixels.size)
 
@@ -110,6 +114,9 @@ object WolfImageDepthSegmenter {
                 separated = masks.separated
             )
         } catch (error: Exception) {
+            allocatedLayers.forEach { layer ->
+                if (!layer.isRecycled) runCatching { layer.recycle() }
+            }
             if (working !== source && !working.isRecycled) working.recycle()
             throw error
         }

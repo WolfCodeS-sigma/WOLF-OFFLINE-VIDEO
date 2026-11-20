@@ -26,7 +26,7 @@ object WolfUploadedImageEngine {
         val warning: String? = null
     ) {
         fun recycle() {
-            layers?.recycle()
+            runCatching { layers?.recycle() }
         }
     }
 
@@ -39,10 +39,10 @@ object WolfUploadedImageEngine {
 
     /** Analysis is best-effort: the source bitmap remains caller-owned and untouched. */
     fun prepare(source: Bitmap, onFailure: (Exception) -> Unit = {}): PreparedImage {
-        require(!source.isRecycled && source.width > 0 && source.height > 0) {
-            "الصورة المرفوعة غير صالحة"
-        }
         return try {
+            require(!source.isRecycled && source.width > 0 && source.height > 0) {
+                "الصورة المرفوعة غير صالحة"
+            }
             val candidate = WolfImageDepthSegmenter.segment(source)
             if (shouldUseDepthLayers(candidate.separated, candidate.confidence)) {
                 PreparedImage(source, candidate, candidate.confidence)
