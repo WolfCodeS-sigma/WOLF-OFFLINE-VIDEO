@@ -238,6 +238,7 @@ object WolfAudioMixer {
                 if (lastWrittenSample < 0L) throw IllegalStateException("ملف الصوت لا يحتوي عينات قابلة للقراءة")
                 pcm.flush()
                 fileStream.fd.sync()
+                }
             }
             success = true
         } finally {
