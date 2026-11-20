@@ -61,6 +61,7 @@ object WolfStoryOriginalityReviewEngine {
         val storyFingerprint: String,
         val storyWords: Int,
         val checkedSources: Int,
+        val checkedSourceVersions: List<SourceStamp>,
         val overallSeverity: Severity,
         val overallOverlapPercent: Int,
         val findings: List<SourceFinding>,
@@ -79,8 +80,17 @@ object WolfStoryOriginalityReviewEngine {
         val hashes: LongArray,
         val unique: Set<Long>,
         val repeated: Set<Long>,
-        val repeatedSamples: List<String>
+        val repeatedSamples: List<String>,
+        val sourcePositions: Map<Long, IntArray>,
+        val positionLimitReached: Boolean
     )
+
+    private data class ContinuousMatch(
+        val wordCount: Int,
+        val phraseSamples: List<String>
+    )
+
+    private const val MAX_POSITIONS_PER_SHINGLE = 128
 
     private val stopWords = setOf(
         "في", "من", "على", "الى", "عن", "ان", "كان", "كانت", "يكون", "تكون",
@@ -240,12 +250,14 @@ object WolfStoryOriginalityReviewEngine {
         val uniqueStoryShingles = storyShingles.unique
         val allMatchedStoryShingles = HashSet<Long>()
         val findings = ArrayList<SourceFinding>()
+        val checkedSourceVersions = ArrayList<SourceStamp>()
         val unavailable = unavailableSources.toMutableList()
         val seenContentFingerprints = HashSet<String>()
         var checkedSources = 0
         var referenceWordCount = 0
         var sourceTruncationCount = 0
         var sourceLimitReached = false
+        var positionLimitReached = false
         val iterator = references.iterator()
 
         while (iterator.hasNext()) {
@@ -267,6 +279,7 @@ object WolfStoryOriginalityReviewEngine {
                 )
                 continue
             }
+            checkedSourceVersions += reference.source
             if (!seenContentFingerprints.add(actualFingerprint)) continue
             val remainingWords = MAX_TOTAL_REFERENCE_WORDS - referenceWordCount
             if (remainingWords <= 0) {
@@ -283,41 +296,21 @@ object WolfStoryOriginalityReviewEngine {
             checkedSources++
 
             val sourceShingles = buildShingles(sourceTokenized.words)
+            if (sourceShingles.positionLimitReached) positionLimitReached = true
             if (uniqueStoryShingles.isEmpty() || sourceShingles.unique.isEmpty()) continue
 
             var matchingWindowCount = 0
-            var runStart = -1
-            var maximumContinuousWords = 0
-            val samples = ArrayList<String>()
-
-            fun finishRun(endExclusive: Int) {
-                if (runStart < 0) return
-                val wordCount = endExclusive - runStart + SHINGLE_WORDS - 1
-                if (wordCount > maximumContinuousWords) maximumContinuousWords = wordCount
-                if (wordCount >= SHINGLE_WORDS && samples.size < 5) {
-                    val phrase = storyTokenized.words.subList(
-                        runStart,
-                        (endExclusive + SHINGLE_WORDS - 1).coerceAtMost(storyTokenized.words.size)
-                    ).joinToString(" ")
-                    if (phrase.isNotBlank() && phrase !in samples) samples += phrase
-                }
-                runStart = -1
-            }
-
-            storyShingles.hashes.forEachIndexed { index, hash ->
-                val matched = hash != HASH_SENTINEL && hash in sourceShingles.unique
-                if (matched) {
+            storyShingles.hashes.forEach { hash ->
+                if (hash != HASH_SENTINEL && hash in sourceShingles.unique) {
                     matchingWindowCount++
                     allMatchedStoryShingles += hash
-                    if (runStart < 0) runStart = index
-                } else {
-                    finishRun(index)
                 }
             }
-            finishRun(storyShingles.hashes.size)
 
             val distinctMatched = uniqueStoryShingles.count { it in sourceShingles.unique }
             if (distinctMatched == 0) continue
+            val continuousMatch = longestContinuousMatch(storyTokenized.words, storyShingles.hashes, sourceShingles)
+            val maximumContinuousWords = continuousMatch.wordCount
             val coverage = ((distinctMatched.toDouble() / uniqueStoryShingles.size) * 100.0)
                 .roundToInt().coerceIn(0, 100)
             val severity = when {
@@ -332,7 +325,7 @@ object WolfStoryOriginalityReviewEngine {
                 distinctMatchedPhrases = distinctMatched,
                 matchingWindowCount = matchingWindowCount,
                 maximumContinuousMatchWords = maximumContinuousWords,
-                phraseSamples = samples
+                phraseSamples = continuousMatch.phraseSamples
             )
         }
 
@@ -346,6 +339,7 @@ object WolfStoryOriginalityReviewEngine {
             if (storyTokenized.truncated) add("تم تحليل أول $MAX_REVIEW_WORDS كلمة من القصة فقط بسبب حد الذاكرة الآمن.")
             if (sourceTruncationCount > 0) add("تم اختصار محتوى ${sourceTruncationCount} مرجعًا وفق حد المعالجة المحلي.")
             if (sourceLimitReached) add("توقف الفحص عند الحد الآمن لعدد المراجع أو الكلمات؛ توجد مصادر أخرى لم تدخل هذه الجولة.")
+            if (positionLimitReached) add("تم تقييد مواضع العبارات شديدة التكرار لتجنب استهلاك الذاكرة؛ قد لا يظهر طول بعض التطابقات المتكررة بالكامل.")
             if (findings.isNotEmpty()) add("التطابق اللفظي مؤشر للمراجعة البشرية وليس دليلًا قاطعًا على النسخ.")
             add("الفحص محلي ويشمل النصوص المرجعية المتاحة والمسموح بها فقط؛ لا يبحث في الإنترنت أو قواعد نشر خارجية.")
         }
@@ -354,6 +348,7 @@ object WolfStoryOriginalityReviewEngine {
             storyFingerprint = fingerprint(story),
             storyWords = storyTokenized.words.size,
             checkedSources = checkedSources,
+            checkedSourceVersions = checkedSourceVersions.distinctBy(::sourceKey),
             overallSeverity = overallSeverity,
             overallOverlapPercent = overallOverlap,
             findings = findings.sortedWith(
@@ -427,7 +422,11 @@ object WolfStoryOriginalityReviewEngine {
         val unique = HashSet<Long>()
         val repeated = HashSet<Long>()
         val repeatedSamples = ArrayList<String>()
-        if (words.size < SHINGLE_WORDS) return Shingles(hashes, unique, repeated, repeatedSamples)
+        val mutablePositions = HashMap<Long, MutableList<Int>>()
+        var positionLimitReached = false
+        if (words.size < SHINGLE_WORDS) {
+            return Shingles(hashes, unique, repeated, repeatedSamples, emptyMap(), false)
+        }
 
         for (start in 0..(words.size - SHINGLE_WORDS)) {
             if (!isInformativeShingle(words, start)) continue
@@ -436,8 +435,54 @@ object WolfStoryOriginalityReviewEngine {
             if (!unique.add(hash) && repeated.add(hash) && repeatedSamples.size < 5) {
                 repeatedSamples += words.subList(start, start + SHINGLE_WORDS).joinToString(" ")
             }
+            val positions = mutablePositions.getOrPut(hash) { ArrayList() }
+            if (positions.size < MAX_POSITIONS_PER_SHINGLE) positions += start
+            else positionLimitReached = true
         }
-        return Shingles(hashes, unique, repeated, repeatedSamples)
+        val sourcePositions = mutablePositions.mapValues { (_, positions) -> positions.toIntArray() }
+        return Shingles(hashes, unique, repeated, repeatedSamples, sourcePositions, positionLimitReached)
+    }
+
+    private fun longestContinuousMatch(
+        storyWords: List<String>,
+        storyHashes: LongArray,
+        sourceShingles: Shingles
+    ): ContinuousMatch {
+        var previousRuns = HashMap<Int, Int>()
+        var bestWindows = 0
+        val bestSamples = ArrayList<String>()
+
+        storyHashes.forEachIndexed { storyStart, hash ->
+            val sourceStarts = sourceShingles.sourcePositions[hash]
+            val currentRuns = HashMap<Int, Int>()
+            if (hash != HASH_SENTINEL && sourceStarts != null) {
+                sourceStarts.forEach { sourceStart ->
+                    val runWindows = (previousRuns[sourceStart - 1] ?: 0) + 1
+                    currentRuns[sourceStart] = runWindows
+                    when {
+                        runWindows > bestWindows -> {
+                            bestWindows = runWindows
+                            bestSamples.clear()
+                            val start = storyStart - runWindows + 1
+                            val end = (storyStart + SHINGLE_WORDS).coerceAtMost(storyWords.size)
+                            val sample = storyWords.subList(start, end).joinToString(" ")
+                            if (sample.isNotBlank()) bestSamples += sample
+                        }
+                        runWindows == bestWindows && bestSamples.size < 5 -> {
+                            val start = storyStart - runWindows + 1
+                            val end = (storyStart + SHINGLE_WORDS).coerceAtMost(storyWords.size)
+                            val sample = storyWords.subList(start, end).joinToString(" ")
+                            if (sample.isNotBlank() && sample !in bestSamples) bestSamples += sample
+                        }
+                    }
+                }
+            }
+            previousRuns = currentRuns
+        }
+        return ContinuousMatch(
+            wordCount = if (bestWindows == 0) 0 else bestWindows + SHINGLE_WORDS - 1,
+            phraseSamples = bestSamples
+        )
     }
 
     private fun isInformativeShingle(words: List<String>, start: Int): Boolean {
@@ -465,6 +510,13 @@ object WolfStoryOriginalityReviewEngine {
         appendLine("عدد كلمات النص المفحوص: ${report.storyWords}")
         appendLine("المراجع التي قورنت فعليًا: ${report.checkedSources}")
         appendLine("مستوى التشابه اللفظي: ${report.overallSeverity.label}")
+        if (report.checkedSourceVersions.isNotEmpty()) {
+            appendLine("المراجع التي تمت مراجعتها:")
+            report.checkedSourceVersions.forEach { source ->
+                appendLine("• ${source.title} — ${source.sourceType}")
+                if (source.usages.isNotEmpty()) appendLine("  استُخدم في: ${source.usages.joinToString("، ")}")
+            }
+        }
         appendLine("تغطية العبارات المتطابقة من بصمات النص: ${report.overallOverlapPercent}%")
         appendLine("العبارات الطويلة المتكررة داخل القصة: ${report.internalRepeatedPhraseCount}")
 
