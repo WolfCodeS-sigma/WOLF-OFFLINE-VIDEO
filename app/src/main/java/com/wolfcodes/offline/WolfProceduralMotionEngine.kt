@@ -171,11 +171,14 @@ object WolfProceduralMotionEngine {
         val driftY = cos((phase * 0.61f + 1.2f).toDouble()).toFloat() * height * 0.009f * factor
         val scale = 1.012f + 0.019f * factor * progress
         val saved = canvas.save()
-        canvas.translate(width * 0.5f + driftX, height * 0.5f + driftY)
-        canvas.scale(scale, scale)
-        canvas.translate(-width * 0.5f, -height * 0.5f)
-        draw.invoke(canvas)
-        canvas.restoreToCount(saved)
+        try {
+            canvas.translate(width * 0.5f + driftX, height * 0.5f + driftY)
+            canvas.scale(scale, scale)
+            canvas.translate(-width * 0.5f, -height * 0.5f)
+            draw.invoke(canvas)
+        } finally {
+            canvas.restoreToCount(saved)
+        }
     }
 
     fun featuresFor(caption: String): SceneFeatures {
