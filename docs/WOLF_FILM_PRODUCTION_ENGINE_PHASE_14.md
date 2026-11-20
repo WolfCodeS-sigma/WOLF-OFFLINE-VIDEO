@@ -6,7 +6,7 @@ Phase 14 completes the offline film-production orchestration while preserving th
 
 - Story segmentation remains bounded to at most 12 scenes.
 - Each scene receives exactly three shot slots.
-- Film duration presets are 5, 10, 15, 20, 25, and 30 minutes; custom duration remains available within the same range.
+- Film duration presets are 5, 10, 15, 20, 25, and 30 minutes; custom duration in seconds remains available, preserving existing shorter projects.
 - Long films are split into production chapters of at most approximately five minutes.
 - Chapters are planned at shot boundaries where possible. If a single shot exceeds the chapter limit, it is split into contiguous frame ranges with its original shot index, local offset, and original shot duration preserved.
 - A resumed segment continues the original camera/motion progress instead of restarting the shot animation.
