@@ -57,6 +57,11 @@ object WolfVoiceSegmentStore {
         ) return@synchronized
         val entries = readEntries(directory, projectId)
         if (entries.isNotEmpty()) return@synchronized
+        val hasRecoverableParts = directory.listFiles()?.any {
+            it.name.startsWith("$projectId-segment-") &&
+                it.name.endsWith(".m4a") && isValidAac(it)
+        } == true
+        if (hasRecoverableParts) return@synchronized
         val duration = readDurationMs(source).takeIf { it in 1_000L..MAX_DURATION_MS } ?: durationMs
         if (duration !in 1_000L..MAX_DURATION_MS) return@synchronized
         val destination = File(directory, segmentFileName(projectId, 1))
