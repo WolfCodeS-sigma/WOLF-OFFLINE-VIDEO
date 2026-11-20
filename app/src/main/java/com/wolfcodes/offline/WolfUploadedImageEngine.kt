@@ -134,7 +134,6 @@ object WolfUploadedImageEngine {
         width: Int,
         height: Int,
         source: Bitmap,
-        shotIndex: Int,
         sceneIndex: Int,
         shotIndex: Int,
         progress: Float,
