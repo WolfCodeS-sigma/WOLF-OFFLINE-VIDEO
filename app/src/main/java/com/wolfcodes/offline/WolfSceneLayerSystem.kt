@@ -17,6 +17,9 @@ import kotlin.math.sin
  */
 object WolfSceneLayerSystem {
 
+    // Reused for every frame to avoid allocating a Paint during video rendering.
+    private val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+
     enum class Depth { BACKGROUND, MIDGROUND, FOREGROUND }
     enum class Kind { CHAIR, DOOR, CURTAIN, BRANCH, HANGING_LIGHT, SHADOW }
 
@@ -115,6 +118,7 @@ object WolfSceneLayerSystem {
     }
 
     /** Draw each object independently, preserving the caller's canvas state. */
+    @Synchronized
     fun render(
         canvas: Canvas,
         width: Int,
@@ -123,7 +127,7 @@ object WolfSceneLayerSystem {
         progress: Float
     ) {
         if (width <= 0 || height <= 0 || elements.isEmpty()) return
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val paint = layerPaint
         elements.forEach { element ->
             val pose = pose(element, progress)
             val saved = canvas.save()
