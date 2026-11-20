@@ -299,7 +299,7 @@ object WolfStoryOriginalityReviewEngine {
             referenceWordCount += sourceTokenized.words.size
             checkedSources++
 
-            val sourceShingles = buildShingles(sourceTokenized.words)
+            val sourceShingles = buildShingles(sourceTokenized.words, uniqueStoryShingles)
             if (sourceShingles.positionLimitReached) positionLimitReached = true
             if (uniqueStoryShingles.isEmpty() || sourceShingles.unique.isEmpty()) continue
 
@@ -422,7 +422,10 @@ object WolfStoryOriginalityReviewEngine {
             type == Character.ENCLOSING_MARK.toInt()
     }
 
-    private fun buildShingles(words: List<String>): Shingles {
+    private fun buildShingles(
+        words: List<String>,
+        collectPositionsFor: Set<Long>? = null
+    ): Shingles {
         val hashes = LongArray(words.size) { HASH_SENTINEL }
         val unique = HashSet<Long>()
         val repeated = HashSet<Long>()
@@ -440,9 +443,11 @@ object WolfStoryOriginalityReviewEngine {
             if (!unique.add(hash) && repeated.add(hash) && repeatedSamples.size < 5) {
                 repeatedSamples += words.subList(start, start + SHINGLE_WORDS).joinToString(" ")
             }
-            val positions = mutablePositions.getOrPut(hash) { ArrayList() }
-            if (positions.size < MAX_POSITIONS_PER_SHINGLE) positions += start
-            else positionLimitReached = true
+            if (collectPositionsFor?.contains(hash) == true) {
+                val positions = mutablePositions.getOrPut(hash) { ArrayList() }
+                if (positions.size < MAX_POSITIONS_PER_SHINGLE) positions += start
+                else positionLimitReached = true
+            }
         }
         val sourcePositions = mutablePositions.mapValues { (_, positions) -> positions.toIntArray() }
         return Shingles(hashes, unique, repeated, repeatedSamples, sourcePositions, positionLimitReached)
@@ -470,13 +475,13 @@ object WolfStoryOriginalityReviewEngine {
                             bestSamples.clear()
                             val start = storyStart - runWindows + 1
                             val end = (storyStart + SHINGLE_WORDS).coerceAtMost(storyWords.size)
-                            val sample = storyWords.subList(start, end).joinToString(" ")
+                            val sample = phraseSample(storyWords, start, end)
                             if (sample.isNotBlank()) bestSamples += sample
                         }
                         runWindows == bestWindows && bestSamples.size < 5 -> {
                             val start = storyStart - runWindows + 1
                             val end = (storyStart + SHINGLE_WORDS).coerceAtMost(storyWords.size)
-                            val sample = storyWords.subList(start, end).joinToString(" ")
+                            val sample = phraseSample(storyWords, start, end)
                             if (sample.isNotBlank() && sample !in bestSamples) bestSamples += sample
                         }
                     }
@@ -488,6 +493,12 @@ object WolfStoryOriginalityReviewEngine {
             wordCount = if (bestWindows == 0) 0 else bestWindows + SHINGLE_WORDS - 1,
             phraseSamples = bestSamples
         )
+    }
+
+    private fun phraseSample(words: List<String>, start: Int, end: Int): String {
+        val selected = words.subList(start, end)
+        val sample = selected.take(40).joinToString(" ").take(500)
+        return if (selected.size > 40 || selected.joinToString(" ").length > 500) "$sample …" else sample
     }
 
     private fun isInformativeShingle(words: List<String>, start: Int): Boolean {
