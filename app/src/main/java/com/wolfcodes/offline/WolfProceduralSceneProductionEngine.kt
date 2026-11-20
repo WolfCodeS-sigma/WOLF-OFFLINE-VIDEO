@@ -156,20 +156,23 @@ object WolfProceduralSceneProductionEngine {
                 environmentOverride = plan.environment.name,
                 presenceCaption = plan.caption
             )
+
+            // Keep every depth/effect/object pass in the same virtual-camera space
+            // as the base artwork. Restoring before this pass caused the foreground
+            // layers to drift away from the zoomed/reframed background in shots 2/3.
+            WolfProceduralMotionEngine.renderDepthAware(
+                canvas = canvas,
+                width = width,
+                height = height,
+                caption = plan.caption,
+                sceneIndex = plan.sceneIndex,
+                shotIndex = safeShot,
+                progress = t,
+                plannedFeatures = plan.features,
+                environment = plan.environment
+            )
         } finally {
             canvas.restoreToCount(saved)
         }
-
-        WolfProceduralMotionEngine.renderDepthAware(
-            canvas = canvas,
-            width = width,
-            height = height,
-            caption = plan.caption,
-            sceneIndex = plan.sceneIndex,
-            shotIndex = safeShot,
-            progress = t,
-            plannedFeatures = plan.features,
-            environment = plan.environment
-        )
     }
 }
