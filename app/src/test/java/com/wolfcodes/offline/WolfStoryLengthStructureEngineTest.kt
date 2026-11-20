@@ -29,6 +29,13 @@ class WolfStoryLengthStructureEngineTest {
         assertTrue(beats.zipWithNext().all { (a, b) -> a.ordinal <= b.ordinal })
     }
 
+    @Test fun shortMultiChapterStoriesDistributeEveryNarrativeBeatAcrossChapters() {
+        val targets = WolfStoryLengthStructureEngine.chapterTargets(801, listOf("البداية", "النهاية"))
+        assertEquals(WolfStoryLengthStructureEngine.Beat.values().toList(), targets.flatMap { it.beats })
+        assertTrue(targets.all { it.beats.isNotEmpty() })
+        assertEquals(801, targets.sumOf { it.targetWords })
+    }
+
     @Test fun invalidLengthTitlesAndToleranceAreRejected() {
         assertFalse(runCatching { WolfStoryLengthStructureEngine.chapterTargets(499, listOf("الفصل")) }.isSuccess)
         assertFalse(runCatching { WolfStoryLengthStructureEngine.chapterTargets(500, emptyList()) }.isSuccess)
