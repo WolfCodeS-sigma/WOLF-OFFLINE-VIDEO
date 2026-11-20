@@ -30,6 +30,26 @@ class WolfSceneRenderPipelineTest {
     }
 
     @Test
+    fun missingImageStillSelectsProceduralBackendWhenDiagnosticsCallbackFails() {
+        val shot = WolfSceneRenderPipeline.prepare(
+            caption = "تحرك الظل في الغرفة",
+            sceneIndex = 4,
+            source = null
+        ) {
+            throw IllegalStateException("diagnostics unavailable")
+        }
+
+        try {
+            assertEquals(WolfSceneRenderPipeline.Backend.PROCEDURAL, shot.backend)
+            assertNotNull(shot.proceduralPlan)
+            assertEquals("تحرك الظل في الغرفة", shot.proceduralPlan?.caption)
+            assertEquals(4, shot.proceduralPlan?.sceneIndex)
+        } finally {
+            shot.recycle()
+        }
+    }
+
+    @Test
     fun failedOrInsufficientImageAnalysisSelectsProceduralBackend() {
         assertEquals(
             false,
