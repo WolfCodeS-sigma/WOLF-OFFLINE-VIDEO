@@ -37,6 +37,19 @@ class WolfVoiceSegmentStoreTest {
     }
 
     @Test
+    fun anAdditionalSegmentCannotPushTheTakePastThirtyMinutes() {
+        assertTrue(
+            WolfVoiceSegmentStore.canAppendDurationMs(listOf(1_700_000L), 100_000L)
+        )
+        assertTrue(
+            !WolfVoiceSegmentStore.canAppendDurationMs(listOf(1_700_000L), 100_001L)
+        )
+        assertTrue(
+            !WolfVoiceSegmentStore.canAppendDurationMs(listOf(1_800_000L), 1_000L)
+        )
+    }
+
+    @Test
     fun maximumNarrationDurationIsExactlyThirtyMinutes() {
         assertEquals(
             1_800_000L,
