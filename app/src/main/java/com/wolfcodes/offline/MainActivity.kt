@@ -103,6 +103,7 @@ class MainActivity : Activity() {
         root.addView(soundEffectsToggle)
 
         root.addView(button("حفظ المشروع").apply { setOnClickListener { saveProject() } })
+        root.addView(label("يمكن إنشاء المشاهد تلقائيًا من نص القصة دون صور مرجعية أو اتصال بالإنترنت؛ الصور اختيارية فقط."))
         root.addView(button("اختيار صور متعددة (اختياري)").apply {
             setOnClickListener { chooseMultipleImages() }
         })
