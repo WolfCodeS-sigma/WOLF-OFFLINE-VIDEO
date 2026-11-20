@@ -400,10 +400,11 @@ object WolfHorrorKnowledgeLibrary {
         root: File,
         title: String,
         finalApprovedText: String,
+        isFinalApproved: Boolean,
         summary: String = "",
         tags: List<String> = emptyList()
     ): SaveResult? = synchronized(lock) {
-        if (!autoSaveAppAuthoredStoriesEnabled(root)) return@synchronized null
+        if (!isFinalApproved || !autoSaveAppAuthoredStoriesEnabled(root)) return@synchronized null
         createFromText(
             root,
             Draft(
