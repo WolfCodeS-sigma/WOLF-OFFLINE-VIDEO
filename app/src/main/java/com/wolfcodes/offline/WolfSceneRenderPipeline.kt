@@ -14,7 +14,7 @@ object WolfSceneRenderPipeline {
     enum class Backend { PROCEDURAL, UPLOADED_IMAGE }
 
     class PreparedShot internal constructor(
-        val backend: Backend,
+        var backend: Backend,
         internal var image: WolfUploadedImageEngine.PreparedImage?,
         internal var proceduralPlan: WolfProceduralSceneProductionEngine.ScenePlan?,
         private val caption: String,
@@ -23,6 +23,13 @@ object WolfSceneRenderPipeline {
         internal fun requireProceduralPlan(): WolfProceduralSceneProductionEngine.ScenePlan {
             return proceduralPlan ?: WolfProceduralSceneProductionEngine.plan(caption, sceneIndex)
                 .also { proceduralPlan = it }
+        }
+
+        internal fun switchToProcedural() {
+            image?.recycle()
+            image = null
+            backend = Backend.PROCEDURAL
+            requireProceduralPlan()
         }
 
         fun recycle() {
@@ -117,6 +124,7 @@ object WolfSceneRenderPipeline {
         val image = preparedShot.image
         if (image == null) {
             onFallback("PreparedImageUnavailable")
+            preparedShot.switchToProcedural()
             renderProcedural(canvas, width, height, shotIndex, progress, preparedShot)
             return Backend.PROCEDURAL
         }
@@ -142,6 +150,7 @@ object WolfSceneRenderPipeline {
 
         if (result == WolfUploadedImageEngine.Result.SAFE_FRAME) {
             onFallback("ImageRenderSafeFrame")
+            preparedShot.switchToProcedural()
             renderProcedural(canvas, width, height, shotIndex, progress, preparedShot)
             return Backend.PROCEDURAL
         }
