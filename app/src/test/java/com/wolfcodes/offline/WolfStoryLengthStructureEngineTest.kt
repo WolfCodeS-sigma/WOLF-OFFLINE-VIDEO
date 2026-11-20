@@ -6,8 +6,8 @@ import org.junit.Test
 class WolfStoryLengthStructureEngineTest {
     @Test fun countsArabicAndEnglishWordsAndIgnoresDiacriticsAndTatweel() {
         val text = "كانت الإِشـارةُ غامضة، ثم ظهر الباب! The old door opened twice."
-        assertEquals(10, WolfStoryLengthStructureEngine.words(text))
-        assertEquals(10, WolfStoryLengthStructureEngine.words("واحد، اثنان؛ ثلاثة... four-five"))
+        assertEquals(11, WolfStoryLengthStructureEngine.words(text))
+        assertEquals(5, WolfStoryLengthStructureEngine.words("واحد، اثنان؛ ثلاثة... four-five"))
     }
 
     @Test fun chapterTargetsAreDeterministicAndSumExactlyToRequestedLength() {
