@@ -612,6 +612,10 @@ class MainActivity : Activity() {
     }
 
     private fun playVoicePreview() {
+        if (voiceMergePending || voiceRecoveryPending || voiceRecorder?.isRecording == true) {
+            status.text = "انتظر اكتمال حفظ أو استعادة مقاطع الراوي قبل المعاينة"
+            return
+        }
         val project = try {
             currentProject().also { WolfProjectStore.save(this, it) }
         } catch (error: Exception) {
