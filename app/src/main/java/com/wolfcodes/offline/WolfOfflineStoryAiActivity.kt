@@ -392,7 +392,7 @@ class WolfOfflineStoryAiActivity : Activity() {
         wordsField.setText(value.brief.targetWords.toString())
         libraryToggle.isChecked = value.brief.useKnowledgeLibrary
         planView.text = formatPlan(value)
-        storyField.setText(formatChapters(value))
+        storyField.setText(value.finalText.ifBlank { formatChapters(value) })
         status.text = "تم استعادة جلسة محفوظة: ${value.chapters.size} / ${value.plan.chapterTitles.size} فصل"
     }
 
@@ -426,24 +426,37 @@ class WolfOfflineStoryAiActivity : Activity() {
                 setBusy(true, "جارٍ حفظ النسخة النهائية المعتمدة...")
                 worker.execute {
                     val result = runCatching {
+                        val root = WolfOfflineStoryAiEngine.sessionRoot(this)
+                        // Persist the user's reviewed text before attempting the optional library save.
+                        val reviewed = value.copy(
+                            finalText = finalText,
+                            approved = false,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        WolfOfflineStoryAiEngine.saveSession(root, reviewed)
                         val saved = WolfHorrorKnowledgeLibrary.saveFinalAppAuthoredStory(
                             File(filesDir, "wolf_horror_knowledge_library"),
                             value.brief.title, finalText, isFinalApproved = true,
                             summary = value.plan.logline,
                             tags = listOf(value.brief.genre, "WOLF OFFLINE STORY AI")
                         )
-                        val approved = value.copy(approved = true, updatedAt = System.currentTimeMillis())
-                        WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), approved)
-                        saved
+                        val approved = reviewed.copy(approved = true, updatedAt = System.currentTimeMillis())
+                        WolfOfflineStoryAiEngine.saveSession(root, approved)
+                        approved to saved
                     }
                     runOnUiThread {
-                        result.onSuccess { saved ->
+                        result.onSuccess { (approved, saved) ->
+                            session = approved
+                            storyField.setText(approved.finalText)
                             setBusy(false, when {
-                                saved == null -> "تم اعتماد النص. الحفظ التلقائي في المكتبة معطّل من إعداداتها."
+                                saved == null -> "تم اعتماد النص وحفظه داخل جلسة التأليف. الحفظ التلقائي في المكتبة معطّل من إعداداتها."
                                 saved.duplicateOfExisting -> "تم الاعتماد؛ المحتوى موجود بالفعل في المكتبة."
                                 else -> "تم اعتماد القصة وحفظها في WOLF HORROR KNOWLEDGE LIBRARY."
                             })
-                        }.onFailure { setBusy(false, "تعذر حفظ القصة المعتمدة: ${it.message}") }
+                        }.onFailure {
+                            session = value.copy(finalText = finalText, approved = false)
+                            setBusy(false, "تم الاحتفاظ بالنص المعدّل كمسودة إن أمكن؛ تعذر إكمال الاعتماد: ${it.message}")
+                        }
                     }
                 }
             }
