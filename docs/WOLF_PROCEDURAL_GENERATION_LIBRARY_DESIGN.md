@@ -1,7 +1,7 @@
 # WOLF Procedural Generation Library — Stage 09 Design
 
 **Design ID:** WOLF-PROCGEN-DESIGN-001  
-**Version:** 1.2  
+**Version:** 1.3  
 **Status:** Stage 09 design baseline  
 **Depends on:** Stage 06 asset policy, Stage 07 inventory, Stage 08 Asset Registry & Quality Gate  
 **Runtime model:** Android application-integrated, deterministic, offline-first  
@@ -56,7 +56,7 @@ A later proposal may add a category only through a separate design review and ex
 
 The library is designed as six separable layers. Their eventual Kotlin package/file names are implementation choices for Stage 10 or later; this design does not prematurely bind the architecture to a renderer.
 
-1. **Generator Catalog** — stable generator IDs, versions, family, supported capabilities, dependencies, and approval scope. Catalog entries are resolved from the app-bundled registry; they are never discovered from the network.
+1. **Generator Catalog** — stable generator IDs, versions, family, supported capabilities, dependencies, approval scope, and an immutable implementation binding. Runnable implementations are statically linked into the Android application and exposed through a closed built-in catalog; registry records authorize an exact built-in binding but never load executable code.
 2. **Policy Resolver** — calls `WolfAssetRegistry.approvedAssets(request)` first, then filters the returned records to `category == WolfAssetCategory.GENERATOR` before exposing anything to the generator catalog. The Stage 08 method intentionally returns every approved asset category; it is not itself a generator-only query. The resolver must never select a `CHARACTER`, `ENVIRONMENT`, `PROP`, `SHADER`, or other non-`GENERATOR` record as executable generator code. It also verifies the `generatorProfile` and `dependencyProfile` metadata against the exact generator ID/version, family, parameter-schema ID/version, output kinds, dependencies, seed algorithm, and supported runtime declared by the catalog. Only an exact, approved, in-scope, hash-verified generator record can be selected.
 3. **Request Validator** — validates the scene contract, parameter schema, seed, timeline, dimensions, coordinate conventions, and resource envelope before execution.
 4. **Deterministic Execution Core** — executes a pure generation function from canonical input. It owns seed derivation, stable ordering, parameter normalization, cancellation boundaries, and output identity.
@@ -89,7 +89,17 @@ The current production path deliberately separates shot intent from per-frame ca
 
 This is a handoff between existing owners, not a second camera system. Any future reassignment of either responsibility requires a separate design decision and regression proof.
 
-`generatorProfile` must be a versioned, validated `WOLF-CANON-JSON-1` object containing at least the canonical generator ID, semantic version, family ID, parameter-schema ID/version, seed-algorithm ID, supported output kinds, execution contract version, and a `hardLimits` object. `hardLimits` declares finite integer maxima for `maxWorkingSetBytes`, `maxTemporaryStorageBytes`, `maxReusableOutputBytes`, `maxTransientElementsPerFrame`, `maxRetainedFrameCount`, and `maxExecutionMillis`; `maxNativeGpuBytes` is also required when that runtime exposes a reliable measurement. `resourceMeasurements` must contain the corresponding measured high-water values (`peakWorkingSetBytes`, `peakTemporaryStorageBytes`, `maxReusableOutputBytesObserved`, `maxTransientElementsPerFrameObserved`, `maxRetainedFrameCountObserved`, and `maxExecutionMillisObserved`, plus `peakNativeGpuBytes` where measurable) and a non-empty `measurementEvidenceReference`. Every required observation must be a finite non-negative base-10 integer no greater than its declared hard limit. Missing, unparsable, `UNKNOWN`, or `PENDING` values, absent evidence, or an exceeded limit block production dispatch even if the general Stage 08 gate returns an approved result. `dependencyProfile` must describe the exact dependency closure and versions, consistent with the Stage 08 `dependencies` map. These are values in the existing registry schema; they do not create a second approval database.
+`generatorProfile` must be a versioned, validated `WOLF-CANON-JSON-1` object containing at least the canonical generator ID, semantic version, family ID, parameter-schema ID/version, seed-algorithm ID, supported output kinds, execution contract version, `implementationBindingId`, exact implementation version/ABI, source repository path/revision/SHA-256, and a `hardLimits` object. `hardLimits` declares finite integer maxima for `maxWorkingSetBytes`, `maxTemporaryStorageBytes`, `maxReusableOutputBytes`, `maxTransientElementsPerFrame`, `maxRetainedFrameCount`, and `maxExecutionMillis`; `maxNativeGpuBytes` is also required when that runtime exposes a reliable measurement. `resourceMeasurements` must contain the corresponding measured high-water values (`peakWorkingSetBytes`, `peakTemporaryStorageBytes`, `maxReusableOutputBytesObserved`, `maxTransientElementsPerFrameObserved`, `maxRetainedFrameCountObserved`, and `maxExecutionMillisObserved`, plus `peakNativeGpuBytes` where measurable) and a non-empty `measurementEvidenceReference`. Every required observation must be a finite non-negative base-10 integer no greater than its declared hard limit. Missing, unparsable, `UNKNOWN`, or `PENDING` values, absent evidence, or an exceeded limit block production dispatch even if the general Stage 08 gate returns an approved result. `dependencyProfile` must describe the exact dependency closure and versions, consistent with the Stage 08 `dependencies` map. These are values in the existing registry schema; they do not create a second approval database.
+
+### 3.3 Static implementation binding and packaged registry metadata
+
+WPGL is an application-integrated library, not a companion package or a dynamic plug-in host:
+
+- Every runnable generator implementation is compiled into the WOLF Android application and registered through a closed, statically linked implementation map keyed by `implementationBindingId`, exact implementation version, and ABI/contract version.
+- The Stage 08 registry record is an authorization and provenance record. It may include a hash-verified, non-executable generator descriptor/metadata file packaged under the app's assets, but WPGL must never execute source files or load generator code from that file.
+- Runtime resolution must match the approved registry `generatorProfile` to the built-in implementation map exactly. Missing bindings, version/ABI mismatches, source fingerprint mismatches, or unrecognized implementations fail closed. No reflection-based class-name loading, dynamic DEX/JAR/SO loading, downloaded scripts, remote shaders, or network-provided executable content is allowed.
+- The source repository path, immutable source revision, source SHA-256, license evidence, and dependency provenance identify the implementation reviewed for inclusion in the application. CI/build provenance validates that source fingerprint against the statically compiled application revision. `WolfAssetFileVerifier` verifies only the packaged files listed in the registry; it must not be described as verifying the compiled DEX/code bytes. The Android application package/build integrity remains responsible for the compiled implementation bytes.
+- Exact runtime/renderer compatibility is still checked by Stage 08 and the adapter declaration. A compiled-in binding cannot run outside its approved runtime/version/scope, and registry approval alone cannot instantiate an unknown implementation.
 
 ## 4. Core request and result contracts
 
@@ -284,6 +294,7 @@ Stage 10 must implement focused tests before any production renderer integration
 12. `PENDING` generator budgets and missing/unknown/infinite resource limits are blocked before allocation in production; finite test-only envelopes remain isolated from production dispatch.
 13. A `CAMERA_MOTION` candidate cannot directly mutate the renderer camera, shot plan, or frame timeline; `StoryDirectorEngine` must accept/reject shot-level intent and `OfflineMotionEngine` may resolve per-frame camera movement only within the existing depth-aware path and frame allocation. If depth layers are unavailable, the safe still-image fallback remains unwarped.
 14. Missing, unparsable, unknown, or over-limit resource measurements (including absent measurement evidence) block production dispatch; valid finite measurements are checked against every declared hard limit before allocation.
+15. Missing or mismatched static implementation bindings, implementation versions/ABIs, source revisions, or source fingerprints are rejected; generator code is never dynamically loaded from registry files or external locations.
 
 ## 13. Stage 09 acceptance criteria
 
@@ -294,6 +305,7 @@ Stage 09 is complete only when:
 - Request/result, deterministic seed, frame timeline, descriptor, and provenance contracts are defined.
 - Generator source and reusable outputs are governed by the Stage 08 registry; WPGL filters executable records to `GENERATOR` only and has no approval bypass.
 - Production execution requires `PASS` resource budgets and finite reviewed limits; `PENDING` is never treated as unlimited or production-safe.
+- Every runnable generator has an exact statically linked application implementation binding; registry metadata authorizes but never dynamically loads executable code.
 - `StoryDirectorEngine` remains the authority for shot-level camera intent and shot-frame allocation; `OfflineMotionEngine` remains the authority for scene-frame allocation and depth-aware per-frame camera transforms. WPGL camera motion is candidate-only and must pass through both existing owners.
 - Realistic human/creature/prop/environment fabrication is explicitly prohibited.
 - Failure fallback, offline/privacy/security constraints, and resource measurement requirements are defined.
@@ -304,4 +316,4 @@ This stage defines the design baseline only. It does not claim that new generato
 
 ---
 
-**Handoff:** Stage 10 may implement generator modules and run cross-generator cooperation tests against this contract. It must first prove generator-only registry filtering, exact profile/version/scope matching, bounded production dispatch, deterministic canonicalization fixtures, and candidate-only camera motion passed through the existing StoryDirectorEngine and OfflineMotionEngine authority boundaries. It must not silently widen the approved scope or modify the protected Stage 01–08 production paths.
+**Handoff:** Stage 10 may implement generator modules and run cross-generator cooperation tests against this contract. It must first prove generator-only registry filtering, exact profile/version/scope matching, bounded production dispatch, deterministic canonicalization fixtures, static implementation binding, and candidate-only camera motion passed through the existing StoryDirectorEngine and OfflineMotionEngine authority boundaries while preserving the safe still-image fallback. It must not silently widen the approved scope or modify the protected Stage 01–08 production paths.
