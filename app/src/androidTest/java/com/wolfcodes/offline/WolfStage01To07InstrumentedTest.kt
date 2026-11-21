@@ -1,0 +1,231 @@
+package com.wolfcodes.offline
+
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+
+/**
+ * Device-side regression tests for Android MediaCodec, MediaMuxer, MediaStore
+ * and persistent chapter checkpoints. These execute on an Android emulator,
+ * not on the host JVM where Android media APIs are unavailable.
+ */
+@RunWith(AndroidJUnit4::class)
+class WolfStage01To07InstrumentedTest {
+
+    @Test
+    fun thirtySecondFilmRetainsRuntimeWithSevenSecondAudioAndUserStillImage() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val fixtureDirectory = File(context.cacheDir, "wolf-stage-01-07-device-tests").apply {
+            if (!exists()) mkdirs()
+        }
+        val narrationFixture = File(fixtureDirectory, "seven-second-audio.m4a")
+        val imageFixture = File(fixtureDirectory, "user-still.png")
+        var exportedUri: Uri? = null
+
+        try {
+            narrationFixture.delete()
+            imageFixture.delete()
+
+            // A real AAC file is generated through the device's MediaCodec encoder.
+            // The seven-second duration mirrors the short-narration regression case.
+            WolfSoundFxEngine.renderAac(
+                scenes = listOf("طرق بطيء على الباب ثم خطوات تقترب في ممر مظلم"),
+                durationSeconds = 7,
+                output = narrationFixture
+            )
+            assertTrue("The seven-second AAC fixture was not created", narrationFixture.isFile)
+            assertTrue("The AAC fixture is empty", narrationFixture.length() > 0L)
+
+            // This test image stands in for a selected still. It verifies the actual
+            // image-to-encoder path while semantic segmentation remains fail-closed.
+            val still = Bitmap.createBitmap(320, 320, Bitmap.Config.ARGB_8888)
+            try {
+                still.eraseColor(Color.rgb(24, 96, 184))
+                imageFixture.outputStream().use { output ->
+                    assertTrue(still.compress(Bitmap.CompressFormat.PNG, 100, output))
+                }
+            } finally {
+                still.recycle()
+            }
+
+            assertFalse(
+                "Color heuristics must not be promoted to semantic segmentation",
+                WolfImageDepthSegmenter.isSemanticSegmentationReady()
+            )
+
+            val result = OfflineProductionEngine.render(
+                context = context,
+                story = "في منتصف الليل سمعت طرقًا بطيئًا على الباب. اقتربت الخطوات من الممر. انطفأ الضوء فجأة. ظهر ظل خلف النافذة.",
+                seconds = 30,
+                imageUris = listOf(Uri.fromFile(imageFixture)),
+                audioUri = Uri.fromFile(narrationFixture),
+                aspectRatio = "1:1",
+                generateSoundEffects = false,
+                includeWatermark = false,
+                includeIntro = true,
+                audioDurationIsAuthoritative = true,
+                audioDurationMs = 7_000L,
+                enableHorrorTypography = false,
+                projectId = "wolf-stage-audit-${System.currentTimeMillis()}"
+            )
+
+            assertEquals("The requested film duration must be authoritative", 30, result.durationSeconds)
+            assertNotNull("The exporter did not return a saved media URI", result.mediaUri)
+            exportedUri = Uri.parse(requireNotNull(result.mediaUri))
+
+            val report = WolfFilmQualityInspector.inspect(
+                context = context,
+                mediaReference = requireNotNull(result.mediaUri),
+                expectedDurationSeconds = 30,
+                requireAudio = true
+            )
+            assertTrue("Exported MP4 failed structural QA: ${report.summary}", report.passed)
+            assertTrue("Expected the full video frame sequence, got ${report.videoSamples}", report.videoSamples >= 350L)
+            assertTrue("The final MP4 contains no readable audio samples", report.audioSamples > 0L)
+            assertNotNull("The exported MP4 duration is missing", report.durationSeconds)
+            assertTrue(
+                "The video stream did not retain a 30-second duration: ${report.durationSeconds}",
+                requireNotNull(report.durationSeconds) in 29.0..31.0
+            )
+
+            val timings = readLastSampleTimes(context, requireNotNull(exportedUri))
+            val video = requireNotNull(timings["video/avc"]) {
+                "The final MP4 has no H.264 video samples"
+            }
+            val audio = requireNotNull(timings["audio/mp4a-latm"]) {
+                "The final MP4 has no AAC audio samples"
+            }
+
+            assertTrue(
+                "Video ended before the requested 30-second timeline: ${video.lastPresentationTimeUs} us",
+                video.lastPresentationTimeUs in 29_500_000L..30_100_000L
+            )
+            assertTrue(
+                "Audio fixture should end near seven seconds, not near the end of the film: ${audio.lastPresentationTimeUs} us",
+                audio.lastPresentationTimeUs in 6_500_000L..7_500_000L
+            )
+
+            // The output must remain decodable after the mux operation, and the
+            // blue-dominant centre pixel confirms the selected still reached video.
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, requireNotNull(exportedUri))
+                val frame = retriever.getFrameAtTime(5_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                assertNotNull("Could not decode a frame from the final MP4", frame)
+                try {
+                    val pixel = requireNotNull(frame).getPixel(frame.width / 2, frame.height / 2)
+                    assertTrue(
+                        "The selected still image was not visible in the encoded frame",
+                        Color.blue(pixel) > Color.red(pixel)
+                    )
+                } finally {
+                    frame?.recycle()
+                }
+            } finally {
+                retriever.release()
+            }
+        } finally {
+            exportedUri?.let { uri ->
+                if (uri.scheme == "content") {
+                    runCatching { context.contentResolver.delete(uri, null, null) }
+                }
+            }
+            narrationFixture.delete()
+            imageFixture.delete()
+        }
+    }
+
+    @Test
+    fun changedRenderFingerprintInvalidatesCompletedChapterOnAndroidStorage() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val projectId = "wolf-stage-checkpoint-${System.currentTimeMillis()}"
+        val plans = WolfLongFilmEngine.planChapters(
+            framesPerScene = listOf(3_600),
+            framesPerSecond = 12,
+            introFrames = 0
+        )
+        val oldFingerprint = "storyboard-planner-v2"
+        val newFingerprint = OfflineProductionEngine.STORYBOARD_RENDER_REVISION
+
+        try {
+            val initial = WolfLongFilmCheckpointStore.begin(
+                context, projectId, oldFingerprint, 12, 3_600, plans
+            )
+            assertEquals(WolfLongFilmEngine.ChapterStatus.PENDING, initial.chapters.single().status)
+
+            val chapterFile = WolfLongFilmCheckpointStore.chapterFile(
+                context, projectId, oldFingerprint, 1
+            )
+            chapterFile.writeBytes(byteArrayOf(1, 2, 3, 4))
+            WolfLongFilmCheckpointStore.markCompleted(context, projectId, 1, chapterFile)
+
+            val sameRender = WolfLongFilmCheckpointStore.begin(
+                context, projectId, oldFingerprint, 12, 3_600, plans
+            )
+            assertEquals(
+                "A completed chapter should be reusable only for the same render fingerprint",
+                WolfLongFilmEngine.ChapterStatus.COMPLETED,
+                sameRender.chapters.single().status
+            )
+
+            val changedRender = WolfLongFilmCheckpointStore.begin(
+                context, projectId, newFingerprint, 12, 3_600, plans
+            )
+            assertEquals(
+                "A changed render fingerprint must reset the old completed chapter",
+                WolfLongFilmEngine.ChapterStatus.PENDING,
+                changedRender.chapters.single().status
+            )
+            assertFalse("The obsolete chapter artifact should be removed", chapterFile.exists())
+        } finally {
+            WolfLongFilmCheckpointStore.clear(context, projectId)
+        }
+    }
+
+    private data class TrackTiming(
+        val samples: Long,
+        val lastPresentationTimeUs: Long
+    )
+
+    private fun readLastSampleTimes(context: android.content.Context, mediaUri: Uri): Map<String, TrackTiming> {
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(context, mediaUri, null)
+            val timings = linkedMapOf<String, TrackTiming>()
+            for (trackIndex in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(trackIndex)
+                val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
+                if (!mime.startsWith("video/") && !mime.startsWith("audio/")) continue
+
+                extractor.selectTrack(trackIndex)
+                extractor.seekTo(0L, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                var sampleCount = 0L
+                var lastPresentationTimeUs = -1L
+                while (extractor.sampleTrackIndex >= 0) {
+                    if (extractor.sampleTrackIndex == trackIndex) {
+                        sampleCount++
+                        lastPresentationTimeUs = extractor.sampleTime
+                    }
+                    if (!extractor.advance()) break
+                }
+                extractor.unselectTrack(trackIndex)
+                timings[mime] = TrackTiming(sampleCount, lastPresentationTimeUs)
+            }
+            return timings
+        } finally {
+            extractor.release()
+        }
+    }
+}
