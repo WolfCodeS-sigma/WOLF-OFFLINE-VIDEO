@@ -643,10 +643,9 @@ class MainActivity : Activity() {
                                 File(approvedPath).isFile
                         }.getOrDefault(false)
                 } ?: false
-                val effectiveDuration = if (approvedVoice) {
-                    (WolfStoryVoiceStateMachine.durationSecondsCeil(voiceSession!!.audioDurationMs) +
-                        if (project.includeIntro) 3 else 0).coerceIn(5, 1800)
-                } else project.durationSeconds
+                // The project duration is the film timeline. Narration is an independent
+                // audio layer and must never shorten the requested video duration.
+                val effectiveDuration = project.durationSeconds.coerceIn(5, 1800)
                 val shotAssignments = WolfSceneAssetStore.shotAssignments(this, project.id)
                     .mapNotNull { (slot, value) ->
                         runCatching { slot to Uri.parse(value) }.getOrNull()
