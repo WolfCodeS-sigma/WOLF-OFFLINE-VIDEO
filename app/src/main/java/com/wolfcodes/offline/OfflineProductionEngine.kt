@@ -688,6 +688,7 @@ object OfflineProductionEngine {
                     source.top=(bitmap.height-cropHeight)/2
                     source.bottom=source.top+cropHeight
                 }
+                val originalSource = Rect(source)
                 // Depth-aware motion is only safe when segmentation produced valid layers.
                 // Otherwise retain the full aspect-matched source crop without camera warping.
                 val shotProgress = t.coerceIn(0f, 1f)
@@ -739,17 +740,32 @@ object OfflineProductionEngine {
                     val layerBottom = (source.bottom * layerScale).toInt()
                         .coerceIn(layerTop + 1, imageLayers.background.height)
                     val layerSource = Rect(layerLeft, layerTop, layerRight, layerBottom)
-                    WolfSceneDepthComposer.renderImageLayers(
-                        canvas = c,
-                        width = w,
-                        height = h,
-                        sceneIndex = scene,
-                        progress = shotProgress,
-                        layers = imageLayers,
-                        source = layerSource,
-                        destination = destination,
-                        rotationDegrees = camera?.rotationDegrees ?: 0f
-                    )
+                    try {
+                        WolfSceneDepthComposer.renderImageLayers(
+                            canvas = c,
+                            width = w,
+                            height = h,
+                            sceneIndex = scene,
+                            progress = shotProgress,
+                            layers = imageLayers,
+                            source = layerSource,
+                            destination = destination,
+                            rotationDegrees = camera?.rotationDegrees ?: 0f
+                        )
+                    } catch (compositionError: Exception) {
+                        android.util.Log.w(
+                            "WOLF_RENDER",
+                            "Depth composition failed; preserving the original user image",
+                            compositionError
+                        )
+                        c.drawColor(android.graphics.Color.BLACK)
+                        c.drawBitmap(
+                            bitmap,
+                            originalSource,
+                            RectF(0f, 0f, w.toFloat(), h.toFloat()),
+                            p
+                        )
+                    }
                 } else {
                     val cameraSave = c.save()
                     try {
