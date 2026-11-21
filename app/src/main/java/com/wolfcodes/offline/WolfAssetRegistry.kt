@@ -238,6 +238,26 @@ class WolfAssetQualityGate(
                 "بيانات التوافق التقنية مفقودة أو غير محسومة: $key"
             )
         }
+        val categoryFields = when (entry.category) {
+            WolfAssetCategory.CHARACTER, WolfAssetCategory.CREATURE ->
+                listOf("geometryProfile", "materialProfile", "rigProfile", "animationProfile")
+            WolfAssetCategory.ENVIRONMENT, WolfAssetCategory.PROP ->
+                listOf("geometryProfile", "materialProfile")
+            WolfAssetCategory.TEXTURE -> listOf("textureProfile", "colorSpace")
+            WolfAssetCategory.MATERIAL -> listOf("materialProfile")
+            WolfAssetCategory.ANIMATION -> listOf("rigProfile", "animationProfile")
+            WolfAssetCategory.AUDIO -> listOf("audioProfile")
+            WolfAssetCategory.FONT -> listOf("fontProfile")
+            WolfAssetCategory.SHADER -> listOf("shaderProfile")
+            WolfAssetCategory.GENERATOR -> listOf("generatorProfile", "dependencyProfile")
+        }
+        categoryFields.forEach { key ->
+            val value = entry.technicalProfile[key]
+            requireValue(
+                !value.isNullOrBlank() && value.trim().uppercase() !in setOf("UNKNOWN", "PENDING"),
+                "ملف الفئة التقنية مفقود أو غير محسوم: $key"
+            )
+        }
         if (entry.budgetStatus == WolfAssetBudgetStatus.PASS) {
             requireValue(entry.resourceMeasurements.isNotEmpty(), "لا يمكن اجتياز ميزانية الموارد دون قياسات موثقة")
         }
