@@ -91,6 +91,15 @@ class StoryPipelineTest {
     }
 
     @Test
+    fun introNeverPushesShortFilmsPastTheirRequestedDuration() {
+        assertEquals(0, OfflineProductionEngine.introDurationSeconds(1, true))
+        assertEquals(1, OfflineProductionEngine.introDurationSeconds(2, true))
+        assertEquals(3, OfflineProductionEngine.introDurationSeconds(5, true))
+        assertEquals(0, OfflineProductionEngine.introDurationSeconds(30, false))
+        assertEquals(3, OfflineProductionEngine.introDurationSeconds(30, true))
+    }
+
+    @Test
     fun directorCreatesThreeShotDescriptionsPerScene() {
         val story = "دخلت الغرفة. ظهر ظل خلف النافذة."
         val plan = StoryDirectorEngine.analyze(story, 20, "9:16", "سينمائي", "رعب نفسي")
