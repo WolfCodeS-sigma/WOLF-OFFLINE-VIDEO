@@ -112,6 +112,17 @@ class WolfAssetRegistryTest {
     }
 
     @Test
+    fun unresolvedTechnicalProfileCannotPassAsCompatible() {
+        val entry = validEntry().copy(
+            technicalProfile = validEntry().technicalProfile + ("coordinateSystem" to "UNKNOWN")
+        )
+        val result = gate(entry).evaluate(entry, request())
+
+        assertFalse(result.approved)
+        assertTrue(result.errors.any { it.contains("غير محسومة") })
+    }
+
+    @Test
     fun failedResourceBudgetBlocksApproval() {
         val entry = validEntry().copy(budgetStatus = WolfAssetBudgetStatus.FAIL)
         val result = gate(entry).evaluate(entry, request())
