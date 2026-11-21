@@ -155,6 +155,11 @@ class WolfStage01To07InstrumentedTest {
     fun atmosphericFallbackWithoutUserMediaExportsDecodableSilentMp4() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         var exportedUri: Uri? = null
+        val staleTempDirectory = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
+        val staleTemp = File(staleTempDirectory, "wolf_offline_stale_before_render.mp4").apply {
+            writeBytes(byteArrayOf(1, 2, 3))
+            setLastModified(System.currentTimeMillis() - 96L * 60L * 60L * 1000L)
+        }
         try {
             val result = OfflineProductionEngine.render(
                 context = context,
@@ -171,6 +176,7 @@ class WolfStage01To07InstrumentedTest {
             )
 
             assertEquals("The silent fallback must preserve the requested runtime", 5, result.durationSeconds)
+            assertFalse("Export did not invoke stale offline-temp cleanup before preflight", staleTemp.exists())
             assertNotNull("The fallback exporter did not save an MP4", result.mediaUri)
             exportedUri = Uri.parse(requireNotNull(result.mediaUri))
 
@@ -199,6 +205,7 @@ class WolfStage01To07InstrumentedTest {
                 retriever.release()
             }
         } finally {
+            staleTemp.delete()
             exportedUri?.let { uri ->
                 if (uri.scheme == "content") {
                     runCatching { context.contentResolver.delete(uri, null, null) }
