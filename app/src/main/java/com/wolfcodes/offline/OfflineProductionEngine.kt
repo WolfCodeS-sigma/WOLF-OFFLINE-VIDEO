@@ -576,6 +576,11 @@ object OfflineProductionEngine {
                     val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
+                    if (shotUri != null && image == null) {
+                        throw IllegalStateException(
+                            "تعذر قراءة صورة المستخدم المحددة للمشهد؛ تم إيقاف هذا المسار بدل استبدالها برسوم مولدة"
+                        )
+                    }
                     val imageLayers = try {
                         image?.let { WolfImageDepthSegmenter.segment(it) }
                     } catch (segmentationError: Exception) {
