@@ -30,13 +30,15 @@ Each entry in the JSON `assets` array maps to `WolfAssetRegistryEntry` and must 
 
 - `assetId`: stable ID matching `wolf_[a-z0-9][a-z0-9._-]{2,63}`.
 - `name`, `version`, `category`, `tags`, and `lifecycle`.
-- `license`: creator/rights holder, source name/location, exact license name/version, evidence reference, verification state, commercial-use permission, modification permission, redistribution permission, app-bundling permission, attribution requirement/text, and restrictions.
+- `license`: creator/rights holder, source name/location, acquisition timestamp/method, provenance reference, exact license ID/name/version, evidence reference, verification state, commercial-use permission, modification permission, redistribution permission, app-bundling permission, attribution requirement/text, and explicit restrictions.
 - `files`: one or more relative packaged file paths, format, exact byte size, and SHA-256 for each file.
 - `dependencies`: IDs of other registry entries required by this asset.
+- `technicalProfile`: explicit coordinate system, units, import settings, renderer requirements, and applicable geometry/material/texture/rig/animation profile details. Use `UNKNOWN` or `NOT_APPLICABLE` rather than guessing.
+- `resourceMeasurements`: measured packaged/runtime resource values where available; an empty/pending profile cannot be marked as a passed budget.
 - `compatibleRuntimes`: runtime identifier to exact tested version.
 - `approvedScopes`: explicitly approved use scopes.
 - `budgetStatus`: `PASS`, `PENDING`, or `FAIL`.
-- `review`: reviewer, review timestamp, reason, rights/visual/technical pass flags, realism score, visual style, and any scoped-stylization approvals.
+- `review`: reviewer, review timestamp, decision reason, review evidence reference, rights/visual/technical pass flags, realism score, visual style, and any scoped-stylization approvals.
 
 Allowed categories: `CHARACTER`, `CREATURE`, `ENVIRONMENT`, `PROP`, `TEXTURE`, `MATERIAL`, `ANIMATION`, `AUDIO`, `FONT`, `SHADER`, `GENERATOR`.
 
@@ -56,7 +58,7 @@ The gate blocks approval when any of the following is true:
 4. Required attribution text is missing.
 5. Visual tags indicate cartoon, chibi, toy-like, comic, mascot, humorous/comical, or primitive-human content.
 6. Visual style is not cinematic realistic. Scoped stylization is allowed only for its explicitly reviewed scope.
-7. Reviewer, date, decision reason, rights/visual/technical review, or realism score (minimum 4/5) is missing or failed.
+7. Acquisition/provenance, technical profile, reviewer/date/decision reason/review evidence, rights/visual/technical review, or realism score (minimum 4/5) is missing or failed.
 8. The requested runtime version is not explicitly listed as tested, or the requested use scope is not approved.
 9. The manifest is empty for an asset, a path is absolute/traversal/unsafe, a file is absent, or its byte size/SHA-256 differs from the packaged bytes.
 10. A dependency is missing, not approved for the same runtime/scope, or participates in a dependency cycle.
@@ -88,7 +90,7 @@ The empty manifest is an honest implementation baseline, not evidence that the c
 `WolfAssetRegistryTest` covers:
 - A complete, realistic, licensed entry passing the gate with a pending-budget warning.
 - Unverified/non-commercial rights rejection.
-- Cartoon/t toy-like visual rejection.
+- Cartoon/toy-like visual rejection.
 - Packaged byte/hash mismatch rejection.
 - Absolute/traversal path rejection.
 - Missing dependency rejection.
