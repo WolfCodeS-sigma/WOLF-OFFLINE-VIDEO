@@ -653,13 +653,13 @@ object OfflineProductionEngine {
                         for (f in 0 until shotFrames) {
                             if (f % (fps * 5) == 0) WolfResourceGuard.ensureSafeToContinue(context)
                             val shotFrameOffset = shotFrameOffsets?.getOrNull(s)?.getOrNull(shotIndex) ?: 0
-                    val fullShotFrameCount = fullShotFrameCounts?.getOrNull(s)?.getOrNull(shotIndex)
-                        ?: shotFrames
-                    val shotProgress = StoryDirectorEngine.progressForShotFrame(
-                        shotFrameOffset,
-                        f,
-                        fullShotFrameCount
-                    )
+                            val fullShotFrameCount = fullShotFrameCounts?.getOrNull(s)?.getOrNull(shotIndex)
+                                ?: shotFrames
+                            val shotProgress = StoryDirectorEngine.progressForShotFrame(
+                                shotFrameOffset,
+                                f,
+                                fullShotFrameCount
+                            )
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
                                 w, h, scenes[s], s, sourceShotIndex, shotProgress, image, imageLayers, includeWatermark,
