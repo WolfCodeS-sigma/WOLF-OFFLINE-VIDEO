@@ -399,6 +399,11 @@ class WolfAssetRegistry private constructor(
 
         const val BUNDLED_MANIFEST_PATH = "wolf_asset_registry.json"
 
+        private fun requiredBoolean(value: JSONObject, key: String): Boolean {
+            return value.opt(key) as? Boolean
+                ?: throw IllegalArgumentException("الحقل $key مفقود أو ليس قيمة Boolean صريحة")
+        }
+
         private fun jsonObjectToMap(value: JSONObject): Map<String, String> = buildMap {
             val keys = value.keys()
             while (keys.hasNext()) {
@@ -411,10 +416,8 @@ class WolfAssetRegistry private constructor(
             val license = item.getJSONObject("license")
             val review = item.getJSONObject("review")
             val files = item.getJSONArray("files")
-            val dependencyVersions = if (item.has("dependencies")) {
-                item.optJSONObject("dependencies")
-                    ?: throw IllegalArgumentException("اعتماديات الأصول يجب أن تكون خريطة لمعرّفات الأصول وإصداراتها")
-            } else JSONObject()
+            val dependencyVersions = item.optJSONObject("dependencies")
+                ?: throw IllegalArgumentException("حقل اعتماديات الأصول مفقود أو ليس خريطة لمعرّفات الأصول وإصداراتها؛ استخدم خريطة فارغة صراحةً عند عدم وجود اعتماديات")
             val tags = item.optJSONArray("tags") ?: JSONArray()
             val scopes = item.optJSONArray("approvedScopes") ?: JSONArray()
             val styleScopes = review.optJSONArray("approvedStyleScopes") ?: JSONArray()
@@ -434,12 +437,12 @@ class WolfAssetRegistry private constructor(
                     licenseName = license.optString("licenseName"),
                     licenseVersion = license.optString("licenseVersion"),
                     evidenceReference = license.optString("evidenceReference"),
-                    verified = license.optBoolean("verified"),
-                    commercialUse = license.optBoolean("commercialUse"),
-                    modificationAllowed = license.optBoolean("modificationAllowed"),
-                    redistributionAllowed = license.optBoolean("redistributionAllowed"),
-                    appBundlingAllowed = license.optBoolean("appBundlingAllowed"),
-                    attributionRequired = license.optBoolean("attributionRequired"),
+                    verified = requiredBoolean(license, "verified"),
+                    commercialUse = requiredBoolean(license, "commercialUse"),
+                    modificationAllowed = requiredBoolean(license, "modificationAllowed"),
+                    redistributionAllowed = requiredBoolean(license, "redistributionAllowed"),
+                    appBundlingAllowed = requiredBoolean(license, "appBundlingAllowed"),
+                    attributionRequired = requiredBoolean(license, "attributionRequired"),
                     attributionText = license.optString("attributionText"),
                     restrictions = license.optString("restrictions"),
                     acquiredAtEpochMillis = license.optLong("acquiredAtEpochMillis"),
@@ -478,11 +481,11 @@ class WolfAssetRegistry private constructor(
                     reviewedAtEpochMillis = review.optLong("reviewedAtEpochMillis"),
                     decisionReason = review.optString("decisionReason"),
                     reviewEvidenceReference = review.optString("reviewEvidenceReference"),
-                    rightsPassed = review.optBoolean("rightsPassed"),
-                    visualPassed = review.optBoolean("visualPassed"),
-                    technicalPassed = review.optBoolean("technicalPassed"),
+                    rightsPassed = requiredBoolean(review, "rightsPassed"),
+                    visualPassed = requiredBoolean(review, "visualPassed"),
+                    technicalPassed = requiredBoolean(review, "technicalPassed"),
                     realismScore = review.optInt("realismScore"),
-                    budgetPendingAccepted = review.optBoolean("budgetPendingAccepted"),
+                    budgetPendingAccepted = requiredBoolean(review, "budgetPendingAccepted"),
                     visualStyle = enumValueOf(review.getString("visualStyle")),
                     approvedStyleScopes = (0 until styleScopes.length()).map { styleScopes.getString(it) }.toSet()
                 )

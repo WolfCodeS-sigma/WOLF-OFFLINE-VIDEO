@@ -7,6 +7,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Test
 
 class WolfAssetRegistryTest {
@@ -242,6 +244,110 @@ class WolfAssetRegistryTest {
         assertEquals(0, registry.size)
         assertTrue(registry.approvedAssets(request()).isEmpty())
         assertFalse(registry.evaluate("wolf_not_present", request()).approved)
+    }
+
+    @Test
+    fun missingDependenciesFieldIsNotTreatedAsAnEmptyDependencyList() {
+        assertManifestRejected(validEntryJson().apply { remove("dependencies") })
+    }
+
+    @Test
+    fun missingAttributionRequirementCannotDefaultToNoAttribution() {
+        val asset = validEntryJson()
+        asset.getJSONObject("license").remove("attributionRequired")
+        assertManifestRejected(asset)
+    }
+
+    @Test
+    fun licenseAndReviewFlagsMustBeExplicitJsonBooleans() {
+        val asset = validEntryJson()
+        asset.getJSONObject("license").put("attributionRequired", "false")
+        assertManifestRejected(asset)
+    }
+
+    private fun assertManifestRejected(asset: JSONObject) {
+        val manifest = JSONObject()
+            .put("schemaVersion", WolfAssetRegistry.CURRENT_SCHEMA_VERSION)
+            .put("assets", JSONArray().put(asset))
+        val parsed = runCatching { WolfAssetRegistry.fromJson(manifest.toString(), verifier) }
+        assertTrue("Malformed or incomplete manifest must fail closed", parsed.isFailure)
+    }
+
+    private fun validEntryJson(): JSONObject {
+        val entry = validEntry()
+        val license = entry.license
+        val review = entry.review
+        val licenseJson = JSONObject()
+            .put("creatorOrRightsHolder", license.creatorOrRightsHolder)
+            .put("sourceName", license.sourceName)
+            .put("sourceLocation", license.sourceLocation)
+            .put("licenseId", license.licenseId)
+            .put("licenseName", license.licenseName)
+            .put("licenseVersion", license.licenseVersion)
+            .put("evidenceReference", license.evidenceReference)
+            .put("verified", license.verified)
+            .put("commercialUse", license.commercialUse)
+            .put("modificationAllowed", license.modificationAllowed)
+            .put("redistributionAllowed", license.redistributionAllowed)
+            .put("appBundlingAllowed", license.appBundlingAllowed)
+            .put("attributionRequired", license.attributionRequired)
+            .put("attributionText", license.attributionText)
+            .put("restrictions", license.restrictions)
+            .put("acquiredAtEpochMillis", license.acquiredAtEpochMillis)
+            .put("acquisitionMethod", license.acquisitionMethod)
+            .put("provenanceRecordReference", license.provenanceRecordReference)
+        val files = JSONArray()
+        entry.files.forEach { file ->
+            files.put(
+                JSONObject()
+                    .put("relativePath", file.relativePath)
+                    .put("format", file.format)
+                    .put("byteSize", file.byteSize)
+                    .put("sha256", file.sha256)
+            )
+        }
+        val dependencies = JSONObject().apply {
+            entry.dependencies.forEach { (id, version) -> put(id, version) }
+        }
+        val technicalProfile = JSONObject().apply {
+            entry.technicalProfile.forEach { (key, value) -> put(key, value) }
+        }
+        val resourceMeasurements = JSONObject().apply {
+            entry.resourceMeasurements.forEach { (key, value) -> put(key, value) }
+        }
+        val runtimes = JSONObject().apply {
+            entry.compatibleRuntimes.forEach { (key, value) -> put(key, value) }
+        }
+        val reviewJson = JSONObject()
+            .put("reviewer", review.reviewer)
+            .put("reviewedAtEpochMillis", review.reviewedAtEpochMillis)
+            .put("decisionReason", review.decisionReason)
+            .put("reviewEvidenceReference", review.reviewEvidenceReference)
+            .put("rightsPassed", review.rightsPassed)
+            .put("visualPassed", review.visualPassed)
+            .put("technicalPassed", review.technicalPassed)
+            .put("realismScore", review.realismScore)
+            .put("budgetPendingAccepted", review.budgetPendingAccepted)
+            .put("visualStyle", review.visualStyle.name)
+            .put("approvedStyleScopes", JSONArray().apply {
+                review.approvedStyleScopes.forEach { put(it) }
+            })
+        return JSONObject()
+            .put("assetId", entry.assetId)
+            .put("name", entry.name)
+            .put("version", entry.version)
+            .put("category", entry.category.name)
+            .put("tags", JSONArray().apply { entry.tags.forEach { put(it) } })
+            .put("lifecycle", entry.lifecycle.name)
+            .put("license", licenseJson)
+            .put("files", files)
+            .put("dependencies", dependencies)
+            .put("technicalProfile", technicalProfile)
+            .put("resourceMeasurements", resourceMeasurements)
+            .put("compatibleRuntimes", runtimes)
+            .put("approvedScopes", JSONArray().apply { entry.approvedScopes.forEach { put(it) } })
+            .put("budgetStatus", entry.budgetStatus.name)
+            .put("review", reviewJson)
     }
 
     private fun gate(entry: WolfAssetRegistryEntry) =

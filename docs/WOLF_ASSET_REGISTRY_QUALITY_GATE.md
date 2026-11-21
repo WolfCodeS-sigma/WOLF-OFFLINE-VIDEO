@@ -47,7 +47,7 @@ Lifecycle values: `CANDIDATE`, `UNDER_REVIEW`, `APPROVED`, `REJECTED`, `QUARANTI
 
 Visual styles: `CINEMATIC_REALISTIC`, `SCOPED_STYLIZED`, `CARTOON`, `TOY_LIKE`, `COMIC`, `UNKNOWN`.
 
-Unknown or missing values do not receive guessed defaults that can create approval. Parsing errors or unsupported schema versions stop registry loading.
+Unknown or missing values do not receive guessed defaults that can create approval. Parsing errors or unsupported schema versions stop registry loading. The JSON parser also requires explicit, correctly typed Boolean values for every rights and review decision flag. The `dependencies` field must always be a JSON object; use an explicit empty object (`{}`) when an asset has no dependencies. Missing, null, or wrongly typed dependency/decision fields are rejected rather than interpreted as a clean result.
 
 ## 4. Mandatory Quality Gate rules
 
