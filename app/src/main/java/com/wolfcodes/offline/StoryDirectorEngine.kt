@@ -54,6 +54,66 @@ object StoryDirectorEngine {
         return buckets.map { it.joinToString("\n") }.filter { it.isNotBlank() }
     }
 
+    /** Allocate an exact frame budget across planned shots using their duration weights. */
+    fun allocateShotFrames(totalFrames: Int, shotDurationsSeconds: List<Int>): List<Int> {
+        require(totalFrames > 0) { "عدد إطارات اللقطة يجب أن يكون موجبًا" }
+        require(shotDurationsSeconds.isNotEmpty()) { "خطة اللقطات فارغة" }
+        require(totalFrames >= shotDurationsSeconds.size) {
+            "عدد الإطارات لا يكفي لتمثيل كل اللقطات المخططة"
+        }
+        val weights = shotDurationsSeconds.map { it.coerceAtLeast(1).toDouble() }
+        val remaining = totalFrames - weights.size
+        val weightSum = weights.sum()
+        val exact = weights.map { remaining * it / weightSum }
+        val result = exact.map { 1 + it.toInt() }.toMutableList()
+        var remainder = totalFrames - result.sum()
+        exact.indices.sortedByDescending { exact[it] - exact[it].toInt() }.forEach { index ->
+            if (remainder > 0) {
+                result[index] += 1
+                remainder -= 1
+            }
+        }
+        check(result.sum() == totalFrames && result.all { it > 0 })
+        return result
+    }
+
+    /** Intersect a scene's shot-frame ranges with one chapter slice without losing frames. */
+    fun sliceShotFrames(shotFrames: List<Int>, startFrame: Int, frameCount: Int): List<Int> {
+        require(startFrame >= 0 && frameCount > 0)
+        require(shotFrames.isNotEmpty() && shotFrames.all { it > 0 })
+        val endFrame = startFrame + frameCount
+        val result = mutableListOf<Int>()
+        var cursor = 0
+        shotFrames.forEach { length ->
+            val overlap = (minOf(endFrame, cursor + length) - maxOf(startFrame, cursor)).coerceAtLeast(0)
+            if (overlap > 0) result.add(overlap)
+            cursor += length
+        }
+        require(result.sum() == frameCount) { "شريحة الفصل تتجاوز نطاق إطارات المشهد" }
+        return result
+    }
+
+    /** Return the shot descriptions intersecting a chapter slice, preserving their order. */
+    fun sliceShotPlans(
+        shots: List<ShotPlan>,
+        shotFrames: List<Int>,
+        startFrame: Int,
+        frameCount: Int
+    ): List<ShotPlan> {
+        require(shots.size == shotFrames.size)
+        val endFrame = startFrame + frameCount
+        val result = mutableListOf<ShotPlan>()
+        var cursor = 0
+        shots.forEachIndexed { index, shot ->
+            if (minOf(endFrame, cursor + shotFrames[index]) > maxOf(startFrame, cursor)) {
+                result.add(shot)
+            }
+            cursor += shotFrames[index]
+        }
+        require(result.isNotEmpty()) { "لا توجد لقطة مخططة ضمن شريحة الفصل" }
+        return result
+    }
+
     fun promptsForSharing(plan: FilmPlan): String = plan.scenes.flatMap { it.shots }.joinToString("\n\n") { shot ->
         "اللقطة ${shot.number} — ${shot.type}\n${shot.prompt}"
     }
@@ -108,24 +168,53 @@ object StoryDirectorEngine {
 
     private fun buildShots(sceneNumber: Int, text: String, sceneDuration: Int, ratio: String,
         style: String, horror: String, setting: String, mood: String, continuity: String): List<ShotPlan> {
-        val templates = listOf(
-            Triple("لقطة تأسيسية", "لقطة واسعة بعدسة 24mm من مستوى العين", "أظهر المكان والعزلة والمساحة السلبية حول الحدث"),
-            Triple("لقطة اقتراب", "لقطة متوسطة بعدسة 50mm وعمق مجال سينمائي", "قرّب الانتباه إلى الشخصية أو الحدث الأساسي"),
-            Triple("لقطة تفصيل أو كشف", "لقطة قريبة بعدسة 85mm أو زاوية منخفضة عند ملاءمة الحدث", "اكشف تفصيلًا مقلقًا موجودًا في النص دون اختراع حدث")
-        ).take(sceneDuration.coerceIn(1, 3))
-        val oneThird = sceneDuration / templates.size
+        val lower = text.lowercase(Locale.ROOT)
+        val chase = listOf("يطارد", "يجري", "هرب", "مطاردة", "يلحق", "ركض", "فرّ").any(lower::contains)
+        val sound = listOf("همس", "صوت", "أنفاس", "ينادي", "طرق", "خطوات", "صرير").any(lower::contains)
+        val reveal = listOf("ظهر", "انكشف", "وجد", "اكتشف", "رأى", "اختفى", "ظل", "وجه").any(lower::contains)
+        val templates = when {
+            chase -> listOf(
+                Triple("لقطة تتبّع واسعة", "لقطة واسعة بعدسة 24mm مع تتبّع جانبي مضبوط", "أظهر اتجاه الحركة والمسافة والعوائق المذكورة في النص"),
+                Triple("لقطة حركة متوسطة", "لقطة متوسطة بعدسة 50mm من زاوية موازية للحركة", "حافظ على اتجاه الحركة واستمرارية موقع الشخصية"),
+                Triple("لقطة تفصيل أثناء المطاردة", "لقطة قريبة بعدسة 85mm مع اهتزاز محدود", "أبرز تفصيل الخطر المذكور دون إضافة مطارد أو حدث جديد")
+            )
+            sound -> listOf(
+                Triple("لقطة تأسيسية صامتة", "لقطة واسعة بعدسة 24mm وكاميرا ثابتة", "اترك مساحة بصرية للمصدر الصوتي المذكور"),
+                Triple("لقطة ترقّب", "لقطة متوسطة بعدسة 50mm من خلف الشخصية عند وجودها بالنص", "وجّه الانتباه إلى اتجاه الصوت دون إظهار مصدر غير مؤكد"),
+                Triple("لقطة مصدر الصوت", "لقطة قريبة بعدسة 85mm", "اكشف المصدر فقط إذا كان محددًا في القصة وإلا أبقه خارج الكادر")
+            )
+            reveal -> listOf(
+                Triple("لقطة تأسيسية غامضة", "لقطة واسعة بعدسة 24mm مع حجب جزئي للكادر", "مهّد للمكان والعنصر المذكور دون كشف مبكر"),
+                Triple("لقطة اقتراب بطيء", "لقطة متوسطة بعدسة 50mm مع اقتراب بصري محدود", "وجّه النظر إلى موضع الظهور أو الاكتشاف المذكور"),
+                Triple("لقطة الكشف", "لقطة قريبة بعدسة 85mm بزاوية منخفضة عند ملاءمة النص", "أظهر التفصيل المذكور فقط مع الحفاظ على الغموض")
+            )
+            else -> listOf(
+                Triple("لقطة تأسيسية", "لقطة واسعة بعدسة 24mm من مستوى العين", "أظهر المكان والعزلة والمساحة السلبية حول الحدث"),
+                Triple("لقطة اقتراب", "لقطة متوسطة بعدسة 50mm وعمق مجال سينمائي", "قرّب الانتباه إلى الشخصية أو الحدث الأساسي المذكور"),
+                Triple("لقطة تفصيل", "لقطة قريبة بعدسة 85mm", "اكشف تفصيلًا مقلقًا موجودًا في النص دون اختراع حدث")
+            )
+        }.take(sceneDuration.coerceIn(1, 3))
+        val baseDuration = sceneDuration / templates.size
         val durations = List(templates.size) { index ->
-            if (index == templates.lastIndex) sceneDuration - oneThird * index else oneThird
+            if (index == templates.lastIndex) sceneDuration - baseDuration * index else baseDuration
         }
         return templates.mapIndexed { i, shotTemplate ->
-            val lighting = when (i) {
-                0 -> "إضاءة محيطية منخفضة ومصدر ضوء منطقي داخل الموقع"
-                1 -> "إضاءة جانبية درامية وظلال عميقة مع وضوح الحدث"
+            val lighting = when {
+                setting == "مكان طبي" -> "إضاءة عملية باردة من مصادر طبية واقعية مع ظلال عميقة"
+                setting == "غابة كثيفة" || setting == "مقابر" -> "إضاءة ليلية محيطية منخفضة مع ضوء خلفي طبيعي محدود"
+                i == 0 -> "إضاءة محيطية منخفضة ومصدر ضوء منطقي داخل الموقع"
+                i == 1 -> "إضاءة جانبية درامية وظلال عميقة مع وضوح الحدث"
                 else -> "ضوء محدود وموجّه يبرز التفصيل المرعب"
             }
-            val motion = when (i) {
-                0 -> "حركة كاميرا بطيئة للداخل أو انزلاق جانبي هادئ"
-                1 -> "اقتراب سينمائي بطيء مع اهتزاز طفيف جدًا عند التوتر"
+            val motion = when {
+                chase && i == 0 -> "تتبّع جانبي بطيء يحافظ على اتجاه الحركة"
+                chase && i == 1 -> "حركة متابعة متوسطة وثابتة دون اهتزاز مبالغ"
+                sound && i == 0 -> "تثبيت الكاميرا وترك التوتر يتصاعد داخل الكادر"
+                sound && i == 2 -> "اقتراب دقيق من مصدر الصوت إن كان ظاهرًا في النص"
+                reveal && i == 0 -> "تثبيت مع حجب جزئي للمعلومة البصرية"
+                reveal && i == templates.lastIndex -> "كشف بطيء ومحدود للتفصيل المذكور"
+                i == 0 -> "حركة كاميرا بطيئة للداخل أو انزلاق جانبي هادئ"
+                i == 1 -> "اقتراب سينمائي بطيء مع اهتزاز طفيف جدًا عند التوتر"
                 else -> "تثبيت قصير ثم حركة دقيقة تكشف التفصيل"
             }
             val prompt = "صورة ثابتة فوتوغرافية واقعية للغاية لفيلم رعب $horror. " +
@@ -133,7 +222,7 @@ object StoryDirectorEngine {
                 "${shotTemplate.second}. ${shotTemplate.third}. الإضاءة: $lighting. " +
                 "الأسلوب: $style. نسبة الإطار: $ratio. استمرارية بصرية ملزمة:\n$continuity\n" +
                 "تكوين سينمائي احترافي وخامات واقعية وتفاصيل دقيقة، بلا نصوص أو شعارات أو علامة مائية. " +
-                "لا تضف شخصيات أو أحداثًا غير مذكورة."
+                "لا تضف شخصيات أو أحداثًا أو مواقع أو مصادر صوت غير مذكورة."
             ShotPlan((sceneNumber - 1) * 3 + i + 1, shotTemplate.first, shotTemplate.second, shotTemplate.third,
                 lighting, motion, durations[i].coerceAtLeast(1), prompt)
         }
