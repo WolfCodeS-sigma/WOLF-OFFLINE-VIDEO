@@ -55,7 +55,7 @@ class WolfProceduralGenerationLibraryTest {
         assertEquals(3, result.effects.size)
         result.effects.forEach { effect ->
             assertEquals(listOf(ENVIRONMENT_ID), effect.supportingAssets.map { it.assetId })
-            assertEquals(listOf("realistic", "environment", "fixture-only"), effect.supportingAssets.single().tags.sorted())
+            assertEquals(setOf("realistic", "environment", "fixture-only"), effect.supportingAssets.single().tags)
             assertTrue(Regex("[a-f0-9]{64}").matches(effect.outputDigest))
         }
 
