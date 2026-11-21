@@ -92,7 +92,7 @@ class WolfAssetRegistryTest {
 
     @Test
     fun missingDependencyBlocksApproval() {
-        val entry = validEntry().copy(dependencies = setOf("wolf_missing_dependency"))
+        val entry = validEntry().copy(dependencies = mapOf("wolf_missing_dependency" to "1.0.0"))
         val result = gate(entry).evaluate(entry, request())
 
         assertFalse(result.approved)
@@ -104,9 +104,9 @@ class WolfAssetRegistryTest {
         val first = validEntry()
         val second = validEntry().copy(
             assetId = "wolf_cinematic_forest_dependency",
-            dependencies = setOf(first.assetId)
+            dependencies = mapOf(first.assetId to first.version)
         )
-        val firstWithDependency = first.copy(dependencies = setOf(second.assetId))
+        val firstWithDependency = first.copy(dependencies = mapOf(second.assetId to second.version))
         val gate = WolfAssetQualityGate(
             mapOf(first.assetId to firstWithDependency, second.assetId to second),
             verifier
@@ -123,10 +123,48 @@ class WolfAssetRegistryTest {
         val scopeResult = gate(entry).evaluate(entry, request(intendedScope = "closeup_character"))
         val runtimeResult = gate(entry).evaluate(entry, request(targetRuntime = "UNTESTED_RENDERER"))
 
+        val versionResult = gate(entry).evaluate(entry, request(targetRuntimeVersion = "2.0"))
+
         assertFalse(scopeResult.approved)
         assertFalse(runtimeResult.approved)
+        assertFalse(versionResult.approved)
         assertTrue(scopeResult.errors.any { it.contains("نطاق الاستخدام") })
         assertTrue(runtimeResult.errors.any { it.contains("توافق مختبر") })
+        assertTrue(versionResult.errors.any { it.contains("إصدار بيئة التشغيل") })
+    }
+
+    @Test
+    fun dependencyVersionMustMatchPinnedVersion() {
+        val dependency = validEntry().copy(version = "2.0.0")
+        val parent = validEntry().copy(
+            assetId = "wolf_cinematic_forest_parent",
+            dependencies = mapOf(dependency.assetId to "1.0.0")
+        )
+        val result = WolfAssetQualityGate(
+            mapOf(parent.assetId to parent, dependency.assetId to dependency),
+            verifier
+        ).evaluate(parent, request())
+
+        assertFalse(result.approved)
+        assertTrue(result.errors.any { it.contains("نسخة الاعتمادية") })
+    }
+
+    @Test
+    fun dependencyWarningsArePropagatedToParentApproval() {
+        val dependency = validEntry()
+        val parent = validEntry().copy(
+            assetId = "wolf_cinematic_forest_parent",
+            dependencies = mapOf(dependency.assetId to dependency.version),
+            budgetStatus = WolfAssetBudgetStatus.PASS,
+            resourceMeasurements = mapOf("packagedBytes" to "5")
+        )
+        val result = WolfAssetQualityGate(
+            mapOf(parent.assetId to parent, dependency.assetId to dependency),
+            verifier
+        ).evaluate(parent, request())
+
+        assertTrue(result.approved)
+        assertTrue(result.warnings.any { it.contains("معلقة") })
     }
 
     @Test
@@ -172,7 +210,7 @@ class WolfAssetRegistryTest {
     @Test
     fun bundledEmptyRegistryLoadsWithoutInventingAssets() {
         val registry = WolfAssetRegistry.fromJson(
-            """{"schemaVersion":1,"assets":[]}""",
+            """{"schemaVersion":2,"assets":[]}""",
             verifier
         )
 
@@ -186,8 +224,9 @@ class WolfAssetRegistryTest {
 
     private fun request(
         targetRuntime: String = "WOLF_ANDROID_CANVAS",
+        targetRuntimeVersion: String = "1.0-tested",
         intendedScope: String = "environment_background"
-    ) = WolfAssetUseRequest(targetRuntime, intendedScope)
+    ) = WolfAssetUseRequest(targetRuntime, targetRuntimeVersion, intendedScope)
 
     private fun validEntry() = WolfAssetRegistryEntry(
         assetId = "wolf_cinematic_forest_001",
@@ -217,7 +256,7 @@ class WolfAssetRegistryTest {
             provenanceRecordReference = "provenance/forest-record.json"
         ),
         files = listOf(manifestFile),
-        dependencies = emptySet(),
+        dependencies = emptyMap(),
         technicalProfile = mapOf(
             "coordinateSystem" to "Android Canvas 2D",
             "units" to "pixels",
