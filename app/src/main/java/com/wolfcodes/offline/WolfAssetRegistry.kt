@@ -58,6 +58,7 @@ data class WolfAssetReview(
     val visualPassed: Boolean,
     val technicalPassed: Boolean,
     val realismScore: Int,
+    val budgetPendingAccepted: Boolean,
     val visualStyle: WolfAssetVisualStyle,
     val approvedStyleScopes: Set<String>
 )
@@ -190,7 +191,10 @@ class WolfAssetQualityGate(
         val license = entry.license
         requireValue(license.creatorOrRightsHolder.isNotBlank(), "صاحب الحقوق غير موثق")
         requireValue(license.sourceName.isNotBlank() && license.sourceLocation.isNotBlank(), "مصدر الأصل غير موثق")
-        requireValue(license.acquiredAtEpochMillis > 0L && license.acquisitionMethod.isNotBlank(), "تاريخ أو طريقة الحصول على الأصل مفقودة")
+        requireValue(
+            license.acquiredAtEpochMillis in 1L..System.currentTimeMillis() && license.acquisitionMethod.isNotBlank(),
+            "تاريخ أو طريقة الحصول على الأصل مفقودة أو غير صالحة"
+        )
         requireValue(license.provenanceRecordReference.isNotBlank(), "مرجع سجل مصدر الأصل مفقود")
         requireValue(license.licenseId.isNotBlank() && license.licenseName.isNotBlank() && license.licenseVersion.isNotBlank(), "معرّف الترخيص أو اسمه أو إصداره مفقود")
         requireValue(license.restrictions.isNotBlank(), "قيود الترخيص غير موثقة؛ استخدم None إذا لم توجد قيود")
@@ -203,8 +207,15 @@ class WolfAssetQualityGate(
             requireValue(license.attributionText.isNotBlank(), "نص الإسناد الإلزامي مفقود")
         }
 
-        val blockedTags = setOf("cartoon", "cartoonish", "chibi", "toy-like", "comic", "mascot", "humorous", "comical", "primitive-human")
-        requireValue(entry.tags.none { it.trim().lowercase() in blockedTags }, "وسم بصري مرفوض لأسلوب WOLF السينمائي")
+        val blockedTags = setOf(
+            "cartoon", "cartoonish", "cartoon-style", "chibi", "chibi-style", "toy-like",
+            "comic", "comic-style", "mascot", "mascot-like", "humorous", "comical",
+            "comedic", "primitive-human"
+        )
+        requireValue(
+            entry.tags.none { it.trim().lowercase().replace('_', '-').replace(' ', '-') in blockedTags },
+            "وسم بصري مرفوض لأسلوب WOLF السينمائي"
+        )
         when (entry.review.visualStyle) {
             WolfAssetVisualStyle.CINEMATIC_REALISTIC -> Unit
             WolfAssetVisualStyle.SCOPED_STYLIZED -> requireValue(
@@ -216,7 +227,10 @@ class WolfAssetQualityGate(
 
         val review = entry.review
         requireValue(review.reviewer.isNotBlank(), "اسم المراجع مفقود")
-        requireValue(review.reviewedAtEpochMillis > 0L, "تاريخ المراجعة مفقود")
+        requireValue(
+            review.reviewedAtEpochMillis in 1L..System.currentTimeMillis(),
+            "تاريخ المراجعة مفقود أو غير صالح"
+        )
         requireValue(review.decisionReason.isNotBlank(), "سبب قرار المراجعة مفقود")
         requireValue(review.reviewEvidenceReference.isNotBlank(), "مرجع أدلة المراجعة البصرية/التقنية مفقود")
         requireValue(review.rightsPassed, "مراجعة الحقوق لم تجتز")
@@ -259,9 +273,20 @@ class WolfAssetQualityGate(
             )
         }
         if (entry.budgetStatus == WolfAssetBudgetStatus.PASS) {
-            requireValue(entry.resourceMeasurements.isNotEmpty(), "لا يمكن اجتياز ميزانية الموارد دون قياسات موثقة")
+            requireValue(
+                entry.resourceMeasurements.isNotEmpty() &&
+                    entry.resourceMeasurements.all { it.key.isNotBlank() && it.value.isNotBlank() },
+                "لا يمكن اجتياز ميزانية الموارد دون قياسات موثقة"
+            )
+        }
+        if (entry.budgetStatus == WolfAssetBudgetStatus.PENDING) {
+            requireValue(review.budgetPendingAccepted, "قبول تعليق ميزانية الموارد يحتاج قرارًا صريحًا من المراجع")
         }
         requireValue(entry.files.isNotEmpty(), "قائمة ملفات الأصل فارغة")
+        requireValue(
+            entry.files.map { it.relativePath }.distinct().size == entry.files.size,
+            "قائمة ملفات الأصل تحتوي على مسارات مكررة"
+        )
         entry.files.forEach { file ->
             requireValue(WolfAssetFileVerifier.isSafeRelativePath(file.relativePath), "مسار ملف غير آمن: ${file.relativePath}")
             requireValue(file.format.isNotBlank(), "صيغة ملف غير محددة: ${file.relativePath}")
@@ -414,6 +439,7 @@ class WolfAssetRegistry private constructor(
                     visualPassed = review.optBoolean("visualPassed"),
                     technicalPassed = review.optBoolean("technicalPassed"),
                     realismScore = review.optInt("realismScore"),
+                    budgetPendingAccepted = review.optBoolean("budgetPendingAccepted"),
                     visualStyle = enumValueOf(review.getString("visualStyle")),
                     approvedStyleScopes = (0 until styleScopes.length()).map { styleScopes.getString(it) }.toSet()
                 )
