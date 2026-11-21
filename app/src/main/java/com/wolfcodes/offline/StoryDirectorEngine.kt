@@ -54,6 +54,42 @@ object StoryDirectorEngine {
         return buckets.map { it.joinToString("\n") }.filter { it.isNotBlank() }
     }
 
+    /** Recover the source slot for a shot even when a chapter starts mid-scene. */
+    internal fun sourceShotIndex(shotNumber: Int, shotsPerScene: Int = 3): Int {
+        require(shotNumber > 0) { "رقم اللقطة يجب أن يكون موجبًا" }
+        require(shotsPerScene > 0) { "عدد لقطات المشهد يجب أن يكون موجبًا" }
+        return (shotNumber - 1) % shotsPerScene
+    }
+
+    /** Convert the planned motion description into a restrained normalized timeline. */
+    internal fun motionProgress(motion: String, progress: Float): Float {
+        val value = progress.coerceIn(0f, 1f)
+        return when {
+            motion.contains("تثبيت") -> 0.5f
+            motion.contains("كشف بطيء") || motion.contains("اقتراب بطيء") ->
+                value * value * (3f - 2f * value)
+            else -> value
+        }
+    }
+
+    /** Choose a conservative horizontal focus from the shot's actual composition notes. */
+    internal fun compositionFocusX(composition: String): Float = when {
+        composition.contains("حجب جزئي") -> 0.66f
+        composition.contains("مصدر الصوت") -> 0.64f
+        composition.contains("خلف الشخصية") -> 0.38f
+        composition.contains("اتجاه الحركة") -> 0.58f
+        else -> 0.5f
+    }
+
+    /** Normalize lighting intent for a subtle, deterministic local render treatment. */
+    internal fun lightingTreatment(lighting: String): String = when {
+        lighting.contains("باردة") -> "COOL"
+        lighting.contains("ليلية") -> "NIGHT"
+        lighting.contains("جانبية") -> "SIDE"
+        lighting.contains("محدود") -> "LOW_KEY"
+        else -> "NEUTRAL"
+    }
+
     /** Allocate an exact frame budget across planned shots using their duration weights. */
     fun allocateShotFrames(totalFrames: Int, shotDurationsSeconds: List<Int>): List<Int> {
         require(totalFrames > 0) { "عدد إطارات اللقطة يجب أن يكون موجبًا" }
