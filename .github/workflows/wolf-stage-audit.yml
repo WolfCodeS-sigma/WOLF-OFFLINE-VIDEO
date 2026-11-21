@@ -1,4 +1,4 @@
-name: WOLF stages 01-07 regression audit
+name: WOLF stages 01-08 regression audit
 
 on:
   pull_request:
@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   android-audit:
-    name: Android debug APK, lint and JVM unit tests
+    name: Android debug APK, lint and JVM unit tests (stages 01-08)
     runs-on: ubuntu-latest
     steps:
       - name: Check out audit branch
@@ -47,7 +47,7 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug lintDebug testDebugUnitTest
 
   android-emulator-regression:
-    name: Android 12 emulator MP4, audio and checkpoint regression tests
+    name: Android 12 emulator MP4, audio, checkpoint and asset registry tests (stages 01-08)
     needs: android-audit
     runs-on: macos-15-intel
     timeout-minutes: 40
