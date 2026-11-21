@@ -419,6 +419,31 @@ class WolfStage01To07InstrumentedTest {
     }
 
     @Test
+    fun bundledAssetRegistryLoadsFromApkAndFailsClosedWhenEmpty() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val registry = WolfAssetRegistry.loadBundled(context)
+
+        assertEquals(0, registry.size)
+        assertTrue(
+            registry.approvedAssets(
+                WolfAssetUseRequest(
+                    targetRuntime = "WOLF_ANDROID_CANVAS",
+                    intendedScope = "environment_background"
+                )
+            ).isEmpty()
+        )
+        assertFalse(
+            registry.evaluate(
+                "wolf_nonexistent_asset",
+                WolfAssetUseRequest(
+                    targetRuntime = "WOLF_ANDROID_CANVAS",
+                    intendedScope = "environment_background"
+                )
+            ).approved
+        )
+    }
+
+    @Test
     fun mainActivityCanLaunchAndCompleteItsInitialScreenLifecycle() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
