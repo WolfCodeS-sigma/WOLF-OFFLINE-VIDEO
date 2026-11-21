@@ -36,7 +36,7 @@ Mandatory rules:
 | `ATMOSPHERE` | Environmental atmosphere | fog density fields, haze layers, dust motes, subtle airborne particles | Must preserve scene readability and avoid decorative/cartoon appearance |
 | `WEATHER` | Weather overlays | rain streaks, wind direction fields, restrained mist movement | Must be driven by explicit scene parameters; no arbitrary weather inference |
 | `ENVIRONMENT_MOTION` | Motion of already-approved environmental elements | foliage sway, cloth-like environmental motion, environmental drift | May animate an existing approved asset; may not invent a realistic tree/prop/character |
-| `CAMERA_MOTION` | Candidate cinematic camera-motion profiles | bounded dolly, pan, tilt, restrained handheld, reveal timing profiles | Profiles are proposals only; `OfflineMotionEngine` remains the sole authority for shot planning, frame allocation, and final camera transforms |
+| `CAMERA_MOTION` | Candidate cinematic camera-motion profiles | bounded dolly, pan, tilt, restrained handheld, reveal timing profiles | Profiles are proposals only; `StoryDirectorEngine` owns shot-level camera/lens/composition intent and shot-frame budgets, while `OfflineMotionEngine` owns scene-frame allocation and deterministic per-frame camera transforms |
 | `LIGHTING_EFFECT` | Non-destructive lighting/post effects | vignette, exposure pulse, restrained volumetric-style overlays, signal interference | Must not obscure required story content, captions, or watermark |
 
 These are the initial design families, not a claim that every generator already exists or is approved. New families require a documented scope, quality rules, rights review, resource profile, and tests before use.
@@ -77,6 +77,17 @@ The production resolver follows this fail-closed sequence:
 6. Pin the selected registry asset ID, exact version, file hashes, dependency versions, runtime ID/version, and scope for the entire request. A later registry change cannot silently change an in-flight render.
 
 A missing or empty generator set is a normal safe result: WPGL reports that no eligible generator is registered and returns control to the scene planner's approved fallback path. It must not fall back to a non-generator registry category or load executable code from an unregistered location.
+
+### 3.2 Existing camera and frame-allocation authority
+
+The current production path deliberately separates shot intent from per-frame camera execution:
+
+- `StoryDirectorEngine` owns the semantic shot plan, including each shot's camera/lens description, composition, motion intent, and duration weighting. Its `allocateShotFrames` function owns the distribution of a scene's frame budget across that scene's shots.
+- `OfflineMotionEngine` owns deterministic scene-level frame allocation through `allocateFrames` and computes the bounded per-frame camera offsets, zoom, and rotation through `cameraFrame` (and its related camera helpers).
+- `OfflineProductionEngine` integrates those existing decisions into the frame render. The renderer consumes the accepted shot plan and resolved camera frame; it does not establish an independent camera-motion authority.
+- A WPGL `CAMERA_MOTION` generator may return a bounded, data-only candidate profile. `StoryDirectorEngine` must accept or reject its shot-level intent against the shot plan; `OfflineMotionEngine` must validate and resolve any accepted per-frame movement. WPGL and renderer adapters may not write camera transforms directly, replace shot plans, change scene/shot frame counts, or alter timestamps. If either existing owner does not accept the candidate, it is discarded and the existing approved fallback behavior continues.
+
+This is a handoff between existing owners, not a second camera system. Any future reassignment of either responsibility requires a separate design decision and regression proof.
 
 `generatorProfile` must be a versioned, validated `WOLF-CANON-JSON-1` object containing at least the canonical generator ID, semantic version, family ID, parameter-schema ID/version, seed-algorithm ID, supported output kinds, execution contract version, and a `hardLimits` object. `hardLimits` declares finite integer maxima for `maxWorkingSetBytes`, `maxTemporaryStorageBytes`, `maxReusableOutputBytes`, `maxTransientElementsPerFrame`, `maxRetainedFrameCount`, and `maxExecutionMillis`; `maxNativeGpuBytes` is also required when that runtime exposes a reliable measurement. `resourceMeasurements` must contain the corresponding measured high-water values (`peakWorkingSetBytes`, `peakTemporaryStorageBytes`, `maxReusableOutputBytesObserved`, `maxTransientElementsPerFrameObserved`, `maxRetainedFrameCountObserved`, and `maxExecutionMillisObserved`, plus `peakNativeGpuBytes` where measurable) and a non-empty `measurementEvidenceReference`. Every required observation must be a finite non-negative base-10 integer no greater than its declared hard limit. Missing, unparsable, `UNKNOWN`, or `PENDING` values, absent evidence, or an exceeded limit block production dispatch even if the general Stage 08 gate returns an approved result. `dependencyProfile` must describe the exact dependency closure and versions, consistent with the Stage 08 `dependencies` map. These are values in the existing registry schema; they do not create a second approval database.
 
@@ -247,7 +258,8 @@ Budgets remain `PENDING` until measured on the target integration and later devi
 |---|---|
 | `WolfProceduralMotionEngine` | Preserve its current behavior as a legacy implementation; future adapters may wrap selected safe effects after Stage 10 verification. |
 | `WolfProceduralVisualSystem` | Keep its compatibility entry point; do not replace it in this design stage. |
-| `OfflineMotionEngine` | Sole authority in the existing production path for shot pacing, camera-motion planning, frame allocation, and final camera transforms. WPGL `CAMERA_MOTION` may return bounded candidate profiles only; `OfflineMotionEngine` validates, accepts/rejects, and resolves any candidate into final per-frame transforms. Renderers consume those resolved transforms and may not independently add camera motion or change frame allocation. Any future transfer of authority requires a separate design decision and regression proof. |
+| `StoryDirectorEngine` | Sole authority for semantic scene/shot plans, shot-level camera/lens/composition intent, motion intent, and shot-frame allocation. It may accept or reject a WPGL camera-profile candidate as shot-plan data. |
+| `OfflineMotionEngine` | Sole authority for scene-frame allocation and deterministic per-frame camera offsets, zoom, and rotation. It validates and resolves only candidates accepted through the existing shot-plan contract. Renderers may not add independent camera transforms or change frame allocation. |
 | `WolfSceneArtEngine` | Remains the current safe base-art/fallback path; the new library must not bypass it. |
 | `WolfAssetRegistry` | Sole approval authority for shared generators and reusable generated assets. |
 | `WolfSceneAssetStore` | Continues to own project-scoped user images; no automatic ingestion or mutation. |
@@ -270,7 +282,7 @@ Stage 10 must implement focused tests before any production renderer integration
 10. Existing Stage 01–08 regression suites continue to pass unchanged.
 11. A non-`GENERATOR` record that passes the general registry gate is still excluded from the WPGL executable catalog; an approved `GENERATOR` record must match exact profile, dependency, scope, runtime, version, hash, and `PASS` budget requirements.
 12. `PENDING` generator budgets and missing/unknown/infinite resource limits are blocked before allocation in production; finite test-only envelopes remain isolated from production dispatch.
-13. A `CAMERA_MOTION` candidate cannot directly mutate the renderer camera or frame timeline; `OfflineMotionEngine` remains the tested final authority.
+13. A `CAMERA_MOTION` candidate cannot directly mutate the renderer camera, shot plan, or frame timeline; `StoryDirectorEngine` must accept/reject shot-level intent and `OfflineMotionEngine` must resolve per-frame camera movement within the existing frame allocation.
 14. Missing, unparsable, unknown, or over-limit resource measurements (including absent measurement evidence) block production dispatch; valid finite measurements are checked against every declared hard limit before allocation.
 
 ## 13. Stage 09 acceptance criteria
@@ -282,7 +294,7 @@ Stage 09 is complete only when:
 - Request/result, deterministic seed, frame timeline, descriptor, and provenance contracts are defined.
 - Generator source and reusable outputs are governed by the Stage 08 registry; WPGL filters executable records to `GENERATOR` only and has no approval bypass.
 - Production execution requires `PASS` resource budgets and finite reviewed limits; `PENDING` is never treated as unlimited or production-safe.
-- `OfflineMotionEngine` remains the single authority for final camera transforms and frame allocation; WPGL camera motion is candidate-only.
+- `StoryDirectorEngine` remains the authority for shot-level camera intent and shot-frame allocation; `OfflineMotionEngine` remains the authority for scene-frame allocation and deterministic per-frame camera transforms. WPGL camera motion is candidate-only and must pass through both existing owners.
 - Realistic human/creature/prop/environment fabrication is explicitly prohibited.
 - Failure fallback, offline/privacy/security constraints, and resource measurement requirements are defined.
 - Existing components and protected behaviors are mapped with no production integration changes.
@@ -292,4 +304,4 @@ This stage defines the design baseline only. It does not claim that new generato
 
 ---
 
-**Handoff:** Stage 10 may implement generator modules and run cross-generator cooperation tests against this contract. It must first prove generator-only registry filtering, exact profile/version/scope matching, bounded production dispatch, deterministic canonicalization fixtures, and candidate-only camera motion. It must not silently widen the approved scope or modify the protected Stage 01–08 production paths.
+**Handoff:** Stage 10 may implement generator modules and run cross-generator cooperation tests against this contract. It must first prove generator-only registry filtering, exact profile/version/scope matching, bounded production dispatch, deterministic canonicalization fixtures, and candidate-only camera motion passed through the existing StoryDirectorEngine and OfflineMotionEngine authority boundaries. It must not silently widen the approved scope or modify the protected Stage 01–08 production paths.
