@@ -232,7 +232,11 @@ class WolfAssetQualityGate(
 
         val requiredTechnicalFields = listOf("coordinateSystem", "units", "importSettings", "rendererRequirements")
         requiredTechnicalFields.forEach { key ->
-            requireValue(!entry.technicalProfile[key].isNullOrBlank(), "بيانات التوافق التقنية مفقودة: $key")
+            val value = entry.technicalProfile[key]
+            requireValue(
+                !value.isNullOrBlank() && value.trim().uppercase() !in setOf("UNKNOWN", "PENDING"),
+                "بيانات التوافق التقنية مفقودة أو غير محسومة: $key"
+            )
         }
         if (entry.budgetStatus == WolfAssetBudgetStatus.PASS) {
             requireValue(entry.resourceMeasurements.isNotEmpty(), "لا يمكن اجتياز ميزانية الموارد دون قياسات موثقة")
