@@ -102,7 +102,7 @@ class WolfOfflineVideoExporter(private val context: Context) {
                 }
             }
             encoder.signalEndOfInputStream()
-            drain(encoder, activeMuxer, info, track) { outputFormat ->
+            drain(encoder, activeMuxer, info, track, waitForEndOfStream = true) { outputFormat ->
                 if (!muxerStarted) {
                     track[0] = activeMuxer.addTrack(outputFormat)
                     activeMuxer.start()
@@ -181,15 +181,29 @@ class WolfOfflineVideoExporter(private val context: Context) {
     }
 
     private fun drain(encoder: MediaCodec, muxer: MediaMuxer, info: MediaCodec.BufferInfo,
-                      track: IntArray, onFormat: (MediaFormat) -> Unit) {
+                      track: IntArray, waitForEndOfStream: Boolean = false,
+                      onFormat: (MediaFormat) -> Unit) {
         var idle = 0
+        var pollsWithoutOutput = 0
         while (true) {
             when (val index = encoder.dequeueOutputBuffer(info, 10_000)) {
                 MediaCodec.INFO_TRY_AGAIN_LATER -> {
-                    if (++idle >= 3) return
+                    idle++
+                    if (waitForEndOfStream) {
+                        if (++pollsWithoutOutput >= 1_000) {
+                            throw IllegalStateException("انتهت مهلة انتظار اكتمال ترميز الفيديو")
+                        }
+                    } else if (idle >= 3) {
+                        return
+                    }
                 }
-                MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> onFormat(encoder.outputFormat)
+                MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    idle = 0
+                    onFormat(encoder.outputFormat)
+                }
                 else -> if (index >= 0) {
+                    idle = 0
+                    pollsWithoutOutput = 0
                     val buffer: ByteBuffer = encoder.getOutputBuffer(index)
                         ?: throw IllegalStateException("تعذر قراءة بيانات الفيديو المشفرة")
                     if (info.size > 0) {
