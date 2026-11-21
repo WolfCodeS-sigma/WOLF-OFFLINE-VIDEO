@@ -1,7 +1,7 @@
 # WOLF Procedural Generation Library — Stage 09 Design
 
 **Design ID:** WOLF-PROCGEN-DESIGN-001  
-**Version:** 1.1  
+**Version:** 1.2  
 **Status:** Stage 09 design baseline  
 **Depends on:** Stage 06 asset policy, Stage 07 inventory, Stage 08 Asset Registry & Quality Gate  
 **Runtime model:** Android application-integrated, deterministic, offline-first  
@@ -85,17 +85,6 @@ The current production path deliberately separates shot intent from per-frame ca
 - `StoryDirectorEngine` owns the semantic shot plan, including each shot's camera/lens description, composition, motion intent, and duration weighting. Its `allocateShotFrames` function owns the distribution of a scene's frame budget across that scene's shots.
 - `OfflineMotionEngine` owns deterministic scene-level frame allocation through `allocateFrames` and computes bounded per-frame camera offsets, zoom, and rotation through `cameraFrame` (and its related helpers) only when safe depth layers are available.
 - `OfflineProductionEngine` integrates those decisions into the frame render. When safe depth layers are unavailable, the existing safe-still-image path intentionally avoids camera warping and preserves the still image; it does not create an alternate procedural camera-motion path. The renderer consumes the accepted shot plan and, when applicable, the resolved depth-aware camera frame; it does not establish an independent camera-motion authority.
-- A WPGL `CAMERA_MOTION` generator may return a bounded, data-only candidate profile. `StoryDirectorEngine` must accept or reject its shot-level intent against the shot plan; `OfflineMotionEngine` must validate and resolve any accepted per-frame movement. WPGL and renderer adapters may not write camera transforms directly, replace shot plans, change scene/shot frame counts, or alter timestamps. If either existing owner does not accept the candidate, it is discarded and the existing approved fallback behavior continues.
-
-This is a handoff between existing owners, not a second camera system. Any future reassignment of either responsibility requires a separate design decision and regression proof.
-
-### 3.2 Existing camera and frame-allocation authority
-
-The current production path deliberately separates shot intent from per-frame camera execution:
-
-- `StoryDirectorEngine` owns the semantic shot plan, including each shot's camera/lens description, composition, motion intent, and duration weighting. Its `allocateShotFrames` function owns the distribution of a scene's frame budget across that scene's shots.
-- `OfflineMotionEngine` owns deterministic scene-level frame allocation through `allocateFrames` and computes the bounded per-frame camera offsets, zoom, and rotation through `cameraFrame` (and its related camera helpers).
-- `OfflineProductionEngine` integrates those existing decisions into the frame render. The renderer consumes the accepted shot plan and resolved camera frame; it does not establish an independent camera-motion authority.
 - A WPGL `CAMERA_MOTION` generator may return a bounded, data-only candidate profile. `StoryDirectorEngine` must accept or reject its shot-level intent against the shot plan; `OfflineMotionEngine` must validate and resolve any accepted per-frame movement. WPGL and renderer adapters may not write camera transforms directly, replace shot plans, change scene/shot frame counts, or alter timestamps. If either existing owner does not accept the candidate, it is discarded and the existing approved fallback behavior continues.
 
 This is a handoff between existing owners, not a second camera system. Any future reassignment of either responsibility requires a separate design decision and regression proof.
