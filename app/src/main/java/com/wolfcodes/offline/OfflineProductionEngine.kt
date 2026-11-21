@@ -29,6 +29,16 @@ object OfflineProductionEngine {
     private const val CONSERVATIVE_AUDIO_BITRATE_BPS = 512_000L
     private const val EXPORT_SAFETY_MARGIN_BYTES = 128L * 1024L * 1024L
 
+    /**
+     * Keeps an optional intro inside the requested film runtime, including very short
+     * durations passed by internal callers. The film must always retain at least one
+     * second for its body timeline.
+     */
+    internal fun introDurationSeconds(requestedTotal: Int, includeIntro: Boolean): Int {
+        val safeTotal = requestedTotal.coerceIn(1, 1800)
+        return if (includeIntro) minOf(3, (safeTotal - 1).coerceAtLeast(0)) else 0
+    }
+
     /** Estimates peak free space while temporary MP4 and final output copies overlap. */
     internal fun estimatePeakStorageBytes(
         durationSeconds: Int,
@@ -85,9 +95,7 @@ object OfflineProductionEngine {
         val requestedTotal = seconds.coerceIn(1, 1800)
         val useNarrationTiming = audioDurationIsAuthoritative && audioUri != null &&
             audioDurationMs != null && audioDurationMs in 1000L..1_800_000L
-        val introSeconds = if (includeIntro) {
-            if (useNarrationTiming) minOf(3, (requestedTotal - 1).coerceAtLeast(0)) else 3
-        } else 0
+        val introSeconds = introDurationSeconds(requestedTotal, includeIntro)
         val introFrames = introSeconds * fps
         // Intro and story share one fixed film timeline. Neither scene count nor
         // narration duration is allowed to extend or truncate the requested runtime.
