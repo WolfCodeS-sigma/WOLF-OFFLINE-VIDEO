@@ -628,7 +628,7 @@ object OfflineProductionEngine {
             try { codec.stop() } catch (_: Exception) {}
             try { codec.release() } catch (_: Exception) {}
             try { if (started) muxer?.stop() } catch (_: Exception) {}
-            muxer?.release()
+            try { muxer?.release() } catch (_: Exception) {}
         }
     }
 
@@ -752,9 +752,12 @@ object OfflineProductionEngine {
                     )
                 } else {
                     val cameraSave = c.save()
-                    if (camera != null) c.rotate(camera.rotationDegrees, w / 2f, h / 2f)
-                    c.drawBitmap(bitmap, source, destination, p)
-                    c.restoreToCount(cameraSave)
+                    try {
+                        if (camera != null) c.rotate(camera.rotationDegrees, w / 2f, h / 2f)
+                        c.drawBitmap(bitmap, source, destination, p)
+                    } finally {
+                        c.restoreToCount(cameraSave)
+                    }
                 }
                 p.color=android.graphics.Color.argb(46,0,0,0)
                 c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
