@@ -53,6 +53,7 @@ data class WolfAssetReview(
     val reviewer: String,
     val reviewedAtEpochMillis: Long,
     val decisionReason: String,
+    val reviewEvidenceReference: String,
     val rightsPassed: Boolean,
     val visualPassed: Boolean,
     val technicalPassed: Boolean,
@@ -217,6 +218,7 @@ class WolfAssetQualityGate(
         requireValue(review.reviewer.isNotBlank(), "اسم المراجع مفقود")
         requireValue(review.reviewedAtEpochMillis > 0L, "تاريخ المراجعة مفقود")
         requireValue(review.decisionReason.isNotBlank(), "سبب قرار المراجعة مفقود")
+        requireValue(review.reviewEvidenceReference.isNotBlank(), "مرجع أدلة المراجعة البصرية/التقنية مفقود")
         requireValue(review.rightsPassed, "مراجعة الحقوق لم تجتز")
         requireValue(review.visualPassed, "مراجعة الجودة البصرية لم تجتز")
         requireValue(review.technicalPassed, "المراجعة التقنية لم تجتز")
@@ -383,6 +385,7 @@ class WolfAssetRegistry private constructor(
                     reviewer = review.optString("reviewer"),
                     reviewedAtEpochMillis = review.optLong("reviewedAtEpochMillis"),
                     decisionReason = review.optString("decisionReason"),
+                    reviewEvidenceReference = review.optString("reviewEvidenceReference"),
                     rightsPassed = review.optBoolean("rightsPassed"),
                     visualPassed = review.optBoolean("visualPassed"),
                     technicalPassed = review.optBoolean("technicalPassed"),
