@@ -755,7 +755,7 @@ object OfflineProductionEngine {
                 val cropWidth=(baseWidth*cropScale).toInt().coerceAtLeast(1)
                 val cropHeight=(baseHeight*cropScale).toInt().coerceAtLeast(1)
                 val plannedFocusX = shotPlan?.let {
-                    StoryDirectorEngine.compositionFocusX(it.composition)
+                    StoryDirectorEngine.compositionFocusX(it.composition, it.camera)
                 }
                 val focusX = plannedFocusX ?: when(shotIndex) {
                     0 -> 0.50f
@@ -853,7 +853,7 @@ object OfflineProductionEngine {
                 }
             } else {
                 val compositionFocus = shotPlan?.let {
-                    StoryDirectorEngine.compositionFocusX(it.composition)
+                    StoryDirectorEngine.compositionFocusX(it.composition, it.camera)
                 }
                 val horizontalOffset = compositionFocus?.let { (it - 0.5f) * w * 0.08f } ?: 0f
                 val compositionSave = c.save()
