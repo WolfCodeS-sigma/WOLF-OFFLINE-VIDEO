@@ -994,7 +994,7 @@ object OfflineProductionEngine {
             if(size<0) break
             val sourcePts=extractor.sampleTime
             val pts=if(frameRate!=null) frameIndex * 1_000_000L / frameRate.coerceAtLeast(1) else sourcePts
-            if(pts<0 || pts>maxDurationUs) break
+            if(pts<0 || pts>=maxDurationUs) break
             val sampleFlags = extractor.sampleFlags
             if (sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED != 0) {
                 throw IllegalStateException("لا يمكن دمج ملف صوت أو فيديو محمي بتشفير DRM")
