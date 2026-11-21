@@ -1,6 +1,7 @@
 package com.wolfcodes.offline
 
 import android.content.Context
+import android.content.res.AssetManager
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -378,12 +379,25 @@ class WolfAssetRegistry private constructor(
             return WolfAssetRegistry(version, entries, fileVerifier)
         }
 
-        fun loadBundled(context: Context): WolfAssetRegistry {
-            val json = context.assets.open("wolf_asset_registry.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
+        fun loadBundled(context: Context): WolfAssetRegistry =
+            loadFromAssetManager(context.assets, BUNDLED_MANIFEST_PATH)
+
+        /**
+         * Loads both a registry manifest and its referenced files from the same
+         * Android AssetManager. This also permits instrumentation to exercise a
+         * populated test-APK manifest without adding fixtures to production assets.
+         */
+        fun loadFromAssetManager(assetManager: AssetManager, manifestPath: String): WolfAssetRegistry {
+            require(WolfAssetFileVerifier.isSafeRelativePath(manifestPath)) {
+                "مسار Manifest غير آمن"
+            }
+            val json = assetManager.open(manifestPath).bufferedReader(Charsets.UTF_8).use { it.readText() }
             return fromJson(json, WolfAssetFileVerifier(assetReader = { path ->
-                runCatching { context.assets.open(path) }.getOrNull()
+                runCatching { assetManager.open(path) }.getOrNull()
             }))
         }
+
+        const val BUNDLED_MANIFEST_PATH = "wolf_asset_registry.json"
 
         private fun jsonObjectToMap(value: JSONObject): Map<String, String> = buildMap {
             val keys = value.keys()
