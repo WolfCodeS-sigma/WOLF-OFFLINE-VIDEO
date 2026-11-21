@@ -151,8 +151,9 @@ class StoryPipelineTest {
     fun storyboardMotionCompositionAndLightingReachDeterministicRenderIntents() {
         assertEquals(0.5f, StoryDirectorEngine.motionProgress("تثبيت الكاميرا", 0.9f), 0.0001f)
         assertEquals(0.5f, StoryDirectorEngine.motionProgress("كشف بطيء ومحدود", 0.5f), 0.0001f)
-        assertEquals(0.64f, StoryDirectorEngine.compositionFocusX("وجّه الانتباه إلى مصدر الصوت") ?: -1f, 0.0001f)
-        assertEquals(0.66f, StoryDirectorEngine.compositionFocusX("حجب جزئي للكادر") ?: -1f, 0.0001f)
+        assertEquals(0.64f, StoryDirectorEngine.compositionFocusX("اترك مساحة بصرية للمصدر الصوتي المذكور") ?: -1f, 0.0001f)
+        assertEquals(0.66f, StoryDirectorEngine.compositionFocusX("تكوين اللقطة", "لقطة واسعة مع حجب جزئي للكادر") ?: -1f, 0.0001f)
+        assertEquals(0.38f, StoryDirectorEngine.compositionFocusX("حافظ على الاستمرارية", "لقطة متوسطة من خلف الشخصية") ?: -1f, 0.0001f)
         assertEquals(null, StoryDirectorEngine.compositionFocusX("تكوين عام بلا توجيه محدد"))
         assertEquals("COOL", StoryDirectorEngine.lightingTreatment("إضاءة عملية باردة"))
         assertEquals("NIGHT", StoryDirectorEngine.lightingTreatment("إضاءة ليلية محيطية منخفضة"))
