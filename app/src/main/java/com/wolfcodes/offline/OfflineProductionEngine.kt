@@ -724,6 +724,7 @@ object OfflineProductionEngine {
         val c: Canvas = surface.lockCanvas(null)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         val safeShotIndex = shotIndex.coerceIn(0, WolfSceneAssetStore.SHOTS_PER_SCENE - 1)
+        val plannedProgress = StoryDirectorEngine.motionProgress(shotPlan?.motion.orEmpty(), t)
         try {
             if(bitmap != null && !bitmap.isRecycled) {
                 c.drawColor(android.graphics.Color.BLACK)
@@ -742,9 +743,7 @@ object OfflineProductionEngine {
                 val originalSource = Rect(source)
                 // Depth-aware motion is only safe when segmentation produced valid layers.
                 // Otherwise retain the full aspect-matched source crop without camera warping.
-                val shotProgress = StoryDirectorEngine.motionProgress(
-                    shotPlan?.motion.orEmpty(), t
-                )
+                val shotProgress = plannedProgress
                 val baseLeft=source.left
                 val baseTop=source.top
                 val baseWidth=source.width()
@@ -853,7 +852,21 @@ object OfflineProductionEngine {
                     c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
                 }
             } else {
-                WolfSceneArtEngine.draw(c, w, h, caption, scene * WolfSceneAssetStore.SHOTS_PER_SCENE + shotIndex, t)
+                val compositionFocus = shotPlan?.let {
+                    StoryDirectorEngine.compositionFocusX(it.composition)
+                }
+                val horizontalOffset = compositionFocus?.let { (it - 0.5f) * w * 0.08f } ?: 0f
+                val compositionSave = c.save()
+                try {
+                    c.translate(horizontalOffset, 0f)
+                    WolfSceneArtEngine.draw(
+                        c, w, h, caption,
+                        scene * WolfSceneAssetStore.SHOTS_PER_SCENE + safeShotIndex,
+                        plannedProgress
+                    )
+                } finally {
+                    c.restoreToCount(compositionSave)
+                }
             }
             WolfProceduralMotionEngine.renderDepthAware(
                 canvas = c,
@@ -862,7 +875,7 @@ object OfflineProductionEngine {
                 caption = caption,
                 sceneIndex = scene,
                 shotIndex = safeShotIndex,
-                progress = t
+                progress = plannedProgress
             )
             drawPlannedLighting(c, w, h, shotPlan?.lighting.orEmpty())
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
