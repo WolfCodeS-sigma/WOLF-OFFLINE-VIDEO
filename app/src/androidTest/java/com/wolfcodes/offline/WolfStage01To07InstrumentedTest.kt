@@ -1,5 +1,6 @@
 package com.wolfcodes.offline
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -285,6 +286,128 @@ class WolfStage01To07InstrumentedTest {
             assertFalse("The obsolete chapter artifact should be removed", chapterFile.exists())
         } finally {
             WolfLongFilmCheckpointStore.clear(context, projectId)
+        }
+    }
+
+
+    @Test
+    fun staleOfflineCleanupDeletesOnlyOwnedExpiredFiles() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val now = System.currentTimeMillis()
+        val offlineDirectory = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
+        val nestedDirectory = File(offlineDirectory, "nested").apply { mkdirs() }
+        val ownedPrefixes = listOf(
+            "silent_wolf_offline_cleanup.mp4",
+            "sfx_wolf_offline_cleanup.m4a",
+            "normalized_wolf_offline_cleanup.mp4",
+            "converted_wolf_offline_cleanup.m4a",
+            "layered_wolf_offline_cleanup.m4a",
+            "layered_wolf_offline_cleanup_voice.pcm",
+            "layered_wolf_offline_cleanup_sfx.pcm",
+            "layered_wolf_offline_cleanup_mix.pcm",
+            "wolf_offline_cleanup.mp4"
+        )
+        val expiredFiles = ownedPrefixes.mapIndexed { index, name ->
+            File(offlineDirectory, name).apply {
+                writeBytes(byteArrayOf(index.toByte(), 1, 2, 3))
+                setLastModified(now - 96L * 60L * 60L * 1000L)
+            }
+        }
+        val recentOwned = File(offlineDirectory, "wolf_offline_recent_cleanup.mp4").apply {
+            writeBytes(byteArrayOf(9, 8, 7))
+            setLastModified(now)
+        }
+        val unrelatedCache = File(offlineDirectory, "user_selected_photo_cleanup.png").apply {
+            writeBytes(byteArrayOf(6, 5, 4))
+            setLastModified(now - 96L * 60L * 60L * 1000L)
+        }
+        val nestedOwned = File(nestedDirectory, "wolf_offline_nested_cleanup.mp4").apply {
+            writeBytes(byteArrayOf(3, 2, 1))
+            setLastModified(now - 96L * 60L * 60L * 1000L)
+        }
+        val projectRecord = File(context.filesDir, "wolf-project-cleanup-preservation-test.json").apply {
+            writeText("{\\"keep\\":true}")
+        }
+
+        try {
+            val expectedReleasedBytes = expiredFiles.sumOf { it.length() }
+            val result = WolfMemoryManager.cleanupStaleOfflineTemps(
+                context = context,
+                now = now,
+                maxAgeMs = 72L * 60L * 60L * 1000L
+            )
+
+            expiredFiles.forEach { file ->
+                assertFalse("Expired WOLF temporary file was not deleted: ${file.name}", file.exists())
+            }
+            assertTrue("Cleanup did not report every expired WOLF temporary file", result.removedFiles >= expiredFiles.size)
+            assertTrue("Cleanup reported fewer released bytes than the test fixtures", result.releasedBytes >= expectedReleasedBytes)
+            assertTrue("A recent WOLF temporary file was deleted", recentOwned.exists())
+            assertTrue("An unrelated cached user asset was deleted", unrelatedCache.exists())
+            assertTrue("Cleanup unexpectedly traversed nested directories", nestedOwned.exists())
+            assertTrue("A persistent project record was deleted", projectRecord.exists())
+        } finally {
+            expiredFiles.forEach { it.delete() }
+            recentOwned.delete()
+            unrelatedCache.delete()
+            nestedOwned.delete()
+            nestedDirectory.delete()
+            projectRecord.delete()
+        }
+    }
+
+    @Test(timeout = 300_000L)
+    fun legacyOfflineVideoExporterStillProducesAReadableFiveSecondMp4() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        var outputUri: Uri? = null
+        try {
+            val project = WolfProjectStore.newProject(
+                story = "دخلت الغرفة المظلمة. سمعت صوتًا خلف الباب.",
+                sourceUrl = "",
+                aspectRatio = "16:9",
+                durationSeconds = 5,
+                visualStyle = "رعب سينمائي مظلم",
+                horrorType = "رعب نفسي",
+                soundEffectsEnabled = false,
+                imageUris = emptyList(),
+                audioUri = null,
+                includeIntro = false,
+                includeWatermark = false
+            )
+            val exported = WolfOfflineVideoExporter(context).export(project) { _, _ -> }
+            outputUri = exported.uri
+
+            assertEquals(5, exported.durationSeconds)
+            val report = WolfFilmQualityInspector.inspect(
+                context = context,
+                mediaReference = exported.uri.toString(),
+                expectedDurationSeconds = 5,
+                requireAudio = false
+            )
+            assertTrue("Legacy exporter MP4 failed structural QA: ${report.summary}", report.passed)
+            assertFalse("Legacy silent exporter unexpectedly added audio", report.hasAudio)
+            assertTrue("Legacy exporter produced too few video samples: ${report.videoSamples}", report.videoSamples >= 115L)
+        } finally {
+            outputUri?.let { uri ->
+                if (uri.scheme == "content") {
+                    runCatching { context.contentResolver.delete(uri, null, null) }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun mainActivityCanLaunchAndCompleteItsInitialScreenLifecycle() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val activity = instrumentation.startActivitySync(
+            Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        try {
+            assertNotNull("MainActivity did not launch", activity)
+            assertFalse("MainActivity finished during initial screen setup", activity.isFinishing)
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
         }
     }
 
