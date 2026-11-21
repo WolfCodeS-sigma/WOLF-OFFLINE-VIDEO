@@ -28,6 +28,7 @@ object OfflineProductionEngine {
     private const val VIDEO_BITRATE_BPS = 1_600_000L
     private const val CONSERVATIVE_AUDIO_BITRATE_BPS = 512_000L
     private const val EXPORT_SAFETY_MARGIN_BYTES = 128L * 1024L * 1024L
+    internal const val STORYBOARD_RENDER_REVISION = "storyboard-planner-v3"
 
     /**
      * Keeps an optional intro inside the requested film runtime, including very short
@@ -39,9 +40,9 @@ object OfflineProductionEngine {
         return if (includeIntro) minOf(3, (safeTotal - 1).coerceAtLeast(0)) else 0
     }
 
-    /** Uses the original still without camera warping when depth segmentation is unavailable. */
-    internal fun useSafeStillImageFallback(depthLayersSeparated: Boolean): Boolean =
-        !depthLayersSeparated
+    /** Uses the original still unless a semantic segmentation result has been validated. */
+    internal fun useSafeStillImageFallback(semanticSegmentationValidated: Boolean): Boolean =
+        !semanticSegmentationValidated
 
     /** Estimates peak free space while temporary MP4 and final output copies overlap. */
     internal fun estimatePeakStorageBytes(
@@ -192,13 +193,22 @@ object OfflineProductionEngine {
                     ?: chosenUris.getOrNull(if (chosenUris.isEmpty()) -1 else sceneIndex % chosenUris.size)
             }
         }
+        if (sceneShotUris.any { scene -> scene.any { it != null } } &&
+            !WolfImageDepthSegmenter.isSemanticSegmentationReady()
+        ) {
+            WolfDiagnostics.record(
+                context, "سلامة صور المستخدم", "WOLF IMAGE FALLBACK", "WARNING",
+                "تم تعطيل حركة طبقات العمق لأن التحليل المتاح لوني وغير دلالي؛ ستُحفظ الصورة الأصلية دون تشويه.",
+                "SEMANTIC_SEGMENTATION_NOT_AVAILABLE"
+            )
+        }
         val chapterFingerprint = if (chapterPlans.isNotEmpty()) {
             WolfLongFilmEngine.fingerprint(
                 story, framesPerScene, fps, w, h, introFrames, enableHorrorTypography,
                 listOf(
                     includeWatermark.toString(),
                     "depth-segmentation-v${WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION}",
-                    "storyboard-planner-v2",
+                    STORYBOARD_RENDER_REVISION,
                     audioUri?.toString().orEmpty(),
                     sceneShotUris.flatten().joinToString("|"),
                     sceneImageAssignments.entries.sortedBy { it.key }
@@ -665,7 +675,14 @@ object OfflineProductionEngine {
                         )
                     }
                     val imageLayers = try {
-                        image?.let { WolfImageDepthSegmenter.segment(it) }
+                        if (WolfImageDepthSegmenter.isSemanticSegmentationReady() && image != null) {
+                            WolfImageDepthSegmenter.segment(image).let { candidate ->
+                                if (candidate.safeForParallax) candidate else {
+                                    candidate.recycle()
+                                    null
+                                }
+                            }
+                        } else null
                     } catch (segmentationError: Exception) {
                         WolfDiagnostics.record(
                             context, "استعادة الرندر", "WOLF IMAGE FALLBACK", "WARNING",
@@ -788,7 +805,7 @@ object OfflineProductionEngine {
                 val baseTop=source.top
                 val baseWidth=source.width()
                 val baseHeight=source.height()
-                val depthLayersAvailable = imageLayers?.separated == true
+                val depthLayersAvailable = imageLayers?.safeForParallax == true
                 val cropScale=if (!useSafeStillImageFallback(depthLayersAvailable)) {
                     when(shotIndex) { 0 -> 1f; 1 -> 0.78f; else -> 0.60f }
                 } else 1f
@@ -838,7 +855,7 @@ object OfflineProductionEngine {
                     (h + dh) / 2f + shiftY
                 )
                 p.alpha = 255
-                if (imageLayers != null && imageLayers.separated) {
+                if (imageLayers?.safeForParallax == true) {
                     val layerScale = imageLayers.sourceScale
                     val layerLeft = (source.left * layerScale).toInt()
                         .coerceIn(0, imageLayers.background.width - 1)

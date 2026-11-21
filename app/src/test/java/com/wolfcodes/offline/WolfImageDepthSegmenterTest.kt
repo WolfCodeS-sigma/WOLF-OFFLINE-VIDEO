@@ -20,7 +20,8 @@ class WolfImageDepthSegmenterTest {
 
         val result = WolfImageDepthSegmenter.analyze(width, height, pixels)
 
-        assertTrue(result.separated)
+        assertTrue(result.heuristicCandidateSeparated)
+        assertFalse(result.semanticValidationPassed)
         assertTrue(result.confidence > 0f)
         assertTrue(result.midgroundMask[18 * width + 18])
         assertFalse(result.midgroundMask[2 * width + 2])
@@ -46,7 +47,8 @@ class WolfImageDepthSegmenterTest {
 
         val result = WolfImageDepthSegmenter.analyze(width, height, pixels)
 
-        assertTrue(result.separated)
+        assertTrue(result.heuristicCandidateSeparated)
+        assertFalse(result.semanticValidationPassed)
         assertTrue(result.midgroundMask[15 * width + 15])
         assertTrue(result.foregroundPlaneMask[16 * width + 50])
         assertFalse(result.foregroundPlaneMask[15 * width + 15])
@@ -60,11 +62,17 @@ class WolfImageDepthSegmenterTest {
 
         val result = WolfImageDepthSegmenter.analyze(width, height, pixels)
 
-        assertFalse(result.separated)
+        assertFalse(result.heuristicCandidateSeparated)
+        assertFalse(result.semanticValidationPassed)
         assertEquals(0f, result.confidence, 0f)
         assertFalse(result.foregroundMask.any { it })
         assertFalse(result.midgroundMask.any { it })
         assertFalse(result.foregroundPlaneMask.any { it })
+    }
+
+    @Test
+    fun colorHeuristicNeverClaimsSemanticSegmentationIsReady() {
+        assertFalse(WolfImageDepthSegmenter.isSemanticSegmentationReady())
     }
 
     @Test

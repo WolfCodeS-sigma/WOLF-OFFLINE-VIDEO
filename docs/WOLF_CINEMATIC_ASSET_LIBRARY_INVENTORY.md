@@ -98,7 +98,7 @@ The application source tree is currently Kotlin source plus the manifest; it doe
 | `WolfProceduralMotionEngine.kt` | Procedural fog, particles, wind-driven branches, rain, environmental pulses, and signal effects | `CODE_ONLY` | Effects code only; may be retained as supporting effects after visual QA |
 | `WolfProceduralVisualSystem.kt` | Procedural 2D scene composition and a simplified ghost-like silhouette | `CODE_ONLY` | Not a realistic human/creature asset; must not be presented as one |
 | `WolfSceneAssetStore.kt` | Project-scoped image URI assignments, keyed by project/scene/shot | `PROJECT_SCOPED` | User-selected images are not library assets and must not be copied into the library automatically |
-| `WolfImageDepthSegmenter.kt` | Image analysis / depth-layer approximation | `CODE_ONLY` | Image-processing logic, not an asset |
+| `WolfImageDepthSegmenter.kt` | Color-distance / border-connectivity image heuristic | `CODE_ONLY` | Not semantic understanding and not authorized to drive depth motion; renderer preserves the original user still until trusted per-image semantic validation exists |
 | `WolfSceneDepthComposer.kt` | Composition of image layers | `CODE_ONLY` | Rendering logic, not an asset |
 | `WolfHorrorTypographyEngine.kt` | Programmatic horror typography treatment | `CODE_ONLY` | No packaged font file was found; system typefaces are not a bundled font library |
 | `WolfSoundFxEngine.kt` | Procedural sound-effect generation | `CODE_ONLY` | Not a collection of licensed audio files |

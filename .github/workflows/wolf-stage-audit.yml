@@ -1,22 +1,35 @@
-name: WOLF stages 01-06 audit
+name: WOLF stages 01-07 regression audit
 
 on:
   push:
     branches:
-      - fix/stages-01-06-audit
+      - fix/stages-01-07-audit
+  pull_request:
+    branches:
+      - docs/stage-07-cinematic-asset-inventory
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: wolf-stage-audit-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   android-audit:
-    name: Android debug build, lint and JVM unit tests
+    name: Android debug APK, lint and JVM unit tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out audit branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Set up JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:

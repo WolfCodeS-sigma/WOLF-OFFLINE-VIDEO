@@ -83,6 +83,34 @@ class StoryPipelineTest {
     }
 
     @Test
+    fun renderRevisionInvalidatesLegacyStoryboardCheckpointFingerprint() {
+        assertEquals("storyboard-planner-v3", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
+        assertEquals(2, WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION)
+
+        val legacy = WolfLongFilmEngine.fingerprint(
+            story = "قصة اختبار",
+            framesPerScene = listOf(120, 120),
+            fps = 12,
+            width = 720,
+            height = 1280,
+            introFrames = 36,
+            typographyEnabled = true,
+            mediaInputs = "depth-segmentation-v1#storyboard-planner-v2"
+        )
+        val current = WolfLongFilmEngine.fingerprint(
+            story = "قصة اختبار",
+            framesPerScene = listOf(120, 120),
+            fps = 12,
+            width = 720,
+            height = 1280,
+            introFrames = 36,
+            typographyEnabled = true,
+            mediaInputs = "depth-segmentation-v${WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION}#${OfflineProductionEngine.STORYBOARD_RENDER_REVISION}"
+        )
+        assertTrue(legacy != current)
+    }
+
+    @Test
     fun introIsIncludedInsideRequestedFilmDuration() {
         val requestedFilmSeconds = 30
         val introSeconds = 3
