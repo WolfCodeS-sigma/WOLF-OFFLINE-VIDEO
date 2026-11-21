@@ -30,7 +30,7 @@ Open the repository as an Android Gradle project in a compatible IDE, or use a G
 
 ## Verification policy
 
-The continuous-integration workflow is intentionally limited to Android lint and local JVM unit tests. It does not build an APK, start an emulator, or run instrumentation tests. Device/runtime verification is a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
+The continuous-integration workflow builds the Debug APK, runs Android lint and JVM unit tests, then runs the Android 12 emulator regression suite for media export, audio, checkpoints, and the bundled asset registry. Testing on the physical Realme 7 remains a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
 
 ## Privacy and connectivity
 
