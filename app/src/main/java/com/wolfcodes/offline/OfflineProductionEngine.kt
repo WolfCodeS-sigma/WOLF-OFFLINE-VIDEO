@@ -89,15 +89,15 @@ object OfflineProductionEngine {
             if (useNarrationTiming) minOf(3, (requestedTotal - 1).coerceAtLeast(0)) else 3
         } else 0
         val introFrames = introSeconds * fps
-        val bodySeconds = if (useNarrationTiming) (requestedTotal - introSeconds).coerceAtLeast(1) else requestedTotal
+        // Intro and story share one fixed film timeline. Neither scene count nor
+        // narration duration is allowed to extend or truncate the requested runtime.
+        val totalVideoSeconds = requestedTotal
+        val bodySeconds = (totalVideoSeconds - introSeconds).coerceAtLeast(1)
         val rawScenes = splitStory(story)
-        val scenes = if (useNarrationTiming) {
-            StoryDirectorEngine.fitSceneTextsToDuration(rawScenes, bodySeconds)
-        } else rawScenes
-        val total = if (useNarrationTiming) bodySeconds else max(requestedTotal, scenes.size * 3).coerceAtMost(1800)
-        val totalVideoSeconds = if (useNarrationTiming) requestedTotal else total + introSeconds
+        val scenes = StoryDirectorEngine.fitSceneTextsToDuration(rawScenes, bodySeconds)
+        val total = bodySeconds
         val totalFrames = total * fps
-        val minimumFrames = if (useNarrationTiming) fps else fps * 3
+        val minimumFrames = 1
         val framesPerScene = OfflineMotionEngine.allocateFrames(scenes, totalFrames, minimumFrames)
         val typographyCues = WolfHorrorTypographyEngine.plan(
             scenes, framesPerScene, fps, enabled = enableHorrorTypography
@@ -111,9 +111,11 @@ object OfflineProductionEngine {
                 maxChapterSeconds = safeChapterDuration
             )
         } else emptyList()
+        // Narration may end early; the video and generated effects retain the full film timeline.
+        val filmDurationUs = totalVideoSeconds.toLong() * 1_000_000L
         val narrationLimitUs = if (useNarrationTiming) {
             (audioDurationMs ?: 1000L).coerceIn(1000L, 1_800_000L) * 1000L
-        } else totalVideoSeconds.toLong() * 1_000_000L
+        } else filmDurationUs
         val name = "wolf_offline_${System.currentTimeMillis()}.mp4"
         val tempDir = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
         // Reserve for overlapping temporary/final MP4 copies, optional AAC, and a safety margin.
@@ -223,9 +225,9 @@ object OfflineProductionEngine {
                     layeredAudioFile = File(tempDir, "layered_$name.m4a")
                     WolfAudioMixer.mix(
                         context, audioUri, generatedAudio, layeredAudioFile,
-                        narrationLimitUs, narrationGain = 0.92, effectsGain = 0.30
+                        filmDurationUs, narrationGain = 0.92, effectsGain = 0.30
                     )
-                    muxAudio(context, silentFile, null, layeredAudioFile, mixedFile, narrationLimitUs, fps)
+                    muxAudio(context, silentFile, null, layeredAudioFile, mixedFile, filmDurationUs, filmDurationUs, fps)
                 } else {
                     convertedAudioFile = audioUri?.let { source ->
                         WolfAudioTranscoder.transcodeToAacIfNeeded(
@@ -235,7 +237,7 @@ object OfflineProductionEngine {
                     }
                     val muxAudioUri = if (convertedAudioFile == null) audioUri else null
                     val muxAudioFile = convertedAudioFile ?: generatedAudio
-                    muxAudio(context,silentFile,muxAudioUri,muxAudioFile,mixedFile,narrationLimitUs, fps)
+                    muxAudio(context,silentFile,muxAudioUri,muxAudioFile,mixedFile,filmDurationUs,narrationLimitUs, fps)
                 }
                 silentFile.delete()
                 tempFile=mixedFile
@@ -318,7 +320,7 @@ object OfflineProductionEngine {
             frames = framesPerScene.sum() + introFrames,
             savedLocation = savedLocation,
             mediaUri = finalReference,
-            durationSeconds = if (useNarrationTiming) requestedTotal else totalVideoSeconds,
+            durationSeconds = totalVideoSeconds,
             framesPerSecond = fps,
             videoWidth = outputWidth,
             videoHeight = outputHeight,
@@ -934,7 +936,8 @@ object OfflineProductionEngine {
         }
     }
 
-    private fun muxAudio(context: Context, videoFile: File, audioUri: Uri?, generatedAudioFile: File?, outputFile: File, maxDurationUs: Long, fps: Int) {
+    private fun muxAudio(context: Context, videoFile: File, audioUri: Uri?, generatedAudioFile: File?,
+                         outputFile: File, videoDurationUs: Long, audioDurationUs: Long, fps: Int) {
         val videoExtractor=MediaExtractor()
         val audioExtractor=MediaExtractor()
         var muxer: MediaMuxer?=null
@@ -965,8 +968,8 @@ object OfflineProductionEngine {
             val outputVideo=muxer.addTrack(videoFormat)
             val outputAudio=muxer.addTrack(audioFormat)
             muxer.start()
-            copyTrack(videoExtractor,videoTrack,muxer,outputVideo,maxDurationUs,fps)
-            copyTrack(audioExtractor,audioTrack,muxer,outputAudio,maxDurationUs)
+            copyTrack(videoExtractor,videoTrack,muxer,outputVideo,videoDurationUs,fps)
+            copyTrack(audioExtractor,audioTrack,muxer,outputAudio,audioDurationUs)
             muxer.stop()
         } finally {
             try { videoExtractor.release() } catch (_:Exception) {}
