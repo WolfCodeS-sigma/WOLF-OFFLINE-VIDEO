@@ -221,7 +221,7 @@ object WolfAudioMixer {
         pcm.write((value shr 8) and 0xff)
     }
 
-    private fun mixPcmFiles(
+    internal fun mixPcmFiles(
         narration: File,
         effects: File,
         output: File,
