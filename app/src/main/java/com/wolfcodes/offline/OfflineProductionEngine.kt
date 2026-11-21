@@ -618,7 +618,12 @@ object OfflineProductionEngine {
                 for (shotIndex in shotFrameCounts.indices) {
                     val shotFrames = shotFrameCounts[shotIndex]
                     val shotPlan = shotPlansPerScene?.getOrNull(s)?.getOrNull(shotIndex)
-                    val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
+                    // Chapter-local shotIndex restarts at zero; ShotPlan.number retains
+                    // the original scene slot so the same user image follows its shot.
+                    val sourceShotIndex = shotPlan?.let {
+                        StoryDirectorEngine.sourceShotIndex(it.number, WolfSceneAssetStore.SHOTS_PER_SCENE)
+                    } ?: shotIndex
+                    val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(sourceShotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
                     if (shotUri != null && image == null) {
@@ -642,7 +647,7 @@ object OfflineProductionEngine {
                             val shotProgress = f.toFloat() / max(1, shotFrames - 1)
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
-                                w, h, scenes[s], s, shotIndex, shotProgress, image, imageLayers, includeWatermark,
+                                w, h, scenes[s], s, sourceShotIndex, shotProgress, image, imageLayers, includeWatermark,
                                 typographyCues.getOrNull(s), sceneFrameOffset + f, fps, shotPlan
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
@@ -737,7 +742,9 @@ object OfflineProductionEngine {
                 val originalSource = Rect(source)
                 // Depth-aware motion is only safe when segmentation produced valid layers.
                 // Otherwise retain the full aspect-matched source crop without camera warping.
-                val shotProgress = t.coerceIn(0f, 1f)
+                val shotProgress = StoryDirectorEngine.motionProgress(
+                    shotPlan?.motion.orEmpty(), t
+                )
                 val baseLeft=source.left
                 val baseTop=source.top
                 val baseWidth=source.width()
@@ -748,8 +755,19 @@ object OfflineProductionEngine {
                 } else 1f
                 val cropWidth=(baseWidth*cropScale).toInt().coerceAtLeast(1)
                 val cropHeight=(baseHeight*cropScale).toInt().coerceAtLeast(1)
-                val focusX=when(shotIndex) { 0 -> 0.50f; 1 -> 0.34f+0.30f*shotProgress; else -> 0.62f-0.24f*shotProgress }
-                val focusY=when(shotIndex) { 0 -> 0.50f; 1 -> 0.45f; else -> 0.40f+0.12f*shotProgress }
+                val plannedFocusX = shotPlan?.let {
+                    StoryDirectorEngine.compositionFocusX(it.composition)
+                }
+                val focusX = plannedFocusX ?: when(shotIndex) {
+                    0 -> 0.50f
+                    1 -> 0.34f + 0.30f * shotProgress
+                    else -> 0.62f - 0.24f * shotProgress
+                }
+                val focusY = when(shotIndex) {
+                    0 -> 0.50f
+                    1 -> 0.45f
+                    else -> 0.40f + 0.12f * shotProgress
+                }
                 source.left=(baseLeft+(baseWidth-cropWidth)*focusX).toInt().coerceIn(baseLeft,baseLeft+baseWidth-cropWidth)
                 source.top=(baseTop+(baseHeight-cropHeight)*focusY).toInt().coerceIn(baseTop,baseTop+baseHeight-cropHeight)
                 source.right=source.left+cropWidth
@@ -846,6 +864,7 @@ object OfflineProductionEngine {
                 shotIndex = safeShotIndex,
                 progress = t
             )
+            drawPlannedLighting(c, w, h, shotPlan?.lighting.orEmpty())
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
             if (includeWatermark) {
                 p.color=android.graphics.Color.WHITE
@@ -877,6 +896,40 @@ object OfflineProductionEngine {
         }
     }
 
+
+    /** Apply only restrained lighting treatments explicitly described by the storyboard. */
+    private fun drawPlannedLighting(canvas: Canvas, width: Int, height: Int, lighting: String) {
+        val treatment = StoryDirectorEngine.lightingTreatment(lighting)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        when (treatment) {
+            "COOL" -> {
+                paint.color = android.graphics.Color.argb(16, 54, 82, 112)
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            }
+            "NIGHT" -> {
+                paint.color = android.graphics.Color.argb(22, 2, 5, 14)
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            }
+            "SIDE" -> {
+                paint.shader = android.graphics.LinearGradient(
+                    0f, 0f, width.toFloat(), 0f,
+                    intArrayOf(
+                        android.graphics.Color.argb(28, 0, 0, 0),
+                        android.graphics.Color.TRANSPARENT,
+                        android.graphics.Color.argb(10, 0, 0, 0)
+                    ),
+                    floatArrayOf(0f, 0.58f, 1f),
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+                paint.shader = null
+            }
+            "LOW_KEY" -> {
+                paint.color = android.graphics.Color.argb(14, 0, 0, 0)
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            }
+        }
+    }
 
     /** Composite a brief atmospheric phrase into the rendered scene, never as UI subtitles. */
     private fun drawHorrorTypography(
