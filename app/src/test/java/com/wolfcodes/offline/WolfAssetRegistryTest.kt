@@ -160,6 +160,7 @@ class WolfAssetRegistryTest {
             creatorOrRightsHolder = "Verified Rights Holder",
             sourceName = "Documented Offline Source",
             sourceLocation = "offline:verified-source-record",
+            licenseId = "WOLF-TEST-LICENSE-001",
             licenseName = "Commercial Redistribution License",
             licenseVersion = "1.0",
             evidenceReference = "licenses/forest-license.txt",
@@ -170,10 +171,20 @@ class WolfAssetRegistryTest {
             appBundlingAllowed = true,
             attributionRequired = true,
             attributionText = "Credit required by license",
-            restrictions = "None for the declared scope"
+            restrictions = "None for the declared scope",
+            acquiredAtEpochMillis = 1_800_000_000_000,
+            acquisitionMethod = "Documented licensed acquisition",
+            provenanceRecordReference = "provenance/forest-record.json"
         ),
         files = listOf(manifestFile),
         dependencies = emptySet(),
+        technicalProfile = mapOf(
+            "coordinateSystem" to "Android Canvas 2D",
+            "units" to "pixels",
+            "importSettings" to "packaged unchanged",
+            "rendererRequirements" to "WOLF_ANDROID_CANVAS"
+        ),
+        resourceMeasurements = emptyMap(),
         compatibleRuntimes = mapOf("WOLF_ANDROID_CANVAS" to "1.0-tested"),
         approvedScopes = setOf("environment_background"),
         budgetStatus = WolfAssetBudgetStatus.PENDING,
