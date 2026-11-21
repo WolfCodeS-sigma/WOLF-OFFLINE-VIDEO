@@ -100,6 +100,24 @@ class WolfAssetRegistryTest {
     }
 
     @Test
+    fun cyclicDependenciesBlockApproval() {
+        val first = validEntry()
+        val second = validEntry().copy(
+            assetId = "wolf_cinematic_forest_dependency",
+            dependencies = setOf(first.assetId)
+        )
+        val firstWithDependency = first.copy(dependencies = setOf(second.assetId))
+        val gate = WolfAssetQualityGate(
+            mapOf(first.assetId to firstWithDependency, second.assetId to second),
+            verifier
+        )
+        val result = gate.evaluate(firstWithDependency, request())
+
+        assertFalse(result.approved)
+        assertTrue(result.errors.any { it.contains("اعتمادية غير معتمدة") || it.contains("دورة") })
+    }
+
+    @Test
     fun approvalIsRestrictedToDeclaredScopeAndTestedRuntime() {
         val entry = validEntry()
         val scopeResult = gate(entry).evaluate(entry, request(intendedScope = "closeup_character"))
@@ -193,7 +211,9 @@ class WolfAssetRegistryTest {
             "coordinateSystem" to "Android Canvas 2D",
             "units" to "pixels",
             "importSettings" to "packaged unchanged",
-            "rendererRequirements" to "WOLF_ANDROID_CANVAS"
+            "rendererRequirements" to "WOLF_ANDROID_CANVAS",
+            "geometryProfile" to "static environment mesh",
+            "materialProfile" to "PBR material profile documented"
         ),
         resourceMeasurements = emptyMap(),
         compatibleRuntimes = mapOf("WOLF_ANDROID_CANVAS" to "1.0-tested"),
