@@ -72,7 +72,7 @@ data class WolfAssetRegistryEntry(
     val lifecycle: WolfAssetLifecycle,
     val license: WolfAssetLicenseEvidence,
     val files: List<WolfAssetFile>,
-    val dependencies: Set<String>,
+    val dependencies: Map<String, String>,
     val technicalProfile: Map<String, String>,
     val resourceMeasurements: Map<String, String>,
     val compatibleRuntimes: Map<String, String>,
@@ -83,6 +83,7 @@ data class WolfAssetRegistryEntry(
 
 data class WolfAssetUseRequest(
     val targetRuntime: String,
+    val targetRuntimeVersion: String,
     val intendedScope: String
 )
 
@@ -186,6 +187,7 @@ class WolfAssetQualityGate(
         requireValue(entry.version.isNotBlank(), "إصدار الأصل مفقود")
         requireValue(entry.lifecycle == WolfAssetLifecycle.APPROVED, "حالة الأصل ليست APPROVED")
         requireValue(request.targetRuntime.isNotBlank(), "بيئة التشغيل المطلوبة غير محددة")
+        requireValue(request.targetRuntimeVersion.isNotBlank(), "إصدار بيئة التشغيل المطلوبة غير محدد")
         requireValue(request.intendedScope.isNotBlank(), "نطاق الاستخدام المطلوب غير محدد")
 
         val license = entry.license
@@ -239,9 +241,10 @@ class WolfAssetQualityGate(
         requireValue(review.realismScore in 4..5, "درجة الواقعية أقل من الحد المعتمد (4/5)")
 
         requireValue(request.intendedScope in entry.approvedScopes, "الأصل غير معتمد لنطاق الاستخدام المطلوب")
+        val testedRuntimeVersion = entry.compatibleRuntimes[request.targetRuntime]
         requireValue(
-            !entry.compatibleRuntimes[request.targetRuntime].isNullOrBlank(),
-            "لا يوجد إثبات توافق مختبر مع بيئة التشغيل المطلوبة"
+            !testedRuntimeVersion.isNullOrBlank() && testedRuntimeVersion == request.targetRuntimeVersion,
+            "لا يوجد إثبات توافق مختبر مع إصدار بيئة التشغيل المطلوبة"
         )
 
         val requiredTechnicalFields = listOf("coordinateSystem", "units", "importSettings", "rendererRequirements")
@@ -298,14 +301,21 @@ class WolfAssetQualityGate(
         if (!dependencyPath.add(entry.assetId)) {
             errors += "تم اكتشاف دورة في اعتماديات الأصول: ${(dependencyPath + entry.assetId).joinToString(" -> ")}"
         } else {
-            entry.dependencies.forEach { dependencyId ->
-                val dependency = entries[dependencyId]
-                if (dependency == null) {
-                    errors += "اعتمادية غير موجودة: $dependencyId"
+            entry.dependencies.forEach { (dependencyId, expectedVersion) ->
+                if (expectedVersion.isBlank()) {
+                    errors += "إصدار الاعتمادية غير مثبت: $dependencyId"
                 } else {
-                    val dependencyResult = evaluateInternal(dependency, request, dependencyPath)
-                    if (!dependencyResult.approved) {
-                        errors += "اعتمادية غير معتمدة: $dependencyId"
+                    val dependency = entries[dependencyId]
+                    if (dependency == null) {
+                        errors += "اعتمادية غير موجودة: $dependencyId"
+                    } else if (dependency.version != expectedVersion) {
+                        errors += "نسخة الاعتمادية لا تطابق النسخة المثبتة: $dependencyId (expected $expectedVersion, found ${dependency.version})"
+                    } else {
+                        val dependencyResult = evaluateInternal(dependency, request, dependencyPath)
+                        warnings += dependencyResult.warnings
+                        if (!dependencyResult.approved) {
+                            errors += "اعتمادية غير معتمدة: $dependencyId"
+                        }
                     }
                 }
             }
@@ -348,7 +358,7 @@ class WolfAssetRegistry private constructor(
         WolfAssetQualityGate(entriesById, fileVerifier).approvedAssets(request)
 
     companion object {
-        const val CURRENT_SCHEMA_VERSION = 1
+        const val CURRENT_SCHEMA_VERSION = 2
 
         fun fromJson(json: String, fileVerifier: WolfAssetFileVerifier): WolfAssetRegistry {
             val root = JSONObject(json)
@@ -377,7 +387,10 @@ class WolfAssetRegistry private constructor(
             val license = item.getJSONObject("license")
             val review = item.getJSONObject("review")
             val files = item.getJSONArray("files")
-            val dependencies = item.optJSONArray("dependencies") ?: JSONArray()
+            val dependencyVersions = if (item.has("dependencies")) {
+                item.optJSONObject("dependencies")
+                    ?: throw IllegalArgumentException("اعتماديات الأصول يجب أن تكون خريطة لمعرّفات الأصول وإصداراتها")
+            } else JSONObject()
             val tags = item.optJSONArray("tags") ?: JSONArray()
             val scopes = item.optJSONArray("approvedScopes") ?: JSONArray()
             val styleScopes = review.optJSONArray("approvedStyleScopes") ?: JSONArray()
@@ -418,7 +431,13 @@ class WolfAssetRegistry private constructor(
                         sha256 = file.getString("sha256")
                     )
                 },
-                dependencies = (0 until dependencies.length()).map { dependencies.getString(it) }.toSet(),
+                dependencies = buildMap {
+                    val keys = dependencyVersions.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        put(key, dependencyVersions.getString(key))
+                    }
+                },
                 technicalProfile = jsonObjectToMap(item.optJSONObject("technicalProfile") ?: JSONObject()),
                 resourceMeasurements = jsonObjectToMap(item.optJSONObject("resourceMeasurements") ?: JSONObject()),
                 compatibleRuntimes = buildMap {
