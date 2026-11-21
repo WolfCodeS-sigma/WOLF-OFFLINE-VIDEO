@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Color
 import android.media.MediaCodec
+import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
@@ -28,13 +29,19 @@ class WolfOfflineVideoExporter(private val context: Context) {
         val fps = 24
         val frames = WolfScenePlanner.allocateFrames(scenes, project.durationSeconds * fps)
         val name = "WOLF_" + System.currentTimeMillis() + ".mp4"
-        val temporary = File(context.cacheDir, name)
+        val temporary = File(context.cacheDir, "raw_$name")
+        val normalized = File(context.cacheDir, "normalized_$name")
         try {
             encode(temporary, scenes, frames, dimensions.first, dimensions.second, fps, onProgress)
-            val uri = saveToMediaStore(temporary, name)
+            // Surface-input encoders may timestamp frames using wall-clock render time.
+            // Repackage samples onto a deterministic frame clock before publishing the MP4.
+            normalizeVideoTimestamps(temporary, normalized, fps)
+            val uri = saveToMediaStore(normalized, name)
+            onProgress(100, "اكتمل تصدير الفيديو")
             return WolfExportResult(uri, name, project.durationSeconds, dimensions.first, dimensions.second)
         } finally {
             temporary.delete()
+            normalized.delete()
         }
     }
 
@@ -82,7 +89,7 @@ class WolfOfflineVideoExporter(private val context: Context) {
                     }
                     frameNumber++
                     if (frameNumber % fps == 0 || frameNumber == totalFrames) {
-                        onProgress((frameNumber * 100 / totalFrames).coerceIn(0, 99),
+                        onProgress((frameNumber * 99 / totalFrames).coerceIn(0, 99),
                             "إنتاج المشهد " + (sceneIndex + 1) + " من " + scenes.size)
                     }
                     nextFrameNanos += frameIntervalNanos
@@ -103,13 +110,73 @@ class WolfOfflineVideoExporter(private val context: Context) {
                 }
             }
             check(muxerStarted && track[0] >= 0) { "تعذر إنشاء مسار الفيديو داخل ملف MP4" }
-            onProgress(100, "اكتمل تصدير الفيديو")
         } finally {
             runCatching { surface?.release() }
             runCatching { encoder.stop() }
             encoder.release()
             if (muxerStarted) runCatching { muxer?.stop() }
             muxer?.release()
+        }
+    }
+
+    /**
+     * Surface timestamps reflect rendering latency on some Android codecs.
+     * Reassign monotonically increasing PTS values from the requested frame rate,
+     * preserving encoded H.264 samples without decoding or re-encoding them.
+     */
+    private fun normalizeVideoTimestamps(inputFile: File, outputFile: File, fps: Int) {
+        val extractor = MediaExtractor()
+        var muxer: MediaMuxer? = null
+        var muxerStarted = false
+        var succeeded = false
+        try {
+            extractor.setDataSource(inputFile.absolutePath)
+            val videoTrack = (0 until extractor.trackCount).firstOrNull { index ->
+                extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true
+            } ?: throw IllegalStateException("مسار الفيديو غير موجود بعد الترميز")
+            val sourceFormat = extractor.getTrackFormat(videoTrack)
+            muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val outputTrack = muxer.addTrack(sourceFormat)
+            muxer.start()
+            muxerStarted = true
+            extractor.selectTrack(videoTrack)
+            val capacity = if (sourceFormat.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                sourceFormat.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE).coerceIn(256 * 1024, 8 * 1024 * 1024)
+            } else 2 * 1024 * 1024
+            val buffer = ByteBuffer.allocateDirect(capacity)
+            val info = MediaCodec.BufferInfo()
+            var frameIndex = 0L
+            while (true) {
+                buffer.clear()
+                val size = extractor.readSampleData(buffer, 0)
+                if (size < 0) break
+                val flags = extractor.sampleFlags
+                if (flags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED != 0 ||
+                    flags and MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME != 0
+                ) {
+                    throw IllegalStateException("تعذر ضبط توقيت عينة فيديو محمية أو مجزأة")
+                }
+                info.offset = 0
+                info.size = size
+                info.presentationTimeUs = frameIndex * 1_000_000L / fps.coerceAtLeast(1)
+                info.flags = if (flags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) {
+                    MediaCodec.BUFFER_FLAG_KEY_FRAME
+                } else 0
+                buffer.position(0)
+                buffer.limit(size)
+                muxer.writeSampleData(outputTrack, buffer, info)
+                frameIndex++
+                if (!extractor.advance()) break
+            }
+            if (frameIndex == 0L) throw IllegalStateException("ملف الفيديو المشفر لا يحتوي إطارات")
+            muxer.stop()
+            muxerStarted = false
+            succeeded = true
+        } finally {
+            runCatching { extractor.release() }
+            runCatching { if (muxerStarted) muxer?.stop() }
+            runCatching { muxer?.release() }
+            if (!succeeded || !outputFile.isFile || outputFile.length() == 0L) outputFile.delete()
         }
     }
 
