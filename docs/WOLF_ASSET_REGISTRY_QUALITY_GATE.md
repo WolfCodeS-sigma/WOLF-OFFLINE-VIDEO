@@ -1,7 +1,7 @@
 # WOLF Asset Registry & Quality Gate — Stage 08
 
 **Registry ID:** WOLF-ASSET-REGISTRY-001  
-**Schema version:** 1  
+**Schema version:** 2  
 **Policy baseline:** `WOLF-ASSET-POLICY-001` (Stage 06)  
 **Inventory baseline:** `WOLF-CINEMATIC-INVENTORY-001` (Stage 07)  
 **Runtime model:** Android application-bundled manifest and files; offline only.
@@ -16,8 +16,9 @@ Project-scoped user images remain managed by `WolfSceneAssetStore`. They are not
 
 ## 2. Runtime contract
 
-Runtime consumers must request assets using both:
+Runtime consumers must request assets using all three:
 - `targetRuntime`: exact runtime identifier.
+- `targetRuntimeVersion`: exact runtime version string tested for this asset.
 - `intendedScope`: exact approved use, such as `environment_background` or a scene-specific character use.
 
 Consumers may use only results from `WolfAssetRegistry.approvedAssets(request)`. A missing ID, candidate, under-review, rejected, quarantined, retired, or otherwise failing entry is not eligible. There is no fallback that substitutes an unrelated asset. An empty registry returns no cinematic library assets; the existing safe atmospheric fallback and user-image paths remain separate.
@@ -32,10 +33,10 @@ Each entry in the JSON `assets` array maps to `WolfAssetRegistryEntry` and must 
 - `name`, `version`, `category`, `tags`, and `lifecycle`.
 - `license`: creator/rights holder, source name/location, acquisition timestamp/method, provenance reference, exact license ID/name/version, evidence reference, verification state, commercial-use permission, modification permission, redistribution permission, app-bundling permission, attribution requirement/text, and explicit restrictions.
 - `files`: one or more relative packaged file paths, format, exact byte size, and SHA-256 for each file.
-- `dependencies`: IDs of other registry entries required by this asset.
+- `dependencies`: a map of required registry asset IDs to their exact pinned asset versions; a missing ID or version mismatch blocks approval.
 - `technicalProfile`: explicit coordinate system, units, import settings, renderer requirements, and category-specific geometry/material/texture/rig/animation/audio/font/shader/generator profiles. Required category fields cannot be `UNKNOWN` or `PENDING`; use `NOT_APPLICABLE` only where genuinely inapplicable.
 - `resourceMeasurements`: measured packaged/runtime resource values where available; an empty/pending profile cannot be marked as a passed budget.
-- `compatibleRuntimes`: runtime identifier to exact tested version.
+- `compatibleRuntimes`: runtime identifier to exact tested version; the request version must match exactly.
 - `approvedScopes`: explicitly approved use scopes.
 - `budgetStatus`: `PASS`, `PENDING`, or `FAIL`.
 - `review`: reviewer, review timestamp, decision reason, review evidence reference, rights/visual/technical pass flags, realism score, visual style, and any scoped-stylization approvals.
@@ -59,10 +60,11 @@ The gate blocks approval when any of the following is true:
 5. Visual tags indicate cartoon, chibi, toy-like, comic, mascot, humorous/comical, or primitive-human content.
 6. Visual style is not cinematic realistic. Scoped stylization is allowed only for its explicitly reviewed scope.
 7. Acquisition/provenance, technical profile, reviewer/date/decision reason/review evidence, rights/visual/technical review, or realism score (minimum 4/5) is missing or failed.
-8. The requested runtime version is not explicitly listed as tested, or the requested use scope is not approved.
-9. The manifest is empty for an asset, a path is absolute/traversal/unsafe, a file is absent, or its byte size/SHA-256 differs from the packaged bytes.
-10. A dependency is missing, not approved for the same runtime/scope, or participates in a dependency cycle.
-11. Resource budget status is `FAIL`.
+8. The requested runtime identifier and exact version are not explicitly listed as tested, or the requested use scope is not approved.
+9. A dependency version is not pinned, or the resolved dependency version differs from the pinned version.
+10. The manifest is empty for an asset, a path is absolute/traversal/unsafe, a file is absent, or its byte size/SHA-256 differs from the packaged bytes.
+11. A dependency is missing, not approved for the same runtime/scope, or participates in a dependency cycle.
+12. Resource budget status is `FAIL`.
 
 A `PENDING` resource budget produces a visible warning, not a false performance pass, and requires an explicit `budgetPendingAccepted` reviewer decision. Without that explicit acceptance, the gate blocks the asset. This is intentional: Stage 06 says device budgets must be measured in later integration and device-optimization stages, not invented now.
 
@@ -94,7 +96,8 @@ The empty manifest is an honest implementation baseline, not evidence that the c
 - Packaged byte/hash mismatch rejection.
 - Absolute/traversal path rejection.
 - Missing dependency rejection.
-- Scope and tested-runtime restrictions.
+- Exact runtime identifier/version and scope restrictions.
+- Dependency version pinning and propagation of dependency budget warnings.
 - Category-specific technical profiles and unresolved metadata rejection.
 - Cyclic dependency rejection.
 - Resource budget failure and pending-budget reviewer acceptance.
