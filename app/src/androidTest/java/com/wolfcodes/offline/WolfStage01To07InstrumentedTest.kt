@@ -428,6 +428,7 @@ class WolfStage01To07InstrumentedTest {
             registry.approvedAssets(
                 WolfAssetUseRequest(
                     targetRuntime = "WOLF_ANDROID_CANVAS",
+                    targetRuntimeVersion = "1.0.0",
                     intendedScope = "environment_background"
                 )
             ).isEmpty()
@@ -437,6 +438,7 @@ class WolfStage01To07InstrumentedTest {
                 "wolf_nonexistent_asset",
                 WolfAssetUseRequest(
                     targetRuntime = "WOLF_ANDROID_CANVAS",
+                    targetRuntimeVersion = "1.0.0",
                     intendedScope = "environment_background"
                 )
             ).approved
