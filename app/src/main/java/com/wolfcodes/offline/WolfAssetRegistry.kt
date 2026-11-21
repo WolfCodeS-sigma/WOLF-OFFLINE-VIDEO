@@ -4,6 +4,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.InputStream
 import java.security.MessageDigest
 
 enum class WolfAssetCategory {
@@ -31,6 +32,7 @@ data class WolfAssetLicenseEvidence(
     val creatorOrRightsHolder: String,
     val sourceName: String,
     val sourceLocation: String,
+    val licenseId: String,
     val licenseName: String,
     val licenseVersion: String,
     val evidenceReference: String,
@@ -41,7 +43,10 @@ data class WolfAssetLicenseEvidence(
     val appBundlingAllowed: Boolean,
     val attributionRequired: Boolean,
     val attributionText: String,
-    val restrictions: String
+    val restrictions: String,
+    val acquiredAtEpochMillis: Long,
+    val acquisitionMethod: String,
+    val provenanceRecordReference: String
 )
 
 data class WolfAssetReview(
@@ -66,6 +71,8 @@ data class WolfAssetRegistryEntry(
     val license: WolfAssetLicenseEvidence,
     val files: List<WolfAssetFile>,
     val dependencies: Set<String>,
+    val technicalProfile: Map<String, String>,
+    val resourceMeasurements: Map<String, String>,
     val compatibleRuntimes: Map<String, String>,
     val approvedScopes: Set<String>,
     val budgetStatus: WolfAssetBudgetStatus,
@@ -89,20 +96,22 @@ data class WolfAssetGateResult(
  */
 class WolfAssetFileVerifier(
     private val packagedAssetRoot: File? = null,
-    private val assetReader: ((String) -> ByteArray?)? = null
+    private val assetReader: ((String) -> InputStream?)? = null
 ) {
     fun verify(file: WolfAssetFile): Boolean {
         if (!isSafeRelativePath(file.relativePath)) return false
         return runCatching {
-            val bytes = if (assetReader != null) {
+            val input = if (assetReader != null) {
                 assetReader.invoke(file.relativePath) ?: return false
             } else {
                 val root = packagedAssetRoot?.canonicalFile ?: return false
                 val candidate = File(root, file.relativePath).canonicalFile
-                if (!candidate.path.startsWith(root.path + File.separator) || !candidate.isFile) return false
-                candidate.readBytes()
+                if (!candidate.path.startsWith(root.path + File.separator) || !candidate.isFile ||
+                    candidate.length() != file.byteSize
+                ) return false
+                candidate.inputStream()
             }
-            bytes.size.toLong() == file.byteSize && sha256(bytes) == file.sha256.lowercase()
+            input.use { stream -> matchesManifest(stream, file.byteSize, file.sha256) }
         }.getOrDefault(false)
     }
 
@@ -115,10 +124,32 @@ class WolfAssetFileVerifier(
             return segments.all { it.isNotBlank() && it != "." && it != ".." }
         }
 
-        fun sha256(file: File): String = sha256(file.readBytes())
+        private fun matchesManifest(input: InputStream, expectedSize: Long, expectedHash: String): Boolean {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val buffer = ByteArray(64 * 1024)
+            var totalBytes = 0L
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                totalBytes += count
+                digest.update(buffer, 0, count)
+            }
+            val actualHash = digest.digest().joinToString("") { "%02x".format(it) }
+            return totalBytes == expectedSize && actualHash == expectedHash.lowercase()
+        }
 
-        fun sha256(bytes: ByteArray): String =
-            MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        fun sha256(file: File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            return digest.digest().joinToString("") { "%02x".format(it) }
+        }
     }
 }
 
@@ -158,7 +189,10 @@ class WolfAssetQualityGate(
         val license = entry.license
         requireValue(license.creatorOrRightsHolder.isNotBlank(), "صاحب الحقوق غير موثق")
         requireValue(license.sourceName.isNotBlank() && license.sourceLocation.isNotBlank(), "مصدر الأصل غير موثق")
-        requireValue(license.licenseName.isNotBlank() && license.licenseVersion.isNotBlank(), "اسم الترخيص أو إصداره مفقود")
+        requireValue(license.acquiredAtEpochMillis > 0L && license.acquisitionMethod.isNotBlank(), "تاريخ أو طريقة الحصول على الأصل مفقودة")
+        requireValue(license.provenanceRecordReference.isNotBlank(), "مرجع سجل مصدر الأصل مفقود")
+        requireValue(license.licenseId.isNotBlank() && license.licenseName.isNotBlank() && license.licenseVersion.isNotBlank(), "معرّف الترخيص أو اسمه أو إصداره مفقود")
+        requireValue(license.restrictions.isNotBlank(), "قيود الترخيص غير موثقة؛ استخدم None إذا لم توجد قيود")
         requireValue(license.evidenceReference.isNotBlank() && license.verified, "دليل الترخيص غير موثق أو غير متحقق")
         requireValue(license.commercialUse, "الاستخدام التجاري غير مسموح أو غير مثبت")
         requireValue(license.modificationAllowed, "التعديل غير مسموح أو غير مثبت")
@@ -194,6 +228,13 @@ class WolfAssetQualityGate(
             "لا يوجد إثبات توافق مختبر مع بيئة التشغيل المطلوبة"
         )
 
+        val requiredTechnicalFields = listOf("coordinateSystem", "units", "importSettings", "rendererRequirements")
+        requiredTechnicalFields.forEach { key ->
+            requireValue(!entry.technicalProfile[key].isNullOrBlank(), "بيانات التوافق التقنية مفقودة: $key")
+        }
+        if (entry.budgetStatus == WolfAssetBudgetStatus.PASS) {
+            requireValue(entry.resourceMeasurements.isNotEmpty(), "لا يمكن اجتياز ميزانية الموارد دون قياسات موثقة")
+        }
         requireValue(entry.files.isNotEmpty(), "قائمة ملفات الأصل فارغة")
         entry.files.forEach { file ->
             requireValue(WolfAssetFileVerifier.isSafeRelativePath(file.relativePath), "مسار ملف غير آمن: ${file.relativePath}")
@@ -269,8 +310,16 @@ class WolfAssetRegistry private constructor(
         fun loadBundled(context: Context): WolfAssetRegistry {
             val json = context.assets.open("wolf_asset_registry.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
             return fromJson(json, WolfAssetFileVerifier(assetReader = { path ->
-                runCatching { context.assets.open(path).use { it.readBytes() } }.getOrNull()
+                runCatching { context.assets.open(path) }.getOrNull()
             }))
+        }
+
+        private fun jsonObjectToMap(value: JSONObject): Map<String, String> = buildMap {
+            val keys = value.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                put(key, value.getString(key))
+            }
         }
 
         private fun parseEntry(item: JSONObject): WolfAssetRegistryEntry {
@@ -293,6 +342,7 @@ class WolfAssetRegistry private constructor(
                     creatorOrRightsHolder = license.optString("creatorOrRightsHolder"),
                     sourceName = license.optString("sourceName"),
                     sourceLocation = license.optString("sourceLocation"),
+                    licenseId = license.optString("licenseId"),
                     licenseName = license.optString("licenseName"),
                     licenseVersion = license.optString("licenseVersion"),
                     evidenceReference = license.optString("evidenceReference"),
@@ -303,7 +353,10 @@ class WolfAssetRegistry private constructor(
                     appBundlingAllowed = license.optBoolean("appBundlingAllowed"),
                     attributionRequired = license.optBoolean("attributionRequired"),
                     attributionText = license.optString("attributionText"),
-                    restrictions = license.optString("restrictions")
+                    restrictions = license.optString("restrictions"),
+                    acquiredAtEpochMillis = license.optLong("acquiredAtEpochMillis"),
+                    acquisitionMethod = license.optString("acquisitionMethod"),
+                    provenanceRecordReference = license.optString("provenanceRecordReference")
                 ),
                 files = (0 until files.length()).map { i ->
                     val file = files.getJSONObject(i)
@@ -315,6 +368,8 @@ class WolfAssetRegistry private constructor(
                     )
                 },
                 dependencies = (0 until dependencies.length()).map { dependencies.getString(it) }.toSet(),
+                technicalProfile = jsonObjectToMap(item.optJSONObject("technicalProfile") ?: JSONObject()),
+                resourceMeasurements = jsonObjectToMap(item.optJSONObject("resourceMeasurements") ?: JSONObject()),
                 compatibleRuntimes = buildMap {
                     val keys = runtimes.keys()
                     while (keys.hasNext()) {
