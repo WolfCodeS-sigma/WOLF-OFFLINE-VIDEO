@@ -73,12 +73,12 @@ object StoryDirectorEngine {
     }
 
     /** Choose a conservative horizontal focus from the shot's actual composition notes. */
-    internal fun compositionFocusX(composition: String): Float = when {
+    internal fun compositionFocusX(composition: String): Float? = when {
         composition.contains("حجب جزئي") -> 0.66f
         composition.contains("مصدر الصوت") -> 0.64f
         composition.contains("خلف الشخصية") -> 0.38f
         composition.contains("اتجاه الحركة") -> 0.58f
-        else -> 0.5f
+        else -> null
     }
 
     /** Normalize lighting intent for a subtle, deterministic local render treatment. */
