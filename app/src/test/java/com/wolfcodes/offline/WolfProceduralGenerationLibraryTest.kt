@@ -283,7 +283,7 @@ class WolfProceduralGenerationLibraryTest {
     fun pinnedSourceBlobRevisionAndSha256MatchTheCompiledGeneratorSources() {
         testBindings().forEach { binding ->
             val relativePath = binding.sourceRepositoryPath.removePrefix("app/")
-            val workingDirectory = File(System.getProperty("user.dir"))
+            val workingDirectory = File(System.getProperty("user.dir") ?: ".")
             val candidates = listOf(
                 File(workingDirectory, relativePath),
                 File(workingDirectory, binding.sourceRepositoryPath)
