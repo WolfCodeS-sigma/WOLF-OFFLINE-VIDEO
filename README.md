@@ -11,7 +11,8 @@ WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected
 - `MainActivity.kt`: independent offline project and production interface.
 - `WolfProjectStore.kt`: durable local project records with atomic file replacement.
 - `StoryDirectorEngine.kt` and `OfflineSupportEngines.kt`: deterministic story segmentation, shot planning, pacing, and local visual helpers.
-- `WolfSceneArtEngine.kt`, `WolfSceneAssetStore.kt`, and `WolfProceduralMotionEngine.kt`: scene artwork, optional image slots, procedural character/environment motion, fog, particles, rain, spectral silhouettes, and visual effects.
+- `WolfSceneArtEngine.kt`, `WolfSceneAssetStore.kt`, and `WolfProceduralMotionEngine.kt`: scene artwork, project-scoped user image slots, procedural motion, and atmospheric effects.
+- `WolfAssetRegistry.kt` and `app/src/main/assets/wolf_asset_registry.json`: application-bundled cinematic asset registry, SHA-256/file integrity checks, rights/realism/scope/runtime validation, and fail-closed Quality Gate. The initial registry is intentionally empty until real assets pass review.
 - `OfflineProductionEngine.kt`: local frame rendering, H.264 MP4 encoding, audio integration, long-film chapter handling, checkpoint support, recovery paths, and export quality inspection.
 - `WolfStoryVoiceEngine.kt`, `WolfAudioMixer.kt`, `WolfAudioTranscoder.kt`, and `WolfSoundFxEngine.kt`: local narration recording, approval state, audio processing, and procedural sound effects.
 - `WolfLongFilmEngine.kt`: chapter planning and resumable chapter checkpoints.
