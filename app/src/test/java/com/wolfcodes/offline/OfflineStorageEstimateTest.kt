@@ -34,6 +34,35 @@ class OfflineStorageEstimateTest {
     }
 
     @Test
+    fun staleCleanupRecognizesEveryOfflineAudioAndVideoTemporaryPrefix() {
+        val generatedTemporaryFiles = listOf(
+            "silent_wolf_offline_test.mp4",
+            "sfx_wolf_offline_test.m4a",
+            "normalized_wolf_offline_test.mp4",
+            "converted_wolf_offline_test.m4a",
+            "layered_wolf_offline_test.m4a",
+            "layered_wolf_offline_test.mp4_voice.pcm",
+            "layered_wolf_offline_test.mp4_sfx.pcm",
+            "layered_wolf_offline_test.mp4_mix.pcm",
+            "wolf_offline_test.mp4"
+        )
+        generatedTemporaryFiles.forEach { name ->
+            assertTrue("Offline temporary file was not recognised: $name", WolfMemoryManager.isOwnedTemporaryFile(name))
+        }
+
+        val userOrProjectFiles = listOf(
+            "user_photo.png",
+            "project_voice.m4a",
+            "project.json",
+            "unrelated_cache.pcm"
+        )
+        userOrProjectFiles.forEach { name ->
+            assertTrue("A user/project file was classified as WOLF temporary: $name",
+                !WolfMemoryManager.isOwnedTemporaryFile(name))
+        }
+    }
+
+    @Test
     fun estimateUsesTheMaximumSupportedVideoDurationIncludingIntro() {
         val capped = OfflineProductionEngine.estimatePeakStorageBytes(5000, false)
         val maximum = OfflineProductionEngine.estimatePeakStorageBytes(1803, false)

@@ -1,7 +1,10 @@
 package com.wolfcodes.offline
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
+import android.graphics.RectF
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
@@ -144,6 +147,97 @@ class WolfStage01To07InstrumentedTest {
             }
             narrationFixture.delete()
             imageFixture.delete()
+        }
+    }
+
+    @Test(timeout = 600_000L)
+    fun atmosphericFallbackWithoutUserMediaExportsDecodableSilentMp4() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        var exportedUri: Uri? = null
+        try {
+            val result = OfflineProductionEngine.render(
+                context = context,
+                story = "في الليل هبت رياح باردة وارتفع الضباب حول المكان ثم ساد الصمت.",
+                seconds = 5,
+                imageUris = emptyList(),
+                audioUri = null,
+                aspectRatio = "1:1",
+                generateSoundEffects = false,
+                includeWatermark = false,
+                includeIntro = false,
+                enableHorrorTypography = false,
+                projectId = "wolf-stage-fallback-${System.currentTimeMillis()}"
+            )
+
+            assertEquals("The silent fallback must preserve the requested runtime", 5, result.durationSeconds)
+            assertNotNull("The fallback exporter did not save an MP4", result.mediaUri)
+            exportedUri = Uri.parse(requireNotNull(result.mediaUri))
+
+            val report = WolfFilmQualityInspector.inspect(
+                context = context,
+                mediaReference = requireNotNull(result.mediaUri),
+                expectedDurationSeconds = 5,
+                requireAudio = false
+            )
+            assertTrue("Atmospheric fallback MP4 failed structural QA: ${report.summary}", report.passed)
+            assertFalse("The no-audio fallback unexpectedly added an audio track", report.hasAudio)
+            assertTrue("Expected about 60 video frames, got ${report.videoSamples}", report.videoSamples >= 58L)
+
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(context, requireNotNull(exportedUri))
+                val frame = retriever.getFrameAtTime(2_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                assertNotNull("The atmospheric fallback frame could not be decoded", frame)
+                try {
+                    val pixel = requireNotNull(frame).getPixel(frame.width / 2, frame.height / 2)
+                    assertTrue("The fallback renderer returned a fully black frame", pixel != Color.BLACK)
+                } finally {
+                    frame?.recycle()
+                }
+            } finally {
+                retriever.release()
+            }
+        } finally {
+            exportedUri?.let { uri ->
+                if (uri.scheme == "content") {
+                    runCatching { context.contentResolver.delete(uri, null, null) }
+                }
+            }
+        }
+    }
+
+    @Test(expected = IllegalStateException::class)
+    fun colorHeuristicLayersAreRejectedByDepthComposer() {
+        val width = 64
+        val height = 64
+        val pixels = IntArray(width * height) { index ->
+            val x = index % width
+            val y = index / width
+            if (x in 12..51 && y in 12..51) Color.WHITE else Color.BLACK
+        }
+        val source = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        source.setPixels(pixels, 0, width, 0, 0, width, height)
+        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val layers = WolfImageDepthSegmenter.segment(source)
+        try {
+            assertTrue(layers.heuristicCandidateSeparated)
+            assertFalse(layers.semanticValidationPassed)
+            assertFalse(layers.safeForParallax)
+            WolfSceneDepthComposer.renderImageLayers(
+                canvas = Canvas(output),
+                width = width,
+                height = height,
+                sceneIndex = 0,
+                progress = 0.5f,
+                layers = layers,
+                source = Rect(0, 0, width, height),
+                destination = RectF(0f, 0f, width.toFloat(), height.toFloat()),
+                rotationDegrees = 0f
+            )
+        } finally {
+            layers.recycle()
+            source.recycle()
+            output.recycle()
         }
     }
 

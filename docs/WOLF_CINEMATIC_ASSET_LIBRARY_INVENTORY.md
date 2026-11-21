@@ -1,22 +1,22 @@
 # WOLF Cinematic Asset Library — Inventory Baseline
 
 **Inventory ID:** WOLF-CINEMATIC-INVENTORY-001  
-**Version:** 1.0  
+**Version:** 1.1  
 **Stage:** 07 — WOLF Cinematic Asset Library inventory  
 **Inventory status:** Initial repository audit completed; asset acquisition and approval are not claimed  
 **Product target:** Serious, realistic, cinematic horror  
 **Runtime target:** Offline; assets must be packaged with and versioned as part of the Android application  
 **Policy baseline:** WOLF-ASSET-POLICY-001, version 1.0  
 **Repository:** WolfCodeS-sigma/WOLF-OFFLINE-VIDEO  
-**Audited reference:** `docs/stage-06-asset-quality-licensing-policy`  
-**Audited commit:** `54b61c4f116fc03458f89dabf2b73fe5916f743b`  
+**Audited reference:** `fix/stages-01-06-audit`  
+**Audited commit:** `77b0186689b856be92ecc80029e97f487305a425`  
 **Audit method:** Git tree and tracked-file inventory, application source review, and asset-path/resource-directory inspection
 
 ---
 
 ## 1. Executive result
 
-The audited repository snapshot contains **no packaged cinematic media assets**. The recursive Git tree contains 44 tracked file blobs, but no tracked files with common model, texture, image, audio, animation, or font asset extensions. The Android application source has 23 Kotlin files; `app/src/main/assets` and `app/src/main/res` are absent in the audited snapshot.
+The audited Stage 07 base snapshot (`fix/stages-01-06-audit`) contains **no packaged cinematic media assets**. Its recursive Git tree contains 45 tracked file blobs: 23 production Kotlin files under `app/src/main`, 13 Kotlin JVM test files, and 9 supporting files. No tracked files with common model, texture, image, audio, animation, or font asset extensions were found. The Android `app/src/main/assets` and `app/src/main/res` directories are absent in that baseline.
 
 Therefore, the verified library inventory at this baseline is:
 

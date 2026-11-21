@@ -42,10 +42,12 @@ object WolfMemoryManager {
         return CleanupResult(removed, released, cacheUsageBytes(context))
     }
 
-    private fun isOwnedTemporaryFile(name: String): Boolean =
+    internal fun isOwnedTemporaryFile(name: String): Boolean =
         name.startsWith("silent_wolf_offline_") ||
             name.startsWith("sfx_wolf_offline_") ||
             name.startsWith("normalized_wolf_offline_") ||
+            name.startsWith("converted_wolf_offline_") ||
+            name.startsWith("layered_wolf_offline_") ||
             name.startsWith("wolf_offline_")
 
     private fun directorySize(file: File): Long {

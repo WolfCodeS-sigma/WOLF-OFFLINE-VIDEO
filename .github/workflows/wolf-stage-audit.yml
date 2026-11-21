@@ -47,9 +47,9 @@ jobs:
         run: gradle --no-daemon :app:assembleDebug lintDebug testDebugUnitTest
 
   android-emulator-regression:
-    name: Android emulator MP4, audio and checkpoint regression tests
+    name: Android 12 emulator MP4, audio and checkpoint regression tests
     needs: android-audit
-    runs-on: ubuntu-latest
+    runs-on: macos-15-intel
     timeout-minutes: 40
     steps:
       - name: Check out audit branch
@@ -75,14 +75,14 @@ jobs:
       - name: Run real Android media and checkpoint tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
-          api-level: 35
+          api-level: 31
           target: google_apis
           arch: x86_64
           profile: pixel_2
-          cores: 2
+          cores: 4
           ram-size: 4096M
           heap-size: 512M
           emulator-boot-timeout: 600
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           disable-animations: true
           script: gradle --no-daemon :app:connectedDebugAndroidTest
