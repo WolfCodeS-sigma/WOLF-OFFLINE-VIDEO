@@ -57,22 +57,29 @@ class StoryPipelineTest {
     
     @Test
     fun requestedFilmDurationIsIndependentFromShortNarration() {
-        val requestedFilmSeconds = 30
-        val narrationSeconds = 7
-        val fps = 12
-        val totalFrames = requestedFilmSeconds * fps
-        val sceneTexts = StoryDirectorEngine.fitSceneTextsToDuration(
-            (1..11).map { "مشهد رقم $it" },
-            requestedFilmSeconds
-        )
-        val frameCounts = OfflineMotionEngine.allocateFrames(
-            sceneTexts, totalFrames, minimumFramesPerScene = 1
+        val timeline = OfflineProductionEngine.buildAudioTimeline(
+            requestedFilmSeconds = 30,
+            narrationTimingEnabled = true,
+            audioDurationMs = 7_000L
         )
 
-        assertEquals(30, requestedFilmSeconds)
-        assertEquals(7, narrationSeconds)
-        assertEquals(360, frameCounts.sum())
-        assertEquals(requestedFilmSeconds * fps, frameCounts.sum())
+        assertEquals(30_000_000L, timeline.filmDurationUs)
+        assertEquals(7_000_000L, timeline.narrationLimitUs)
+
+        val withoutNarrationTiming = OfflineProductionEngine.buildAudioTimeline(
+            requestedFilmSeconds = 30,
+            narrationTimingEnabled = false,
+            audioDurationMs = 7_000L
+        )
+        assertEquals(30_000_000L, withoutNarrationTiming.filmDurationUs)
+        assertEquals(30_000_000L, withoutNarrationTiming.narrationLimitUs)
+
+        val missingNarrationDuration = OfflineProductionEngine.buildAudioTimeline(
+            requestedFilmSeconds = 30,
+            narrationTimingEnabled = true,
+            audioDurationMs = null
+        )
+        assertEquals(30_000_000L, missingNarrationDuration.narrationLimitUs)
     }
 
     @Test
