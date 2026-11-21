@@ -326,7 +326,7 @@ class WolfStage01To07InstrumentedTest {
             setLastModified(now - 96L * 60L * 60L * 1000L)
         }
         val projectRecord = File(context.filesDir, "wolf-project-cleanup-preservation-test.json").apply {
-            writeText("{\\"keep\\":true}")
+            writeText("preserve-me")
         }
 
         try {
