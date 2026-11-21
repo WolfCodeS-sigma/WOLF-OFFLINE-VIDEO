@@ -83,6 +83,6 @@ jobs:
           ram-size: 4096M
           heap-size: 512M
           emulator-boot-timeout: 600
-          emulator-options: -no-window -gpu host -no-snapshot -noaudio -no-boot-anim -no-metrics
+          emulator-options: -no-window -gpu software -no-snapshot -noaudio -no-boot-anim -no-metrics
           disable-animations: true
           script: gradle --no-daemon :app:connectedDebugAndroidTest
