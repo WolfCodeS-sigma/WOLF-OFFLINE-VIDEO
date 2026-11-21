@@ -100,6 +100,41 @@ class StoryPipelineTest {
     }
 
     @Test
+    fun storyboardShotFrameBudgetsPreserveExactSceneFrames() {
+        val plan = StoryDirectorEngine.analyze(
+            "سمعت خطوات في الممر. هربت إلى الغرفة ثم ظهر ظل خلف الباب.",
+            30, "9:16", "رعب سينمائي مظلم", "رعب نفسي", audioDrivenDuration = true
+        )
+        val sceneFrames = OfflineMotionEngine.allocateFrames(
+            plan.scenes.map { it.sourceText }, 360, minimumFramesPerScene = 1
+        )
+        val shotFrames = plan.scenes.mapIndexed { index, scene ->
+            StoryDirectorEngine.allocateShotFrames(
+                sceneFrames[index], scene.shots.map { it.durationSeconds }
+            )
+        }
+        assertEquals(360, shotFrames.sumOf { it.sum() })
+        assertTrue(shotFrames.all { it.isNotEmpty() && it.all { frames -> frames > 0 } })
+        assertEquals(sceneFrames, shotFrames.map { it.sum() })
+    }
+
+    @Test
+    fun storyboardChapterSlicesPreserveShotBoundariesAndFrames() {
+        val shots = listOf(2, 5, 3)
+        val slice = StoryDirectorEngine.sliceShotFrames(shots, startFrame = 4, frameCount = 5)
+        assertEquals(listOf(3, 2), slice)
+        assertEquals(5, slice.sum())
+        assertEquals(2, StoryDirectorEngine.sliceShotPlans(
+            listOf(
+                StoryDirectorEngine.ShotPlan(1, "A", "24mm", "", "", "", 2, ""),
+                StoryDirectorEngine.ShotPlan(2, "B", "50mm", "", "", "", 5, ""),
+                StoryDirectorEngine.ShotPlan(3, "C", "85mm", "", "", "", 3, "")
+            ),
+            shots, startFrame = 4, frameCount = 5
+        ).size)
+    }
+
+    @Test
     fun directorCreatesThreeShotDescriptionsPerScene() {
         val story = "دخلت الغرفة. ظهر ظل خلف النافذة."
         val plan = StoryDirectorEngine.analyze(story, 20, "9:16", "سينمائي", "رعب نفسي")
