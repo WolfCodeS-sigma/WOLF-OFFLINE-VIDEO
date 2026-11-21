@@ -1,7 +1,7 @@
 # WOLF Procedural Generation Library — Stage 09 Design
 
 **Design ID:** WOLF-PROCGEN-DESIGN-001  
-**Version:** 1.0  
+**Version:** 1.1  
 **Status:** Stage 09 design baseline  
 **Depends on:** Stage 06 asset policy, Stage 07 inventory, Stage 08 Asset Registry & Quality Gate  
 **Runtime model:** Android application-integrated, deterministic, offline-first  
@@ -25,6 +25,7 @@ Mandatory rules:
 6. **No silent substitution:** if a generator cannot satisfy a request, the scene planner must use a safe approved asset, a separately approved user image, an existing safe atmospheric fallback, or a documented neutral fallback. It must not invent an unrelated subject.
 7. **Preserve prior paths:** the existing renderer, exporter, project records, audio, user-image store, frame timing, checkpoints, and fallback behavior remain independent until an explicitly tested integration stage changes them.
 8. **Measured resource claims only:** unknown performance budgets remain pending; this design does not invent GPU, memory, polygon, texture, or APK-size limits.
+9. **No unbounded production execution:** every production request must carry finite, reviewed resource limits and a current runtime safety snapshot. A missing envelope, an unbounded limit, or a `PENDING` production budget blocks execution; it is never interpreted as unlimited capacity.
 
 ## 2. What the library generates
 
@@ -35,7 +36,7 @@ Mandatory rules:
 | `ATMOSPHERE` | Environmental atmosphere | fog density fields, haze layers, dust motes, subtle airborne particles | Must preserve scene readability and avoid decorative/cartoon appearance |
 | `WEATHER` | Weather overlays | rain streaks, wind direction fields, restrained mist movement | Must be driven by explicit scene parameters; no arbitrary weather inference |
 | `ENVIRONMENT_MOTION` | Motion of already-approved environmental elements | foliage sway, cloth-like environmental motion, environmental drift | May animate an existing approved asset; may not invent a realistic tree/prop/character |
-| `CAMERA_MOTION` | Cinematic camera transforms | dolly, pan, tilt, restrained handheld, reveal timing | Must remain inside declared safe framing bounds and preserve subject visibility |
+| `CAMERA_MOTION` | Candidate cinematic camera-motion profiles | bounded dolly, pan, tilt, restrained handheld, reveal timing profiles | Profiles are proposals only; `OfflineMotionEngine` remains the sole authority for shot planning, frame allocation, and final camera transforms |
 | `LIGHTING_EFFECT` | Non-destructive lighting/post effects | vignette, exposure pulse, restrained volumetric-style overlays, signal interference | Must not obscure required story content, captions, or watermark |
 
 These are the initial design families, not a claim that every generator already exists or is approved. New families require a documented scope, quality rules, rights review, resource profile, and tests before use.
@@ -56,13 +57,28 @@ A later proposal may add a category only through a separate design review and ex
 The library is designed as six separable layers. Their eventual Kotlin package/file names are implementation choices for Stage 10 or later; this design does not prematurely bind the architecture to a renderer.
 
 1. **Generator Catalog** — stable generator IDs, versions, family, supported capabilities, dependencies, and approval scope. Catalog entries are resolved from the app-bundled registry; they are never discovered from the network.
-2. **Policy Resolver** — obtains eligible generator records exclusively through `WolfAssetRegistry.approvedAssets(request)`. It rejects missing, pending, rejected, retired, unregistered, version-mismatched, or out-of-scope generators.
+2. **Policy Resolver** — calls `WolfAssetRegistry.approvedAssets(request)` first, then filters the returned records to `category == WolfAssetCategory.GENERATOR` before exposing anything to the generator catalog. The Stage 08 method intentionally returns every approved asset category; it is not itself a generator-only query. The resolver must never select a `CHARACTER`, `ENVIRONMENT`, `PROP`, `SHADER`, or other non-`GENERATOR` record as executable generator code. It also verifies the `generatorProfile` and `dependencyProfile` metadata against the exact generator ID/version, family, parameter-schema ID/version, output kinds, dependencies, seed algorithm, and supported runtime declared by the catalog. Only an exact, approved, in-scope, hash-verified generator record can be selected.
 3. **Request Validator** — validates the scene contract, parameter schema, seed, timeline, dimensions, coordinate conventions, and resource envelope before execution.
 4. **Deterministic Execution Core** — executes a pure generation function from canonical input. It owns seed derivation, stable ordering, parameter normalization, cancellation boundaries, and output identity.
 5. **Renderer Adapters** — translate renderer-neutral effect descriptors into a specific backend. An adapter must declare the exact runtime/renderer version it was tested against. Stage 09 does not certify Godot, Filament, Cocos Creator, libGDX, KorGE, Lottie, or SceneView.
 6. **Output Audit and Handoff** — records generator/version, seed, canonical parameters, runtime version, output type, warnings, resource measurements, and provenance. Reusable packaged outputs are submitted as registry candidates; they are not auto-approved.
 
 The library must remain independent of the current Canvas implementation. The existing `WolfProceduralMotionEngine` is a legacy renderer implementation and a source of current behavior to preserve, not the architectural API for every future engine.
+
+### 3.1 Stage 08 generator-resolution contract
+
+The production resolver follows this fail-closed sequence:
+
+1. Build the exact `WolfAssetUseRequest` using the requested runtime ID, exact runtime version, and intended use scope.
+2. Ask the bundled `WolfAssetRegistry.approvedAssets(request)` for records that pass the existing Stage 08 rights, realism, review, technical, scope, dependency, file-size, and SHA-256 checks.
+3. Filter that result to `WolfAssetCategory.GENERATOR` only. Filtering is mandatory because `approvedAssets()` returns all approved categories, not just generators.
+4. Match the registry record's `assetId`, version, `generatorProfile`, `dependencyProfile`, compatible runtime version, approved scope, and dependency versions against the requested catalog descriptor. Any absent, unknown, conflicting, or mismatched field rejects the record.
+5. For production execution, additionally require `budgetStatus == PASS` and complete, finite reviewed resource measurements for the generator. Stage 08 may allow a reviewer-accepted `PENDING` budget with a warning; WPGL must still block that generator from production execution until the measurements pass. Such entries may appear only in isolated Stage 10 test fixtures with explicit finite test limits, never in a production resolver result.
+6. Pin the selected registry asset ID, exact version, file hashes, dependency versions, runtime ID/version, and scope for the entire request. A later registry change cannot silently change an in-flight render.
+
+A missing or empty generator set is a normal safe result: WPGL reports that no eligible generator is registered and returns control to the scene planner's approved fallback path. It must not fall back to a non-generator registry category or load executable code from an unregistered location.
+
+`generatorProfile` must carry at least the canonical generator ID, semantic version, family ID, parameter-schema ID/version, seed-algorithm ID, supported output kinds, and execution contract version. `dependencyProfile` must describe the exact dependency closure and versions, consistent with the Stage 08 `dependencies` map. These are values in the existing registry schema; they do not create a second approval database.
 
 ## 4. Core request and result contracts
 
@@ -76,7 +92,7 @@ A generation request must contain:
 - `canvas`: width, height, pixel aspect ratio, and declared coordinate origin.
 - `parameters`: typed, schema-versioned values with explicit units and bounded ranges.
 - `runtimeTarget`: exact engine/renderer identifier and version.
-- `resourceEnvelope`: optional measured limits supplied by the caller; absence means unknown/pending, not unlimited.
+- `resourceEnvelope`: required finite hard limits for peak working memory, temporary storage, reusable output bytes, transient elements per frame, retained frame/cache count, and execution/cancellation deadline. Include native/GPU memory where it can be measured. The request also carries the current runtime safety snapshot (available memory, free storage, thermal state, and applicable `WolfResourceGuard` result). Every mandatory cap must be positive, finite, reviewed, and no greater than the generator's approved descriptor limits; missing, unknown, infinite, or `PENDING` values reject execution before allocation. No default of “unlimited” is permitted.
 
 A generation result must contain:
 
@@ -99,7 +115,16 @@ Sub-generators use the versioned algorithm `WOLF-SEED-1`:
 3. Compute SHA-256 over the concatenated byte sequence.
 4. Interpret the first eight digest bytes as an unsigned 64-bit big-endian sub-seed.
 
-The canonical parameter digest uses UTF-8 canonical JSON: object keys sorted lexicographically, arrays kept in declared order, strings encoded as UTF-8, booleans/null represented as JSON literals, integers in base-10 without leading zeros, and decimal values normalized to a non-exponent decimal representation with trailing fractional zeros removed. NaN and infinity are invalid. The canonicalization version is recorded with every result.
+The canonical parameter digest uses the versioned `WOLF-CANON-JSON-1` encoding. Its rules are exact:
+
+- Input must be valid UTF-8 JSON with no duplicate object keys, invalid Unicode surrogate sequences, NaN, or infinity.
+- Object keys are sorted by unsigned lexicographic order of their UTF-8 byte sequences. Array order is preserved.
+- Unicode string values are preserved as supplied; no NFC/NFD or locale-dependent normalization is performed. UTF-8 encoding is mandatory. In JSON strings, escape `"` and `\\`, encode U+0000 through U+001F with the standard short escape where defined and otherwise lowercase `\\u00xx`; all other valid Unicode scalar values are emitted as UTF-8.
+- JSON numbers are parsed as exact base-10 values, not binary floating point. Emit plain decimal notation without an exponent, remove unnecessary leading integer zeros and trailing fractional zeros, remove a now-empty decimal point, remove a leading plus if present in an upstream typed representation, and canonicalize every negative zero to `0`. Equivalent numeric values therefore have one byte representation (for example, `1`, `1.0`, and `1e0` canonicalize identically).
+- Parameter schemas must bound string lengths, numeric precision/scale, nesting depth, array length, and total canonical input bytes before hashing; values outside those declared bounds are rejected.
+- Booleans and null use the exact JSON literals `true`, `false`, and `null`.
+
+The digest is SHA-256 over the resulting UTF-8 byte sequence. Every result records `WOLF-CANON-JSON-1`; changing any canonicalization rule requires a new canonicalization ID and verification fixtures.
 
 Never use Kotlin/JVM object hash codes, unordered map iteration, device time, random UUIDs, or unseeded random APIs as reproducibility inputs. A future algorithm change requires a new seed-algorithm ID and generator compatibility declaration.
 
@@ -124,7 +149,8 @@ Each generator has a stable descriptor with:
 - supported renderer/runtime IDs and exact tested versions;
 - dependencies pinned to exact generator or asset versions;
 - deterministic/recovery capability declaration;
-- expected CPU, memory, GPU, and output-size measurement fields;
+- reviewed finite hard limits for CPU execution time, peak working memory, temporary storage, reusable output bytes, transient elements per frame, and retained frame/cache count; native/GPU limits are included where measurable;
+- measured CPU, memory, GPU, output-size, and frame-time observations, kept distinct from the hard limits;
 - allowed use scopes and prohibited use cases;
 - source/license/provenance references;
 - test evidence and lifecycle state.
@@ -202,7 +228,7 @@ The design requires measurement fields, not invented budgets:
 - frame-time distribution and dropped/late-frame observations;
 - cancellation and recovery latency.
 
-Budgets remain `PENDING` until measured on the target integration and later device stage. Stage 10 can compare generator behavior and reject pathological/unbounded workloads, but it cannot claim final Realme 7 approval. Physical-device testing remains deferred to Stage 21.
+Budgets remain `PENDING` until measured on the target integration and later device stage. A `PENDING` budget is not an executable production budget: WPGL may describe or test the generator with finite isolated test limits, but production dispatch is blocked until Stage 08 records `PASS` with complete reviewed measurements. Stage 10 must test both the blocked-pending path and the passing bounded path. Even after that, passing measurements on a CI emulator do not claim final Realme 7 approval. Physical-device testing remains deferred to Stage 21.
 
 ## 10. Security, bounds, and privacy
 
@@ -221,7 +247,7 @@ Budgets remain `PENDING` until measured on the target integration and later devi
 |---|---|
 | `WolfProceduralMotionEngine` | Preserve its current behavior as a legacy implementation; future adapters may wrap selected safe effects after Stage 10 verification. |
 | `WolfProceduralVisualSystem` | Keep its compatibility entry point; do not replace it in this design stage. |
-| `OfflineMotionEngine` | Remains authoritative for film pacing, frame allocation, and camera-motion planning until a separately tested contract is approved. |
+| `OfflineMotionEngine` | Sole authority in the existing production path for shot pacing, camera-motion planning, frame allocation, and final camera transforms. WPGL `CAMERA_MOTION` may return bounded candidate profiles only; `OfflineMotionEngine` validates, accepts/rejects, and resolves any candidate into final per-frame transforms. Renderers consume those resolved transforms and may not independently add camera motion or change frame allocation. Any future transfer of authority requires a separate design decision and regression proof. |
 | `WolfSceneArtEngine` | Remains the current safe base-art/fallback path; the new library must not bypass it. |
 | `WolfAssetRegistry` | Sole approval authority for shared generators and reusable generated assets. |
 | `WolfSceneAssetStore` | Continues to own project-scoped user images; no automatic ingestion or mutation. |
@@ -242,6 +268,9 @@ Stage 10 must implement focused tests before any production renderer integration
 8. Cancellation and resource limits are honored without leaking temporary files.
 9. Renderer adapters declare and enforce exact tested runtime versions.
 10. Existing Stage 01–08 regression suites continue to pass unchanged.
+11. A non-`GENERATOR` record that passes the general registry gate is still excluded from the WPGL executable catalog; an approved `GENERATOR` record must match exact profile, dependency, scope, runtime, version, hash, and `PASS` budget requirements.
+12. `PENDING` generator budgets and missing/unknown/infinite resource limits are blocked before allocation in production; finite test-only envelopes remain isolated from production dispatch.
+13. A `CAMERA_MOTION` candidate cannot directly mutate the renderer camera or frame timeline; `OfflineMotionEngine` remains the tested final authority.
 
 ## 13. Stage 09 acceptance criteria
 
@@ -250,7 +279,9 @@ Stage 09 is complete only when:
 - The library mission, scope, exclusions, and initial generator families are explicit.
 - Architecture layers and boundaries are documented independently of any single renderer.
 - Request/result, deterministic seed, frame timeline, descriptor, and provenance contracts are defined.
-- Generator source and reusable outputs are governed by the Stage 08 registry; no approval bypass exists.
+- Generator source and reusable outputs are governed by the Stage 08 registry; WPGL filters executable records to `GENERATOR` only and has no approval bypass.
+- Production execution requires `PASS` resource budgets and finite reviewed limits; `PENDING` is never treated as unlimited or production-safe.
+- `OfflineMotionEngine` remains the single authority for final camera transforms and frame allocation; WPGL camera motion is candidate-only.
 - Realistic human/creature/prop/environment fabrication is explicitly prohibited.
 - Failure fallback, offline/privacy/security constraints, and resource measurement requirements are defined.
 - Existing components and protected behaviors are mapped with no production integration changes.
@@ -260,4 +291,4 @@ This stage defines the design baseline only. It does not claim that new generato
 
 ---
 
-**Handoff:** Stage 10 may implement generator modules and run cross-generator cooperation tests against this contract. It must not silently widen the approved scope or modify the protected Stage 01–08 production paths.
+**Handoff:** Stage 10 may implement generator modules and run cross-generator cooperation tests against this contract. It must first prove generator-only registry filtering, exact profile/version/scope matching, bounded production dispatch, deterministic canonicalization fixtures, and candidate-only camera motion. It must not silently widen the approved scope or modify the protected Stage 01–08 production paths.
