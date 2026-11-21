@@ -394,6 +394,21 @@ class WolfStage01To07InstrumentedTest {
             assertTrue("Legacy exporter MP4 failed structural QA: ${report.summary}", report.passed)
             assertFalse("Legacy silent exporter unexpectedly added audio", report.hasAudio)
             assertTrue("Legacy exporter produced too few video samples: ${report.videoSamples}", report.videoSamples >= 115L)
+            val actualDuration = requireNotNull(report.durationSeconds) {
+                "Legacy exporter MP4 duration metadata is missing"
+            }
+            assertTrue(
+                "Legacy MP4 duration must be five seconds within 0.1s, got ${actualDuration}",
+                actualDuration in 4.90..5.10
+            )
+
+            val videoTiming = requireNotNull(readLastSampleTimes(context, requireNotNull(outputUri))["video/avc"]) {
+                "Legacy MP4 has no readable H.264 presentation timestamps"
+            }
+            assertTrue(
+                "Legacy MP4 final frame timestamp must be near five seconds, got ${videoTiming.lastPresentationTimeUs} us",
+                videoTiming.lastPresentationTimeUs in 4_900_000L..5_100_000L
+            )
         } finally {
             outputUri?.let { uri ->
                 if (uri.scheme == "content") {
