@@ -30,7 +30,6 @@ object WolfProceduralMotionEngine {
     )
 
     data class SceneFeatures(
-        val hasGhost: Boolean,
         val hasForest: Boolean,
         val hasRain: Boolean,
         val hasGlitch: Boolean,
@@ -46,16 +45,6 @@ object WolfProceduralMotionEngine {
 
     private val particlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-    }
-
-    private val ghostPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
-
-    private val ghostLinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
     }
 
     private val branchPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -100,9 +89,6 @@ object WolfProceduralMotionEngine {
         if (features.hasRain) {
             drawRain(canvas, width, height, sceneIndex, t)
         }
-        if (features.hasGhost) {
-            drawGhost(canvas, width, height, sceneIndex, shotIndex, t)
-        }
         if (features.hasReveal || features.hasChase) {
             drawEnvironmentalPulse(canvas, width, height, sceneIndex, t, features.hasChase)
         }
@@ -141,9 +127,6 @@ object WolfProceduralMotionEngine {
             if (features.hasForest) {
                 drawWindDrivenBranches(this, width, height, sceneIndex, t)
             }
-            if (features.hasGhost) {
-                drawGhost(this, width, height, sceneIndex, shotIndex, t)
-            }
         }
 
         drawAtDepth(canvas, width, height, sceneIndex, t, 1.0f) {
@@ -181,10 +164,6 @@ object WolfProceduralMotionEngine {
         val text = caption.lowercase(java.util.Locale.ROOT)
         fun containsAny(vararg terms: String): Boolean = terms.any(text::contains)
 
-        val ghost = containsAny(
-            "شبح", "أشباح", "طيف", "أطياف", "روح", "المرأة", "امرأة", "ظل يتحرك",
-            "ghost", "specter", "spectre", "spirit", "apparition", "phantom"
-        )
         val forest = containsAny(
             "شجرة", "أشجار", "غابة", "غابه", "أغصان", "أوراق الشجر", "حديقة",
             "tree", "trees", "forest", "woods", "branches", "leaves"
@@ -207,7 +186,6 @@ object WolfProceduralMotionEngine {
         )
 
         return SceneFeatures(
-            hasGhost = ghost,
             hasForest = forest,
             hasRain = rain,
             hasGlitch = glitch,
@@ -313,85 +291,6 @@ object WolfProceduralMotionEngine {
             particlePaint.color = Color.argb(alpha, 210, 205, 195)
             canvas.drawCircle(x * width, y * height, radius, particlePaint)
         }
-    }
-
-    private fun drawGhost(
-        canvas: Canvas,
-        width: Int,
-        height: Int,
-        sceneIndex: Int,
-        shotIndex: Int,
-        progress: Float
-    ) {
-        val t = progress.coerceIn(0f, 1f)
-        val visibility = sampleKeyframes(
-            t,
-            listOf(
-                Keyframe(0f, 0.02f),
-                Keyframe(0.16f, 0.18f),
-                Keyframe(0.43f, 0.92f),
-                Keyframe(0.72f, 0.68f),
-                Keyframe(1f, 0.12f)
-            )
-        )
-        val oscillation = sin((t * 2.0 * PI + sceneIndex * 0.61).toDouble()).toFloat()
-        val drift = sin((t * PI + sceneIndex * 0.37).toDouble()).toFloat()
-        val unit = height * 0.40f
-        val centerX = width * if (shotIndex % 2 == 0) 0.76f else 0.64f
-        val centerY = height * (0.52f + oscillation * 0.026f)
-        val translateX = drift * width * 0.026f
-        val bodySway = oscillation * 5.5f
-        val alpha = (visibility * 76f).toInt().coerceIn(0, 76)
-
-        val saved = canvas.save()
-        canvas.translate(centerX + translateX, centerY)
-        canvas.scale(unit / 220f, unit / 220f)
-        canvas.rotate(bodySway * 0.22f)
-
-        ghostPaint.color = Color.argb(alpha, 190, 199, 214)
-        ghostPaint.shader = null
-
-        val body = Path().apply {
-            moveTo(-68f, -8f)
-            cubicTo(-76f, 24f, -73f, 74f, -61f, 116f)
-            cubicTo(-52f, 151f, -76f, 173f, -69f, 188f)
-            cubicTo(-45f, 179f, -36f, 170f, -20f, 185f)
-            cubicTo(-2f, 201f, 12f, 176f, 28f, 184f)
-            cubicTo(45f, 193f, 57f, 179f, 70f, 188f)
-            cubicTo(79f, 152f, 68f, 119f, 66f, 78f)
-            cubicTo(65f, 36f, 51f, 2f, 31f, -9f)
-            close()
-        }
-        canvas.drawPath(body, ghostPaint)
-
-        val headSaved = canvas.save()
-        canvas.rotate(-bodySway * 0.34f, 0f, -45f)
-        canvas.drawOval(-43f, -99f, 43f, -8f, ghostPaint)
-        canvas.restoreToCount(headSaved)
-
-        ghostLinePaint.color = Color.argb((alpha * 0.78f).toInt(), 206, 213, 226)
-        ghostLinePaint.strokeWidth = 10f
-        val leftArm = Path().apply {
-            moveTo(-56f, 20f)
-            cubicTo(-91f, 28f - oscillation * 8f, -99f, 65f, -85f, 91f)
-        }
-        val rightArm = Path().apply {
-            moveTo(56f, 18f)
-            cubicTo(91f, 29f + oscillation * 8f, 98f, 62f, 82f, 88f)
-        }
-        canvas.drawPath(leftArm, ghostLinePaint)
-        canvas.drawPath(rightArm, ghostLinePaint)
-
-        val eyeAlpha = (alpha * 0.92f).toInt()
-        ghostPaint.color = Color.argb(eyeAlpha, 105, 9, 24)
-        canvas.drawOval(-25f, -61f, -11f, -43f, ghostPaint)
-        canvas.drawOval(11f, -61f, 25f, -43f, ghostPaint)
-
-        ghostPaint.color = Color.argb((alpha * 0.22f).toInt(), 225, 34, 52)
-        canvas.drawCircle(-18f, -53f, 13f, ghostPaint)
-        canvas.drawCircle(18f, -53f, 13f, ghostPaint)
-
-        canvas.restoreToCount(saved)
     }
 
     private fun drawWindDrivenBranches(
