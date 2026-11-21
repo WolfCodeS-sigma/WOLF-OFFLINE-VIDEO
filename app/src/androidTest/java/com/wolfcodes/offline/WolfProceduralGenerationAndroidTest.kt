@@ -58,7 +58,7 @@ class WolfProceduralGenerationAndroidTest {
 
         assertEquals(3, registry.approvedAssets(request.assetUseRequest)
             .count { it.category == WolfAssetCategory.GENERATOR })
-        val result = WolfProceduralGenerationLibrary(registry).generate(request)
+        val result = WolfProceduralGenerationLibrary(registry, testGenerators()).generate(request)
 
         assertTrue("Android AssetManager-backed Stage 08 gate should approve test fixtures", result.succeeded)
         assertEquals(3, result.effects.size)
@@ -71,7 +71,7 @@ class WolfProceduralGenerationAndroidTest {
 
     private fun fixtureManifest(): JSONObject {
         val assets = JSONArray()
-        WolfBuiltInGeneratorCatalog.bindings.forEach { binding ->
+        testBindings().forEach { binding ->
             assets.put(
                 entry(
                     assetId = binding.assetId,
@@ -201,7 +201,30 @@ class WolfProceduralGenerationAndroidTest {
             .put("review", review)
     }
 
+    private fun testBindings(): List<WolfGeneratorBinding> = WolfBuiltInGeneratorCatalog.bindings.map {
+        it.copy(hardLimits = TEST_ONLY_LIMITS)
+    }
+
+    private fun testGenerators(): List<WolfBuiltInProceduralGenerator> {
+        val bindings = testBindings()
+        return WolfBuiltInGeneratorCatalog.generators.mapIndexed { index, delegate ->
+            object : WolfBuiltInProceduralGenerator {
+                override val binding: WolfGeneratorBinding = bindings[index]
+                override fun generate(context: WolfGeneratorExecutionContext): WolfProceduralEffectPayload =
+                    delegate.generate(context.copy(binding = binding))
+            }
+        }
+    }
+
     private companion object {
+        val TEST_ONLY_LIMITS = WolfGeneratorHardLimits(
+            maxWorkingSetBytes = 131072L,
+            maxTemporaryStorageBytes = 65536L,
+            maxReusableOutputBytes = 16384L,
+            maxTransientElementsPerFrame = 64L,
+            maxRetainedFrameCount = 1L,
+            maxExecutionMillis = 250L
+        )
         const val ENVIRONMENT_ID = "wolf_stage10_android_environment_fixture"
         const val PRIMARY_SHA256 = "16dfdd1fe6fdb3a4fc90d93491c4bb228c8d1cff4d38a4ff82c7f58eb3994ad2"
         const val DEPENDENCY_SHA256 = "cae08d4beb1c90dccddf768c3d01e8dc963fcaa9c0f42eacd259f1d29dfb1c61"

@@ -40,7 +40,7 @@ class WolfProceduralGenerationLibraryTest {
         val registry = createRegistry()
         val environmentBefore = environmentFile.readBytes()
 
-        val result = WolfProceduralGenerationLibrary(registry).generate(request())
+        val result = stage10Library(registry).generate(request())
 
         assertTrue(result.succeeded)
         assertEquals(WolfProceduralFallbackMode.NONE, result.fallbackMode)
@@ -79,7 +79,7 @@ class WolfProceduralGenerationLibraryTest {
 
     @Test
     fun identicalSeedAndFrameIdentityRegenerateTheSameEffects() {
-        val library = WolfProceduralGenerationLibrary(createRegistry())
+        val library = stage10Library(createRegistry())
         val first = library.generate(request())
         val repeated = library.generate(request())
 
@@ -95,7 +95,7 @@ class WolfProceduralGenerationLibraryTest {
 
     @Test
     fun differentMasterSeedsChangeDeterministicProceduralOutput() {
-        val library = WolfProceduralGenerationLibrary(createRegistry())
+        val library = stage10Library(createRegistry())
         val first = library.generate(request(seed = 7L))
         val second = library.generate(request(seed = 987654321L))
 
@@ -109,7 +109,7 @@ class WolfProceduralGenerationLibraryTest {
 
     @Test
     fun emptyGeneratorSetFailsClosedAndKeepsTheBaseSceneFallback() {
-        val result = WolfProceduralGenerationLibrary(
+        val result = stage10Library(
             createRegistry(includeGenerators = false)
         ).generate(request())
 
@@ -122,7 +122,7 @@ class WolfProceduralGenerationLibraryTest {
     @Test
     fun nonGeneratorRegistryEntryCannotBeExecutedAsGeneratorCode() {
         val id = WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId
-        val result = WolfProceduralGenerationLibrary(
+        val result = stage10Library(
             createRegistry(categoryOverrideId = id)
         ).generate(request())
 
@@ -137,7 +137,7 @@ class WolfProceduralGenerationLibraryTest {
         val registry = createRegistry(pendingGeneratorId = id)
         assertTrue(registry.evaluate(id, request().assetUseRequest).approved)
 
-        val result = WolfProceduralGenerationLibrary(registry).generate(request())
+        val result = stage10Library(registry).generate(request())
 
         assertFalse(result.succeeded)
         assertEquals(WolfProceduralFailureCode.GENERATOR_BUDGET_NOT_PASSED, result.failureCode)
@@ -149,7 +149,7 @@ class WolfProceduralGenerationLibraryTest {
         val registry = createRegistry(profileOverrideId = id)
         assertTrue(registry.evaluate(id, request().assetUseRequest).approved)
 
-        val result = WolfProceduralGenerationLibrary(registry).generate(request())
+        val result = stage10Library(registry).generate(request())
 
         assertFalse(result.succeeded)
         assertEquals(WolfProceduralFailureCode.GENERATOR_PROFILE_MISMATCH, result.failureCode)
@@ -164,7 +164,7 @@ class WolfProceduralGenerationLibraryTest {
         )
         assertTrue(registry.evaluate(id, request().assetUseRequest).approved)
 
-        val result = WolfProceduralGenerationLibrary(registry).generate(request())
+        val result = stage10Library(registry).generate(request())
 
         assertFalse(result.succeeded)
         assertEquals(
@@ -181,7 +181,7 @@ class WolfProceduralGenerationLibraryTest {
             measurementOverride = "measurementEvidenceReference" to "PENDING"
         )
 
-        val result = WolfProceduralGenerationLibrary(registry).generate(request())
+        val result = stage10Library(registry).generate(request())
 
         assertFalse(result.succeeded)
         assertEquals(
@@ -196,7 +196,7 @@ class WolfProceduralGenerationLibraryTest {
             resourceEnvelope = request().resourceEnvelope.copy(maxWorkingSetBytes = 999999L)
         )
 
-        val result = WolfProceduralGenerationLibrary(createRegistry()).generate(oversized)
+        val result = stage10Library(createRegistry()).generate(oversized)
 
         assertFalse(result.succeeded)
         assertEquals(WolfProceduralFailureCode.REQUEST_RESOURCE_LIMITS_INVALID, result.failureCode)
@@ -213,7 +213,7 @@ class WolfProceduralGenerationLibraryTest {
             )
         )
 
-        val result = WolfProceduralGenerationLibrary(createRegistry()).generate(unsafe)
+        val result = stage10Library(createRegistry()).generate(unsafe)
 
         assertFalse(result.succeeded)
         assertEquals(WolfProceduralFailureCode.RUNTIME_UNSAFE, result.failureCode)
@@ -223,11 +223,11 @@ class WolfProceduralGenerationLibraryTest {
     @Test
     fun unapprovedOrVersionMismatchedSceneAssetCannotBeUsed() {
         val unapprovedRegistry = createRegistry(environmentTags = setOf("cartoon", "environment"))
-        val unapproved = WolfProceduralGenerationLibrary(unapprovedRegistry).generate(request())
+        val unapproved = stage10Library(unapprovedRegistry).generate(request())
         assertFalse(unapproved.succeeded)
         assertEquals(WolfProceduralFailureCode.SCENE_ASSET_NOT_APPROVED, unapproved.failureCode)
 
-        val wrongVersion = WolfProceduralGenerationLibrary(createRegistry())
+        val wrongVersion = stage10Library(createRegistry())
             .generate(request().copy(sceneAssets = listOf(WolfSceneAssetPin(ENVIRONMENT_ID, "9.9.9"))))
         assertFalse(wrongVersion.succeeded)
         assertEquals(WolfProceduralFailureCode.SCENE_ASSET_NOT_APPROVED, wrongVersion.failureCode)
@@ -269,7 +269,8 @@ class WolfProceduralGenerationLibraryTest {
             ),
             WolfBuiltInGeneratorCatalog.bindings.map { it.implementationBindingId }
         )
-        assertTrue(WolfBuiltInGeneratorCatalog.bindings.all { it.isWellFormed() })
+        assertTrue(WolfBuiltInGeneratorCatalog.bindings.all { !it.isWellFormed() })
+        assertTrue(WolfBuiltInGeneratorCatalog.bindings.all { !it.hardLimits.isWellFormed() })
         assertFalse(
             WolfBuiltInGeneratorCatalog.bindings.any {
                 it.family == WolfGeneratorFamily.valueOf("ATMOSPHERE") &&
@@ -280,7 +281,7 @@ class WolfProceduralGenerationLibraryTest {
 
     @Test
     fun pinnedSourceBlobRevisionAndSha256MatchTheCompiledGeneratorSources() {
-        WolfBuiltInGeneratorCatalog.bindings.forEach { binding ->
+        testBindings().forEach { binding ->
             val relativePath = binding.sourceRepositoryPath.removePrefix("app/")
             val workingDirectory = File(System.getProperty("user.dir"))
             val candidates = listOf(
@@ -314,7 +315,7 @@ class WolfProceduralGenerationLibraryTest {
     ): WolfAssetRegistry {
         val assets = JSONArray()
         if (includeGenerators) {
-            WolfBuiltInGeneratorCatalog.bindings.forEach { binding ->
+            testBindings().forEach { binding ->
                 val file = generatorDescriptorFile(binding)
                 val profile = if (binding.assetId == profileOverrideId) {
                     binding.canonicalProfileJson() + " "
@@ -524,7 +525,34 @@ class WolfProceduralGenerationLibraryTest {
         )
     )
 
+    private fun testBindings(): List<WolfGeneratorBinding> = WolfBuiltInGeneratorCatalog.bindings.map {
+        it.copy(hardLimits = TEST_ONLY_LIMITS)
+    }
+
+    private fun testGenerators(): List<WolfBuiltInProceduralGenerator> {
+        val bindings = testBindings()
+        return WolfBuiltInGeneratorCatalog.generators.mapIndexed { index, delegate ->
+            object : WolfBuiltInProceduralGenerator {
+                override val binding: WolfGeneratorBinding = bindings[index]
+                override fun generate(context: WolfGeneratorExecutionContext): WolfProceduralEffectPayload =
+                    delegate.generate(context.copy(binding = binding))
+            }
+        }
+    }
+
+    private fun stage10Library(registry: WolfAssetRegistry) =
+        WolfProceduralGenerationLibrary(registry, testGenerators())
+
     private companion object {
+        // Synthetic ceilings used only by automated fixtures, never by the production catalog.
+        val TEST_ONLY_LIMITS = WolfGeneratorHardLimits(
+            maxWorkingSetBytes = 131072L,
+            maxTemporaryStorageBytes = 65536L,
+            maxReusableOutputBytes = 16384L,
+            maxTransientElementsPerFrame = 64L,
+            maxRetainedFrameCount = 1L,
+            maxExecutionMillis = 250L
+        )
         const val ENVIRONMENT_ID = "wolf_stage10_environment_fixture"
     }
 }

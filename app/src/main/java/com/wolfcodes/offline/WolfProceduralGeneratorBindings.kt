@@ -5,6 +5,8 @@ package com.wolfcodes.offline
  * bindings; it can never instantiate a class or load code dynamically.
  *
  * Source fingerprints are pinned after the source files are committed.
+ * Resource limits intentionally remain PENDING (zero) until real reviewed
+ * measurements exist; tests supply separate, explicitly test-only limits.
  */
 internal object WolfBuiltInGeneratorBindings {
     val ATMOSPHERE = WolfGeneratorBinding(
@@ -22,12 +24,12 @@ internal object WolfBuiltInGeneratorBindings {
         sourceRevision = "c9be633bdd18596814b0baeb7895dd5fa137addc",
         sourceSha256 = "6401eb77c4e5738ef48d65870e8ffcb2b8edb6506097e51552146f79a2d46790",
         hardLimits = WolfGeneratorHardLimits(
-            maxWorkingSetBytes = 131072L,
-            maxTemporaryStorageBytes = 65536L,
-            maxReusableOutputBytes = 16384L,
-            maxTransientElementsPerFrame = 64L,
-            maxRetainedFrameCount = 1L,
-            maxExecutionMillis = 250L
+            maxWorkingSetBytes = maxWorkingSetBytes = 0L,
+            maxTemporaryStorageBytes = 0L,
+            maxReusableOutputBytes = 0L,
+            maxTransientElementsPerFrame = 0L,
+            maxRetainedFrameCount = 0L,
+            maxExecutionMillis = 0L
         )
     )
 
@@ -46,12 +48,12 @@ internal object WolfBuiltInGeneratorBindings {
         sourceRevision = "0f0017fc2617e9f8c595bbd824aae1f1232fb500",
         sourceSha256 = "1b8e85a83a32f2d150bdb3dd95f2fdb0c5037bcf573672c7f93819704ebb67e2",
         hardLimits = WolfGeneratorHardLimits(
-            maxWorkingSetBytes = 131072L,
-            maxTemporaryStorageBytes = 65536L,
-            maxReusableOutputBytes = 16384L,
-            maxTransientElementsPerFrame = 64L,
-            maxRetainedFrameCount = 1L,
-            maxExecutionMillis = 250L
+            maxWorkingSetBytes = maxWorkingSetBytes = 0L,
+            maxTemporaryStorageBytes = 0L,
+            maxReusableOutputBytes = 0L,
+            maxTransientElementsPerFrame = 0L,
+            maxRetainedFrameCount = 0L,
+            maxExecutionMillis = 0L
         )
     )
 
@@ -70,12 +72,12 @@ internal object WolfBuiltInGeneratorBindings {
         sourceRevision = "ae394fc127fd8b00c02f756e6da1916aff40a73e",
         sourceSha256 = "83204f1d69e99d8be9af6c7b2ace539659d4b85ab143d7615a6c4c604c9ce6fa",
         hardLimits = WolfGeneratorHardLimits(
-            maxWorkingSetBytes = 131072L,
-            maxTemporaryStorageBytes = 65536L,
-            maxReusableOutputBytes = 16384L,
-            maxTransientElementsPerFrame = 64L,
-            maxRetainedFrameCount = 1L,
-            maxExecutionMillis = 250L
+            maxWorkingSetBytes = maxWorkingSetBytes = 0L,
+            maxTemporaryStorageBytes = 0L,
+            maxReusableOutputBytes = 0L,
+            maxTransientElementsPerFrame = 0L,
+            maxRetainedFrameCount = 0L,
+            maxExecutionMillis = 0L
         )
     )
 }

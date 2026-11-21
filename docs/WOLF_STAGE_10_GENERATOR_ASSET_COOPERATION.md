@@ -27,7 +27,7 @@ The library calls WolfAssetRegistry.approvedAssets(request) and explicitly filte
 - source repository path, Git blob revision, and SHA-256 source fingerprint;
 - exact target runtime version and approved use scope.
 
-The selected generator must be APPROVED through Stage 08, have budgetStatus == PASS, and carry finite, non-negative resource measurements with evidence. Each measured high-water value is compared with its corresponding hard limit. Missing, non-numeric, UNKNOWN, PENDING, over-limit, or unsupported values block production dispatch.
+The selected generator must be APPROVED through Stage 08, have budgetStatus == PASS, and carry finite, non-negative resource measurements with evidence. The production built-in bindings currently retain zero/PENDING resource ceilings and therefore cannot run. They may only be enabled after actual target-runtime measurements are reviewed and added to the binding and Stage 08 record. Each measured high-water value is compared with its corresponding hard limit. Missing, non-numeric, UNKNOWN, PENDING, over-limit, or unsupported values block production dispatch.
 
 The caller also supplies a finite resource envelope and a current runtime safety snapshot. The envelope cannot exceed the approved generator limits; low-memory or severe-thermal snapshots are rejected; available memory and free storage must cover the request envelope before generation begins.
 
@@ -58,11 +58,11 @@ The Stage 10 JVM suite covers:
 - required upstream atmosphere/weather outputs;
 - closed static catalog identity and exact source Git blob/SHA-256 fingerprints.
 
-An Android instrumentation test constructs synthetic registry metadata and uses the instrumentation APK's real AssetManager to verify the referenced test fixture bytes before running the same three-generator cooperation chain.
+JVM and Android fixtures inject finite TEST_ONLY ceilings separately from the production catalog. These are synthetic structural test limits, not device measurements, production budgets, or values to copy into a real asset record. An Android instrumentation test constructs synthetic registry metadata and uses the instrumentation APK's real AssetManager to verify the referenced test fixture bytes before running the same three-generator cooperation chain.
 
 ## 6. Production asset status and explicit limitations
 
-The production app/src/main/assets/wolf_asset_registry.json remains intentionally empty at the Stage 10 starting point. Consequently, a normal production registry loaded by WolfProceduralGenerationLibrary.loadBundled() has no approved generator records and fails closed to the base-scene/no-effect fallback.
+The production app/src/main/assets/wolf_asset_registry.json remains intentionally empty at the Stage 10 starting point. In addition, the production built-in bindings keep resource ceilings at zero/PENDING until actual reviewed measurements exist. Consequently, a normal production registry loaded by WolfProceduralGenerationLibrary.loadBundled() has no approved generator records and no production-ready resource bindings; it fails closed to the base-scene/no-effect fallback.
 
 The test registry records and byte files are synthetic, test-only fixtures. They are not cinematic assets, do not demonstrate visual realism, do not satisfy the real-asset collection target, and are not added to the production APK. No genuine cinematic environment asset has been approved or integrated by this stage.
 

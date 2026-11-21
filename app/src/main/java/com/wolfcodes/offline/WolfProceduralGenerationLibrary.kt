@@ -6,9 +6,11 @@ import android.content.Context
  * Stage 10 cooperation core. It emits renderer-neutral, transient effect
  * descriptors only; it never creates or modifies cinematic source assets.
  */
-class WolfProceduralGenerationLibrary(
-    private val registry: WolfAssetRegistry
+class WolfProceduralGenerationLibrary internal constructor(
+    private val registry: WolfAssetRegistry,
+    private val generators: List<WolfBuiltInProceduralGenerator>
 ) {
+    constructor(registry: WolfAssetRegistry) : this(registry, WolfBuiltInGeneratorCatalog.generators)
     fun generate(request: WolfProceduralGenerationRequest): WolfProceduralGenerationResult {
         if (!isRequestWellFormed(request)) {
             return failed(WolfProceduralFailureCode.INVALID_REQUEST)
@@ -48,15 +50,15 @@ class WolfProceduralGenerationLibrary(
         }
 
         val selectedGenerators = mutableListOf<Pair<WolfBuiltInProceduralGenerator, WolfAssetRegistryEntry>>()
-        for (generator in WolfBuiltInGeneratorCatalog.generators) {
+        for (generator in generators) {
             val binding = generator.binding
-            if (!binding.isWellFormed()) {
-                return failed(WolfProceduralFailureCode.GENERATOR_PROFILE_MISMATCH)
-            }
             val registered = registry.find(binding.assetId)
                 ?: return failed(WolfProceduralFailureCode.GENERATOR_NOT_REGISTERED)
             if (registered.category != WolfAssetCategory.GENERATOR) {
                 return failed(WolfProceduralFailureCode.GENERATOR_CATEGORY_MISMATCH)
+            }
+            if (!binding.isWellFormed()) {
+                return failed(WolfProceduralFailureCode.GENERATOR_PROFILE_MISMATCH)
             }
             val approved = approvedGeneratorEntries[binding.assetId]
                 ?: return failed(WolfProceduralFailureCode.GENERATOR_NOT_APPROVED)
