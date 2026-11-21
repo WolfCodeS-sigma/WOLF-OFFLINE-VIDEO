@@ -56,6 +56,28 @@ object OfflineProductionEngine {
         return oneVideoCopy * videoCopies + audioAllowance + EXPORT_SAFETY_MARGIN_BYTES
     }
 
+    internal data class AudioTimeline(
+        val filmDurationUs: Long,
+        val narrationLimitUs: Long
+    )
+
+    /** Keep the requested film clock independent from the optional narration clock. */
+    internal fun buildAudioTimeline(
+        requestedFilmSeconds: Int,
+        narrationTimingEnabled: Boolean,
+        audioDurationMs: Long?
+    ): AudioTimeline {
+        val filmDurationUs = requestedFilmSeconds.coerceIn(1, 1800).toLong() * 1_000_000L
+        val narrationLimitUs = if (
+            narrationTimingEnabled && audioDurationMs != null && audioDurationMs in 1_000L..1_800_000L
+        ) {
+            audioDurationMs * 1_000L
+        } else {
+            filmDurationUs
+        }
+        return AudioTimeline(filmDurationUs, narrationLimitUs)
+    }
+
     data class Result(
         val scenes: Int,
         val frames: Int,
@@ -141,10 +163,13 @@ object OfflineProductionEngine {
             )
         } else emptyList()
         // Narration may end early; the video and generated effects retain the full film timeline.
-        val filmDurationUs = totalVideoSeconds.toLong() * 1_000_000L
-        val narrationLimitUs = if (useNarrationTiming) {
-            (audioDurationMs ?: 1000L).coerceIn(1000L, 1_800_000L) * 1000L
-        } else filmDurationUs
+        val audioTimeline = buildAudioTimeline(
+            requestedFilmSeconds = totalVideoSeconds,
+            narrationTimingEnabled = useNarrationTiming,
+            audioDurationMs = audioDurationMs
+        )
+        val filmDurationUs = audioTimeline.filmDurationUs
+        val narrationLimitUs = audioTimeline.narrationLimitUs
         val name = "wolf_offline_${System.currentTimeMillis()}.mp4"
         val tempDir = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
         // Reserve for overlapping temporary/final MP4 copies, optional AAC, and a safety margin.
