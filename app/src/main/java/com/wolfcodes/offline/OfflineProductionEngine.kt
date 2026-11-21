@@ -417,20 +417,25 @@ object OfflineProductionEngine {
                 val chapterImages = chapter.slices.map { slice ->
                     sceneImageUris.getOrElse(slice.sceneIndex) { emptyList() }
                 }
-                val chapterShotBudgets = chapter.slices.map { slice ->
-                    StoryDirectorEngine.sliceShotFrames(
-                        shotFrameBudgets.getOrElse(slice.sceneIndex) { emptyList() },
-                        slice.startFrame,
-                        slice.frameCount
-                    )
-                }
-                val chapterShotPlans = chapter.slices.map { slice ->
-                    StoryDirectorEngine.sliceShotPlans(
+                val chapterShotSegments = chapter.slices.map { slice ->
+                    StoryDirectorEngine.sliceShotSegments(
                         shotPlansPerScene.getOrElse(slice.sceneIndex) { emptyList() },
                         shotFrameBudgets.getOrElse(slice.sceneIndex) { emptyList() },
                         slice.startFrame,
                         slice.frameCount
                     )
+                }
+                val chapterShotBudgets = chapterShotSegments.map { segments ->
+                    segments.map { it.frameCount }
+                }
+                val chapterShotPlans = chapterShotSegments.map { segments ->
+                    segments.map { it.shotPlan }
+                }
+                val chapterShotOffsets = chapterShotSegments.map { segments ->
+                    segments.map { it.startOffsetFrames }
+                }
+                val chapterShotFullFrameCounts = chapterShotSegments.map { segments ->
+                    segments.map { it.totalShotFrames }
                 }
                 val chapterCues = chapter.slices.map { slice ->
                     val source = typographyCues.getOrNull(slice.sceneIndex) ?: return@map null
@@ -449,7 +454,8 @@ object OfflineProductionEngine {
                             totalSlices
                         )
                     },
-                    bitRate, chapterShotBudgets, chapterShotPlans
+                    bitRate, chapterShotBudgets, chapterShotPlans,
+                    chapterShotOffsets, chapterShotFullFrameCounts
                 )
                 WolfLongFilmCheckpointStore.markCompleted(
                     context, projectId, chapter.number, chapterFile
@@ -574,7 +580,9 @@ object OfflineProductionEngine {
         typographyCues: List<WolfHorrorTypographyEngine.Cue?>,
         introSeconds: Int, onSceneProgress: ((Int, Int) -> Unit)?, bitRate: Int,
         shotFrameBudgets: List<List<Int>>? = null,
-        shotPlansPerScene: List<List<StoryDirectorEngine.ShotPlan>>? = null) {
+        shotPlansPerScene: List<List<StoryDirectorEngine.ShotPlan>>? = null,
+        shotFrameOffsets: List<List<Int>>? = null,
+        fullShotFrameCounts: List<List<Int>>? = null) {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, 0x7F000789)
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate.coerceIn(400_000, 2_500_000))
@@ -644,7 +652,14 @@ object OfflineProductionEngine {
                     try {
                         for (f in 0 until shotFrames) {
                             if (f % (fps * 5) == 0) WolfResourceGuard.ensureSafeToContinue(context)
-                            val shotProgress = f.toFloat() / max(1, shotFrames - 1)
+                            val shotFrameOffset = shotFrameOffsets?.getOrNull(s)?.getOrNull(shotIndex) ?: 0
+                    val fullShotFrameCount = fullShotFrameCounts?.getOrNull(s)?.getOrNull(shotIndex)
+                        ?: shotFrames
+                    val shotProgress = StoryDirectorEngine.progressForShotFrame(
+                        shotFrameOffset,
+                        f,
+                        fullShotFrameCount
+                    )
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
                                 w, h, scenes[s], s, sourceShotIndex, shotProgress, image, imageLayers, includeWatermark,
