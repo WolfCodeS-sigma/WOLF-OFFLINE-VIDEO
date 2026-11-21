@@ -54,6 +54,42 @@ class StoryPipelineTest {
         for (number in 1..8) assertTrue(fitted.any { it.contains("فقرة رقم " + number) })
     }
 
+    
+    @Test
+    fun requestedFilmDurationIsIndependentFromShortNarration() {
+        val requestedFilmSeconds = 30
+        val narrationSeconds = 7
+        val fps = 12
+        val totalFrames = requestedFilmSeconds * fps
+        val sceneTexts = StoryDirectorEngine.fitSceneTextsToDuration(
+            (1..11).map { "مشهد رقم $it" },
+            requestedFilmSeconds
+        )
+        val frameCounts = OfflineMotionEngine.allocateFrames(
+            sceneTexts, totalFrames, minimumFramesPerScene = 1
+        )
+
+        assertEquals(30, requestedFilmSeconds)
+        assertEquals(7, narrationSeconds)
+        assertEquals(360, frameCounts.sum())
+        assertEquals(requestedFilmSeconds * fps, frameCounts.sum())
+    }
+
+    @Test
+    fun introIsIncludedInsideRequestedFilmDuration() {
+        val requestedFilmSeconds = 30
+        val introSeconds = 3
+        val bodySeconds = requestedFilmSeconds - introSeconds
+        val bodyFrames = bodySeconds * 12
+        val sceneTexts = StoryDirectorEngine.fitSceneTextsToDuration(
+            (1..11).map { "مشهد رقم $it" }, bodySeconds
+        )
+        val frames = OfflineMotionEngine.allocateFrames(sceneTexts, bodyFrames, 1)
+
+        assertEquals(324, frames.sum())
+        assertEquals(360, frames.sum() + introSeconds * 12)
+    }
+
     @Test
     fun directorCreatesThreeShotDescriptionsPerScene() {
         val story = "دخلت الغرفة. ظهر ظل خلف النافذة."
