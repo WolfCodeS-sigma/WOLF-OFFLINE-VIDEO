@@ -165,8 +165,17 @@ class WolfAssetQualityGate(
     private val entries: Map<String, WolfAssetRegistryEntry>,
     private val fileVerifier: WolfAssetFileVerifier
 ) {
-    fun evaluate(entry: WolfAssetRegistryEntry, request: WolfAssetUseRequest): WolfAssetGateResult =
-        evaluateInternal(entry, request, linkedSetOf())
+    fun evaluate(entry: WolfAssetRegistryEntry, request: WolfAssetUseRequest): WolfAssetGateResult {
+        val registeredEntry = entries[entry.assetId]
+        if (registeredEntry == null || registeredEntry != entry) {
+            return WolfAssetGateResult(
+                approved = false,
+                errors = listOf("الأصل غير مسجل أو أن بياناته لا تطابق النسخة المسجلة"),
+                warnings = emptyList()
+            )
+        }
+        return evaluateInternal(registeredEntry, request, linkedSetOf())
+    }
 
     fun approvedAssets(request: WolfAssetUseRequest): List<WolfAssetRegistryEntry> =
         entries.values.filter { evaluate(it, request).approved }

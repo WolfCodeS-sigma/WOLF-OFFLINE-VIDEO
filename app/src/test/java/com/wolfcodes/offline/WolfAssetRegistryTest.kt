@@ -60,6 +60,22 @@ class WolfAssetRegistryTest {
     }
 
     @Test
+    fun unregisteredOrAlteredEntryCannotBeApproved() {
+        val registered = validEntry()
+        val gate = gate(registered)
+        val unregistered = validEntry().copy(assetId = "wolf_unregistered_forest")
+        val alteredRegistered = registered.copy(name = "Altered outside registry")
+
+        val unregisteredResult = gate.evaluate(unregistered, request())
+        val alteredResult = gate.evaluate(alteredRegistered, request())
+
+        assertFalse(unregisteredResult.approved)
+        assertFalse(alteredResult.approved)
+        assertTrue(unregisteredResult.errors.any { it.contains("غير مسجل") })
+        assertTrue(alteredResult.errors.any { it.contains("لا تطابق") })
+    }
+
+    @Test
     fun missingDescriptiveTagsBlockApproval() {
         val entry = validEntry().copy(tags = emptySet())
         val result = gate(entry).evaluate(entry, request())

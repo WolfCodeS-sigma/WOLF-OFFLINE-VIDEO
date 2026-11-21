@@ -21,7 +21,7 @@ Runtime consumers must request assets using all three:
 - `targetRuntimeVersion`: exact runtime version string tested for this asset.
 - `intendedScope`: exact approved use, such as `environment_background` or a scene-specific character use.
 
-Consumers may use only results from `WolfAssetRegistry.approvedAssets(request)`. A missing ID, candidate, under-review, rejected, quarantined, retired, or otherwise failing entry is not eligible. There is no fallback that substitutes an unrelated asset. An empty registry returns no cinematic library assets; the existing safe atmospheric fallback and user-image paths remain separate.
+Consumers may use only results from `WolfAssetRegistry.approvedAssets(request)`. Direct Quality Gate evaluation also requires the submitted record to match the exact entry registered under its ID; unregistered or caller-altered records are rejected. A missing ID, candidate, under-review, rejected, quarantined, retired, or otherwise failing entry is not eligible. There is no fallback that substitutes an unrelated asset. An empty registry returns no cinematic library assets; the existing safe atmospheric fallback and user-image paths remain separate.
 
 The manifest is loaded from Android `AssetManager`; file verification reads the packaged asset stream, checks exact byte size, and recalculates SHA-256. JVM tests can use a temporary directory verifier for deterministic fixtures.
 
@@ -102,6 +102,7 @@ The empty manifest is an honest implementation baseline, not evidence that the c
 - Cyclic dependency rejection.
 - Resource budget failure and pending-budget reviewer acceptance.
 - Runtime filtering to approved entries only.
+- Rejection of unregistered or caller-altered entry records.
 - Loading the empty bundled-registry schema without inventing assets.
 
 ## 8. Non-goals
