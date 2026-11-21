@@ -50,6 +50,9 @@ class WolfProceduralGenerationLibrary(
         val selectedGenerators = mutableListOf<Pair<WolfBuiltInProceduralGenerator, WolfAssetRegistryEntry>>()
         for (generator in WolfBuiltInGeneratorCatalog.generators) {
             val binding = generator.binding
+            if (!binding.isWellFormed()) {
+                return failed(WolfProceduralFailureCode.GENERATOR_PROFILE_MISMATCH)
+            }
             val registered = registry.find(binding.assetId)
                 ?: return failed(WolfProceduralFailureCode.GENERATOR_NOT_REGISTERED)
             if (registered.category != WolfAssetCategory.GENERATOR) {
@@ -180,7 +183,8 @@ class WolfProceduralGenerationLibrary(
         binding: WolfGeneratorBinding
     ): Boolean {
         val values = entry.resourceMeasurements
-        if (values["measurementEvidenceReference"].isNullOrBlank()) return false
+        val evidence = values["measurementEvidenceReference"]?.trim()
+        if (evidence.isNullOrBlank() || evidence.uppercase() in setOf("UNKNOWN", "PENDING")) return false
         val measured = listOf(
             "peakWorkingSetBytes" to binding.hardLimits.maxWorkingSetBytes,
             "peakTemporaryStorageBytes" to binding.hardLimits.maxTemporaryStorageBytes,
