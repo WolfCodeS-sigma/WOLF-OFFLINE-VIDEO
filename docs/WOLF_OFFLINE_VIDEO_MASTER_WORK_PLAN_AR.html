@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#10131b"><title>WOLF OFFLINE VIDEO — الخطة الهندسية الرئيسية</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0e14;--p:#151b25;--p2:#1d2734;--line:#344254;--txt:#eef2f7;--muted:#aeb9c8;--red:#8e2437;--gold:#d8b56d;--green:#76c49b}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 85% 0,#34202a,transparent 38%),var(--bg);color:var(--txt);font:16px/1.9 Tahoma,Arial,sans-serif}
+main{max-width:1100px;width:calc(100% - 28px);margin:25px auto 60px}header{padding:32px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(140deg,#251820,#171e29 70%,#111720)}
+h1{font-size:clamp(1.8rem,5vw,3rem);line-height:1.3;margin:8px 0 12px}h2{font-size:1.45rem;margin:0 0 14px}h3{font-size:1.08rem;margin:0 0 8px}
+.eyebrow{color:var(--gold)}.lead{font-size:1.08rem;color:#d9e1ec}.status{display:inline-block;border:1px solid #806d48;background:#30291e;color:#f0dfb7;padding:4px 12px;border-radius:30px;margin-top:10px}
+section{margin-top:20px;padding:22px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(160deg,var(--p),#10151e)}
+p{margin:8px 0;color:#d9e0e9}ul,ol{padding-right:24px;margin:8px 0}li{margin:5px 0}.muted,small{color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.card{padding:15px;border:1px solid var(--line);border-radius:13px;background:var(--p2)}
+.note,.warn{padding:12px 15px;border-radius:9px;margin-top:12px}.note{border-right:4px solid var(--gold);background:#29251b;color:#f0e2c4}.warn{border-right:4px solid var(--red);background:#2d1b22;color:#ffdce1}
+table{width:100%;border-collapse:collapse;margin-top:10px}td,th{padding:10px;text-align:right;border-bottom:1px solid var(--line);vertical-align:top}th{background:#202b39;color:#f0dfb6}
+.flow{max-width:800px;margin:15px auto;display:grid;gap:8px;text-align:center}.node{padding:12px;border:1px solid #40516a;border-radius:11px;background:#1c2939}.down{color:var(--gold)}
+.stage{margin:9px 0;padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:var(--p2)}.stage b{color:#f0dfb6}
+code{direction:ltr;unicode-bidi:embed;background:#202632;color:#f4c8cf;padding:2px 5px;border-radius:5px}a{color:#a9d0ff}footer{text-align:center;color:var(--muted);padding:22px}
+@media(max-width:600px){main{width:calc(100% - 14px);margin:8px auto 25px}header,section{padding:17px}td,th{font-size:.88rem;padding:7px}}
+</style></head><body><main>
+<header>
+<div class="eyebrow">WOLF OFFLINE VIDEO · MASTER ENGINEERING PLAN</div>
+<h1>الخطة الهندسية الرئيسية المحدّثة</h1>
+<p class="lead">منظومة طبقية تجمع التوليد الإجرائي بالأصول السينمائية الواقعية، ثم تربطهما بالمحركات عبر WOLF Motion Hub، وتنتهي بخط إخراج MP4 موحّد.</p>
+<div class="status">مرجع محفوظ — لا يبدأ التنفيذ قبل اكتمال مراجعة Debug وتوجيه المستخدم</div>
+</header>
+
+<section><h2>1. القرارات الحاكمة</h2><ul>
+<li>المستودع الوحيد: <strong>WolfCodeS-sigma/WOLF-OFFLINE-VIDEO</strong>.</li>
+<li>الإنتاج Offline؛ لا بحث أو تنزيل أو تشغيل مولدات فيديو سحابية.</li>
+<li>في مسار الصور، المستخدم هو من يختار ويرفع الصور. التطبيق يحللها ويفصل طبقاتها ويحرك العناصر المناسبة، ولا يختار صورًا بدلًا عنه.</li>
+<li>مسار مستقل للموشن الهجين 3D/2.5D دون صور يرفعها المستخدم، يعتمد على الأصول المحلية والمولدات البرمجية.</li>
+<li>مكتبة الأصول جزء من توزيع التطبيق نفسه، بلا ملف منفصل يطلب من المستخدم استيراده ولا تنزيل وقت التشغيل.</li>
+<li>تشفير البيانات المحلية مؤجل. توقيع Release وتجهيز APK مؤجلان إلى بوابة الإصدار.</li>
+<li>المستخدم وحده يحدد بدء المراحل؛ هذه الخطة لا تعني بدء التنفيذ. لا دمج أو تعديل main دون موافقته.</li>
+</ul></section>
+
+<section><h2>2. التشخيص المرجعي لفيديوهات Debug</h2>
+<div class="card"><h3>هاتف الصحراء الزراعية</h3><p>مسار بلا صور رفعها المستخدم، لكن المخرجات كانت مربعات ودوائر ومثلثات وألوانًا بدل بيئة سينمائية، مع شريط أحمر أعلى الفيديو وصوت مؤثرات منخفض. المطلوب أصول/بيئات محلية وتوليد إجرائي مقبول، ومنع UI overlay من دخول الفيديو.</p></div>
+<div class="card"><h3>صوفيا</h3><p><strong>الصور الـ32–34 اختارها المستخدم.</strong> العيب في تحليل الصور المختارة وفصل طبقاتها وتحديد ما يتحرك وفق المشهد، وفي حركة كاميرا عامة شوّهت الصور وظهور أشكال هندسية كأشباح. يجب حفظ الصورة الأصلية؛ وعند فشل الفصل تُستخدم حركة آمنة على الصورة كاملة، لا صورة بديلة ولا جسم هندسي.</p></div>
+<div class="card"><h3>الجاثوم</h3><p>اختار المستخدم 11 صورة و30 ثانية وسجل تعليقًا مدته نحو 7 ثوانٍ. ملف MP4 المرفوع قيس بنحو 7.012 ثانية. يجب تتبع السبب في جدول اللقطات والإطارات وPTS ونهاية مساري الصوت والفيديو؛ المدة المختارة هي المرجع ولا ينتهي الفيديو مع تعليق أقصر.</p></div>
+</section>
+
+<section><h2>3. المواصفات السينمائية الملزمة</h2><div class="grid">
+<div class="card"><h3>لا أجسام هندسية بديلة</h3><p>لا دوائر/مثلثات/مربعات بدائية كشخصيات أو أشباح. البديل المقبول: أصل سينمائي، silhouette مقصود، لقطة بديلة، أو الصورة الأصلية.</p></div>
+<div class="card"><h3>الشخصيات والبيئات</h3><p>أجسام وخامات وإضاءة وظلال وRigging وتحريكات واقعية. المحرك وحده لا يولد بشرًا واقعيين من primitives.</p></div>
+<div class="card"><h3>الشريط الأحمر</h3><p>فصل شريط تقدم الواجهة عن Render Target ومنع ظهوره في MP4.</p></div>
+<div class="card"><h3>العلامة المائية</h3><p>شعار WOLF شبه شفاف بملمس دم سائل وقطرات متدلية، في موضع آمن لا يحجب الحدث.</p></div>
+<div class="card"><h3>الخط الدموي</h3><p>كل النصوص والعناوين والتوضيحات داخل الفيلم بالهوية الدموية نفسها مع Arabic shaping وRTL وقراءة واضحة. واجهة التطبيق بخط عربي واضح عادي.</p></div>
+<div class="card"><h3>الصوت</h3><p>مسارات منفصلة للراوي والجو والمؤثرات والموسيقى، مع LUFS/True Peak وCompressor وDucking وLimiter ومنع clipping.</p></div>
+<div class="card"><h3>سلامة الصور</h3><p>حفظ الأصل والنسبة؛ لا تمديد أو تشويه للوجه أو الجسم. عند فشل الفصل، حركة محدودة وآمنة على الصورة كاملة.</p></div>
+<div class="card"><h3>المدة</h3><p>targetDuration يحكم الإطارات والتصدير؛ تعليق 7 ثوانٍ لا ينهي فيلمًا اختيرت مدته 30 ثانية. لا قص تلقائي لتعليق أطول.</p></div>
+</div></section>
+
+<section><h2>4. أفضل معمارية: مكتبتان متعاونتان ونواة واحدة</h2>
+<div class="flow">
+<div class="node"><strong>WOLF Motion Hub</strong><br><small>المنسق: اختيار مصدر الأصل، توزيع المهام، الذاكرة، التوقيت والبدائل</small></div><div class="down">↓</div>
+<div class="grid">
+<div class="card"><h3>WOLF Procedural Generation Library</h3><p>مولدات برمجية للهندسة والبيئات والـProps والخامات والشيدرز والضباب والجسيمات والكاميرا والحركة والمخلوقات الإجرائية.</p></div>
+<div class="card"><h3>WOLF Cinematic Asset Library</h3><p>أصول واقعية مرخصة: شخصيات بشرية Rigged، مخلوقات، بيئات، Props، خامات PBR، HDRI وتحريكات جاهزة.</p></div>
+</div><div class="down">↓</div>
+<div class="node"><strong>WOLF Asset Registry &amp; Quality Gate</strong><br><small>الفهرس والترخيص والبصمات والتوافق والحجم والتصنيف واعتماد الجودة</small></div><div class="down">↓</div>
+<div class="node"><strong>WOLF Scene Contract + Adapters</strong><br><small>عقد موحد للمشهد والأصل والحركة والكاميرا والطبقات؛ محول خاص بكل محرك</small></div><div class="down">↓</div>
+<div class="grid"><div class="node">Godot · 3D scene engine</div><div class="node">Filament · PBR render</div><div class="node">Cocos · Particles/FX</div><div class="node">libGDX · Unique code FX</div><div class="node">KorGE · 2D/Parallax</div><div class="node">Lottie · Vector motion</div></div><div class="down">↓</div>
+<div class="node"><strong>WOLF Scene Compositor</strong><br><small>تجميع الطبقات والتوقيت وAlpha والألوان</small></div><div class="down">↓</div>
+<div class="node"><strong>خط MP4 الحالي</strong><br><small>MediaCodec / MediaMuxer والصوت والفصول والاستكمال</small></div>
+</div>
+<div class="note"><strong>قاعدة المصدر:</strong> لكل عنصر يقرر Hub هل يستخدم أصلًا جاهزًا، أو يولده بالكود، أو يدمجهما. الأصول الواقعية قوالب ومصادر إنتاج وبدائل، وليست مجرد أرشيف. المولدات تستطيع تخصيص القوالب حيث تسمح الرخصة والـrig والخامات بذلك.</div>
+<p><strong>حد واقعي:</strong> لا نعتمد على مولد هندسي بسيط لصنع إنسان photorealistic. البشر الواقعيون يعتمدون على قوالب/أصول تشريحية عالية الجودة وRig/Animation؛ أما الكود فيوفر التخصيص والتوليد الإجرائي والبيئات والخامات والحركة والمؤثرات.</p>
+</section>
+
+<section><h2>5. فهرس الأصول وجودتها</h2><p>كل أصل له ID، فئة ووسوم، مصدر وترخيص، الحجم الخام والمضغوط، SHA-256، الصيغة والتبعيات، الخامات والعظام والحركات، المحركات المتوافقة، ودرجة الجودة.</p>
+<table><tr><th>الحالة</th><th>القرار</th></tr>
+<tr><td>مقبول سينمائيًا</td><td>يجتاز واقعية الشكل والخامة والتحريك والإضاءة والترخيص والتوافق.</td></tr>
+<tr><td>قيد الاختبار</td><td>لا يدخل الإنتاج النهائي قبل نجاح الاختبار.</td></tr>
+<tr><td>مرفوض</td><td>كرتوني/Low Poly/بلاستيك/حركة ضعيفة/ترخيص غير واضح؛ لا يستخدم في الفيلم النهائي.</td></tr></table>
+<p>لا ندخل أصولًا كرتونية أو مضحكة لمجرد أنها مجانية أو صغيرة. لا تُقبل نماذج من مصادر مثل Kenney/Quaternius إلا إذا اجتاز أصل محدد نفس معيار الجودة؛ اسم المصدر وحده لا يمنحه القبول.</p>
+</section>
+
+<section><h2>6. توزيع المحركات من دون تكرار</h2>
+<table><tr><th>المكوّن</th><th>المسؤولية المقيدة</th></tr>
+<tr><td>Godot</td><td>المشهد 3D الأساسي والبيئة والشخصيات والكاميرات والحركة والفيزياء.</td></tr>
+<tr><td>Filament</td><td>رندر PBR متخصص للعناصر/اللقطات التي تثبت الحاجة إليه، لا تكرار رسم المشهد كله.</td></tr>
+<tr><td>SceneView</td><td>واجهة معاينة فوق Filament، لا محرك مستقل.</td></tr>
+<tr><td>Cocos</td><td>جسيمات ومؤثرات 2D/3D ذات قيمة فريدة مثبتة.</td></tr>
+<tr><td>libGDX</td><td>عمليات شاشة ومؤثرات برمجية/رياضية لا يكررها المركّب أو محرك آخر.</td></tr>
+<tr><td>KorGE</td><td>طبقات 2D وParallax عندما يثبت دورًا فريدًا.</td></tr>
+<tr><td>Lottie</td><td>الشعارات والعناوين المتجهة؛ تشكيل العربية والخط الدموي له مسار نصوص عربي متخصص.</td></tr>
+<tr><td>Blender</td><td>تحضير خارجي للنماذج والـRigging والتحريك والخامات؛ لا يُضمّن المحرر في APK.</td></tr></table>
+<p>كل المحركات تبقى ضمن التصميم المطلوب، لكن إدخال Runtime كل واحد إلى APK يمر باختبار Android/ABI/NDK/Gradle/Graphics API والحجم والذاكرة. إذا تعذر الدمج المستقر، يتوقف هذا الجزء للمراجعة ولا يُفرض على حساب استقرار التطبيق.</p>
+<ul><li>لا تشغيل لجميع المحركات الثقيلة بالتوازي؛ تحميل عند الحاجة وتحرير الموارد بعدها.</li><li>البداية بتبادل إطارات/طبقات عبر مسار محدود الذاكرة وآمن. مشاركة GPU textures بين سياقات مختلفة تحسين لاحق فقط بعد إثباته.</li><li>Godot يدعم تضمين Android عبر AAR والتواصل ثنائي الاتجاه، لكن وثائقه تنبه إلى أن نسخة واحدة فقط من المحرك مدعومة في Android process، ويجب إدارة lifecycle/التدوير بعناية.</li></ul>
+</section>
+
+<section><h2>7. المكتبة داخل التطبيق والحجم</h2>
+<p>المستخدم لا يريد ملف مكتبة منفصلًا ولا استيرادًا يدويًا. المرجع هو أن تكون الأصول المعتمدة جزءًا من إصدار التطبيق، وتعمل دون اتصال بعد التثبيت.</p>
+<ul>
+<li>في توزيع APK مباشر: تضمين الأصول المختارة داخل APK كـassets مع manifest مدمج.</li>
+<li>إذا احتاج Runtime لمسارات ملفات، يستخرج التطبيق ما يلزم تلقائيًا إلى مساحة التطبيق الخاصة؛ هذا استخراج محلي داخلي لا حزمة مرافقة.</li>
+<li>لا تنزيل شبكي ولا on-demand assets في المسار الأساسي.</li>
+<li>يجب حساب مساحة التثبيت والنسخ المؤقتة والتحديث؛ لا نفترض أن حجم APK يساوي المساحة التي يحتاجها التثبيت دائمًا.</li>
+<li>التقدير السابق 2–4 GB للحزمة الأولية مُلغى كهدف ثابت. نحدد الحجم من manifest حقيقي بعد الجرد والضغط والبناء.</li>
+<li>تستخدم LOD وإعادة استخدام الخامات وضغطًا مناسبًا مثل KTX2 عندما يتوافق مع المحرك والجهاز، دون تدهور الواقعية.</li>
+<li>Play Asset Delivery install-time جزء من APK set عند التثبيت ومتاح عند إطلاق التطبيق، لكنه ليس APK واحدًا ويتطلب قناة توزيع Play؛ لذلك ليس اختيارنا الافتراضي. لا نغيّر توزيع APK المباشر دون موافقة المستخدم.</li>
+</ul>
+</section>
+
+<section><h2>8. مسارات الواجهة</h2><div class="grid">
+<div class="card"><h3>قصة جديدة إلى فيلم</h3><p>كتابة ومراجعة وتخطيط مشاهد وصورة وصوت وإخراج.</p></div>
+<div class="card"><h3>قصة جاهزة إلى فيلم</h3><p>المستخدم يقدم النص والتطبيق يخطط المشاهد.</p></div>
+<div class="card"><h3>موشن 3D/2.5D هجين — بدون صور</h3><p>أصول محلية ومولدات ومحركات؛ لا واجهة رفع صور.</p></div>
+<div class="card"><h3>تحريك صور المستخدم</h3><p>المستخدم يختار الصور؛ التطبيق يحلل ويفصل ويحرك تلقائيًا ولا يستبدل الصور.</p></div>
+<div class="card"><h3>مشروع مختلط</h3><p>يجمع الأصول المولدة والصور التي اختارها المستخدم.</p></div>
+</div>
+<p>أسماء المحركات لا تظهر في واجهة المستخدم؛ WOLF يختار المحرك داخليًا.</p></section>
+
+<section><h2>9. واجهة المستخدم والصوت</h2><ul>
+<li>شاشة رئيسية بالهوية المعتمدة، Offline indicator، إنشاء مشروع، المشاريع الأخيرة، المكتبة والإعدادات.</li>
+<li>شاشة اختيار المسار ببطاقات مستقلة، خاصة فصل مسار الهجين بلا صور عن مسار صور المستخدم.</li>
+<li>مساحة عمل لكل مشروع ومحطات: القصة، المشاهد، الصورة والحركة، الصوت، الإخراج.</li>
+<li>استوديو الصوت يعرض Teleprompter للنص كاملًا أثناء التسجيل، يميز السطر الحالي، تمرير يدوي/تلقائي، تكبير وتصغير الخط، المسافات والسرعة، مؤقت وموجة صوتية وإيقاف واستكمال وحفظ أجزاء.</li>
+<li>الخط الدموي داخل الفيديو فقط؛ واجهة التطبيق بخط عربي واضح.</li>
+<li>الواجهة RTL، ألوان فحمية وقرمزية محدودة، أيقونات واضحة وأزرار كبيرة؛ تُقارن لقطات حقيقية بالمرجع على Realme 7.</li>
+</ul></section>
+
+<section><h2>10. الترتيب التنفيذي الأفضل</h2>
+<p class="muted">ترتيب تبعيات هندسي مقترح، لا يبدأ تلقائيًا. كل بوابة تتطلب مراجعة ونجاح الاختبار قبل التالية.</p>
+<ol>
+<li><strong>إغلاق مراجعة Debug وجمع الأدلة:</strong> ربط كل عيب بملف/توقيت/إطار.</li>
+<li><strong>تدقيق خط الإنتاج دون تغيير:</strong> رسم مسار القصة والمشاهد والصور والصوت والتصدير وتحديد مصادر الحقيقة.</li>
+<li><strong>إصلاح المدة والتوقيت والتصدير:</strong> targetDuration وPTS وعدد الإطارات ونهاية muxer؛ اختبار 30 ثانية مع تعليق 7 ثوانٍ.</li>
+<li><strong>تنظيف الرندر والـFallback:</strong> منع الشريط الأحمر والأجسام الهندسية البديلة.</li>
+<li><strong>تحسين Storyboard Planner:</strong> ربط كل حدث بلقطة ومكان وشخصية وتوقيت واستمرارية.</li>
+<li><strong>سياسة جودة وترخيص الأصول:</strong> معايير قبول ورفض وبيانات مصدر وتوافق.</li>
+<li><strong>جرد WOLF Cinematic Asset Library:</strong> جمع مرشحين واقعيين مرخصين ومعاينة وتحريك وقياس الحجم.</li>
+<li><strong>بناء Asset Registry &amp; Quality Gate:</strong> فهرس وبصمات وصيغ وتبعيات ودرجات جودة.</li>
+<li><strong>تصميم WOLF Procedural Generation Library:</strong> مولدات الهندسة والمواد والبيئات والمؤثرات وحدودها.</li>
+<li><strong>اختبار تعاون المولدات والأصول:</strong> تخصيص قوالب واقعية مع حفظ الأصل والترخيص.</li>
+<li><strong>POC منفرد لكل محرك:</strong> اختبار Runtime وABI/NDK/Gradle/Graphics API والحجم والذاكرة.</li>
+<li><strong>اعتماد أدوار المحركات:</strong> تثبيت الدور الفريد لكل مكوّن وتوثيق أي تعارض قبل الدمج.</li>
+<li><strong>بناء Motion Code Library وScene Contract:</strong> الأوامر المشتركة والمحوّلات.</li>
+<li><strong>بناء WOLF Motion Hub:</strong> الجدولة والذاكرة والاختيار والبدائل والاسترداد.</li>
+<li><strong>دمج المحركات تدريجيًا:</strong> Godot ثم Filament/SceneView ثم Cocos ثم libGDX ثم KorGE ثم Lottie، مع اختبارات رجعية بعد كل دمج.</li>
+<li><strong>استكمال مسار صور المستخدم:</strong> segmentation والأقنعة والحركة الآمنة وحفظ الأصل وعدم التشويه.</li>
+<li><strong>تطوير الهوية الدموية:</strong> الخط العربي لكل نصوص الفيديو والعلامة المائية شبه الشفافة.</li>
+<li><strong>WOLF Audio Mastering:</strong> فصل المسارات والضغط وDucking وLimiter والقياس والمزامنة.</li>
+<li><strong>إعادة تصميم الواجهة كاملة:</strong> مطابقة المرجع مع ربط الوظائف والملقّن واختبار RTL.</li>
+<li><strong>اختبارات القصص المرجعية:</strong> هاتف الصحراء (بدون صور)، صوفيا (صور المستخدم)، الجاثوم (11 صورة/30 ثانية/تعليق 7 ثوانٍ).</li>
+<li><strong>اختبار Realme 7:</strong> محاكي قريب ثم الجهاز الفعلي للحرارة والذاكرة والبطارية والتصدير.</li>
+<li><strong>Release APK والتوقيع:</strong> مفتاح محفوظ خارج المستودع وبناء بعد الموافقة.</li>
+<li><strong>التسليم والتوثيق:</strong> APK وأدلة الاختبارات والقيود.</li>
+</ol></section>
+
+<section><h2>11. معايير القبول</h2><table><tr><th>المجال</th><th>معيار النجاح</th></tr>
+<tr><td>مسار بلا صور</td><td>أصول ومشاهد محلية واقعية؛ لا هندسيات بديلة مضحكة.</td></tr>
+<tr><td>مسار صور المستخدم</td><td>الصور من المستخدم؛ تحليل وفصل وحركة مناسبة مع حفظ الأصل.</td></tr>
+<tr><td>الأصول</td><td>جودة سينمائية وترخيص وتوافق وحركة مقبولة.</td></tr>
+<tr><td>المدة</td><td>مدة MP4 توافق الهدف وعدد الإطارات وPTS.</td></tr>
+<tr><td>الصوت</td><td>راوي واضح ومؤثرات مسموعة دون clipping.</td></tr>
+<tr><td>النصوص والعلامة</td><td>خط دموي عربي مقروء لكل نصوص الفيلم؛ علامة شبه شفافة بقطرات دم.</td></tr>
+<tr><td>Offline</td><td>الأصول والمحركات الأساسية موجودة مع التطبيق ولا تنزيلات وقت الإنتاج.</td></tr>
+<tr><td>Realme 7</td><td>اختبار فعلي للذاكرة والحرارة والبطارية والتصدير، لا المحاكي وحده.</td></tr>
+<tr><td>الاستقرار</td><td>حفظ واستعادة سليمان ولا كسر للمراحل السابقة.</td></tr></table></section>
+
+<section><h2>12. قائمة المراحل بالأسماء فقط</h2>
+<p>إغلاق مراجعة Debug وجمع الأدلة<br>
+تدقيق خط الإنتاج الحالي دون تغيير<br>
+إصلاح مدة الفيلم والتوقيت<br>
+إصلاح طبقة الرندر والـFallback<br>
+تحسين Storyboard Planner<br>
+إنشاء سياسة جودة وترخيص للأصول<br>
+جرد WOLF Cinematic Asset Library<br>
+بناء Asset Registry &amp; Quality Gate<br>
+تصميم WOLF Procedural Generation Library<br>
+اختبار التعاون بين المولدات والأصول<br>
+اختبارات إثبات توافق المحركات (POC) منفردة<br>
+اعتماد أدوار المحركات النهائية<br>
+بناء WOLF Motion Code Library وScene Contract<br>
+بناء WOLF Motion Hub<br>
+دمج المحركات تدريجيًا<br>
+استكمال مسار صور المستخدم<br>
+تطوير الهوية الدموية<br>
+WOLF Audio Mastering<br>
+إعادة تصميم التطبيق بالكامل<br>
+اختبارات القصص المرجعية الثلاث<br>
+اختبار Realme 7 وتحسين الموارد<br>
+تجهيز Release APK والتوقيع<br>
+التسليم والتوثيق</p></section>
+
+<section><h2>13. مصادر تقنية رسمية</h2><ul>
+<li><a href="https://docs.godotengine.org/en/latest/tutorials/platform/android/android_library.html">Godot Android Library</a> — دمج Runtime كـAAR.</li>
+<li><a href="https://docs.godotengine.org/en/latest/tutorials/platform/android/embedding_in_android_projects.html">Godot Android Embedding</a> — دورة الحياة والتواصل مع التطبيق المضيف وقيد instance واحدة للعملية.</li>
+<li><a href="https://github.com/google/filament">Google Filament</a> — Android PBR وOpenGL ES 3/Vulkan وواجهات Java/JNI.</li>
+<li><a href="https://sceneview.github.io/docs/">SceneView</a> — واجهة Android/Compose المبنية فوق Filament.</li>
+<li><a href="https://docs.cocos.com/creator/3.5/manual/en/editor/publish/native-options.html">Cocos Creator Android native publishing</a>.</li>
+<li><a href="https://docs.korge.org/">KorGE</a> — محرك Kotlin متعدد المنصات.</li>
+<li><a href="https://github.com/airbnb/lottie-android">Lottie Android</a>.</li>
+<li><a href="https://developer.android.com/guide/playcore/asset-delivery">Play Asset Delivery</a> — مرجع يوضح أن install-time pack جزء من APK set وليس ملف APK واحدًا.</li>
+<li><a href="https://developer.android.com/tools/bundletool">Android bundletool</a>.</li>
+</ul>
+<p class="muted">المراجع لتصميم الدمج؛ تُراجع الإصدارات والتراخيص والتبعيات الدقيقة مجددًا عند مرحلة POC. لا يُفترض توافق جميع المحركات قبل البناء والاختبار.</p></section>
+
+<section><h2>14. ما لم يُنفذ في هذه الخطوة</h2><ul>
+<li>لم نجرد أو ننزّل أصولًا فعلية ولم نعلن عن مكتبة محتوى مكتملة.</li>
+<li>لم تُدمج محركات أو مكتبات توليد إجرائي.</li>
+<li>لم يتغير كود التطبيق أو مخطط البيانات أو المشروع أو التصدير.</li>
+<li>لم يُبنَ APK ولم يبدأ اختبار جديد.</li>
+<li>التحديث توثيقي فقط؛ بدء التنفيذ يحتاج توجيه المستخدم.</li>
+</ul></section>
+<footer>WOLF OFFLINE VIDEO · مرجع هندسي مستقبلي · محفوظ للمراجعة والاعتماد</footer>
+</main></body></html>
