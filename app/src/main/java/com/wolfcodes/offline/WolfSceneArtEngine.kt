@@ -87,10 +87,6 @@ object WolfSceneArtEngine {
                     p
                 )
 
-                if (hauntedPresence || scene % 3 == 1) {
-                    drawSilhouette(layer, p, w, h, t, scene)
-                }
-
                 p.shader = LinearGradient(
                     0f, 0f, 0f, h,
                     intArrayOf(Color.argb(55, 0, 0, 0), Color.TRANSPARENT, Color.argb(118, 0, 0, 0)),
@@ -102,9 +98,6 @@ object WolfSceneArtEngine {
             }
         )
 
-        p.style = Paint.Style.FILL
-        p.color = Color.argb(90, 190, 8, 28)
-        canvas.drawRect(0f, 0f, w * (0.15f + t * 0.7f), maxOf(2f, h * 0.004f), p)
     }
 
     private fun drawForest(c: Canvas, p: Paint, w: Float, h: Float, t: Float, scene: Int) {
