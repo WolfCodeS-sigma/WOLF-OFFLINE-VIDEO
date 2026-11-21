@@ -78,7 +78,7 @@ A changed file requires a new version/hash and a fresh review. The gate never re
 
 | Item | Current value |
 |---|---:|
-| Registry schema version | 1 |
+| Registry schema version | 2 |
 | Registry entries | 0 |
 | Approved cinematic assets | 0 |
 | Runtime downloads | Prohibited |
@@ -104,7 +104,22 @@ The empty manifest is an honest implementation baseline, not evidence that the c
 - Runtime filtering to approved entries only.
 - Rejection of unregistered or caller-altered entry records.
 - Loading the empty bundled-registry schema without inventing assets.
+- Android instrumentation coverage for a populated manifest, real test-APK asset streams, SHA-256/byte-size verification, pinned dependency versions, missing dependencies, and corrupted file hashes.
 
 ## 8. Non-goals
 
 This stage does not populate the library, add third-party binary assets, build the WOLF Procedural Generation Library, connect renderer engines, alter user image assignments, modify project persistence, or test the physical Realme 7. Those remain separate planned work with their own acceptance evidence.
+
+
+## 9. Android integration boundary and asset-collection schedule
+
+The Android integration contract is verified at two levels:
+
+- The production APK loads the bundled manifest through Android `AssetManager`; the currently empty production manifest correctly yields no approved cinematic assets.
+- Android instrumentation also loads a separate, populated test manifest and reads its fixture files from the instrumentation APK's `AssetManager`. These fixtures exist only under `src/androidTest/assets`; they are not production library assets and are not included in the application APK.
+
+The registry and gate expose `approvedAssets(request)` as the only permitted source for future shared-library consumers. No current production renderer or scene component consumes the shared cinematic library yet: the audited production paths currently use existing code-rendered visuals and project-scoped user media, while the shared library contains zero approved assets. This is an explicit integration boundary, not permission to bypass the gate. The later Motion Code Library, Motion Hub, and engine-integration stages must obtain shared assets only through the registry's approved result; they must not open manifest files or asset paths directly.
+
+Asset acquisition is not postponed until the end of application development. Once this Stage 08 registry and quality gate are verified, real licensed assets begin entering the library in reviewed batches and continue in parallel throughout Stages 09–20. Every candidate must pass the registry, rights, cinematic-quality, compatibility, dependency, and measured-resource checks applicable to its integration stage. Test fixtures never count toward library coverage.
+
+The library remains intentionally unpopulated in this stage. Stage 07's verified count of zero is retained as the honest baseline; it is not an acceptance target for the completed project. The master roadmap's mandatory completion gate remains: 100% of required asset needs approved, no unresolved required gaps or dependencies, and successful use in all three reference stories by Stage 20. Final packaging, size, and offline verification remain in Stages 21–22.
