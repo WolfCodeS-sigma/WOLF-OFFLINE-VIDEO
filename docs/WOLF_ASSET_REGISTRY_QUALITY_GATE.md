@@ -64,7 +64,7 @@ The gate blocks approval when any of the following is true:
 10. A dependency is missing, not approved for the same runtime/scope, or participates in a dependency cycle.
 11. Resource budget status is `FAIL`.
 
-A `PENDING` resource budget produces a visible warning, not a false performance pass. This is intentional: Stage 06 says device budgets must be measured in later integration and device-optimization stages, not invented now.
+A `PENDING` resource budget produces a visible warning, not a false performance pass, and requires an explicit `budgetPendingAccepted` reviewer decision. Without that explicit acceptance, the gate blocks the asset. This is intentional: Stage 06 says device budgets must be measured in later integration and device-optimization stages, not invented now.
 
 ## 5. File integrity and path safety
 
@@ -97,7 +97,7 @@ The empty manifest is an honest implementation baseline, not evidence that the c
 - Scope and tested-runtime restrictions.
 - Category-specific technical profiles and unresolved metadata rejection.
 - Cyclic dependency rejection.
-- Resource budget failure.
+- Resource budget failure and pending-budget reviewer acceptance.
 - Runtime filtering to approved entries only.
 - Loading the empty bundled-registry schema without inventing assets.
 
