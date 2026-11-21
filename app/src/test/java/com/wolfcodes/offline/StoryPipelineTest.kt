@@ -137,14 +137,32 @@ class StoryPipelineTest {
     @Test
     fun chapterStartingAtSecondOrThirdShotKeepsOriginalImageSlots() {
         val sourceImages = listOf("image-1", "image-2", "image-3")
-        val chapterStartingAtSecondShot = listOf(
-            StoryDirectorEngine.ShotPlan(2, "B", "50mm", "مصدر الصوت", "إضاءة باردة", "اقتراب بطيء", 2, ""),
-            StoryDirectorEngine.ShotPlan(3, "C", "85mm", "حجب جزئي", "إضاءة ليلية", "كشف بطيء", 2, "")
+        val originalPlans = listOf(
+            StoryDirectorEngine.ShotPlan(1, "A", "24mm", "تكوين واسع", "إضاءة منخفضة", "تثبيت", 2, ""),
+            StoryDirectorEngine.ShotPlan(2, "B", "50mm", "المصدر الصوتي", "إضاءة باردة", "اقتراب بطيء", 5, ""),
+            StoryDirectorEngine.ShotPlan(3, "C", "85mm", "حجب جزئي", "إضاءة ليلية", "كشف بطيء", 3, "")
         )
-        val mapped = chapterStartingAtSecondShot.map { shot ->
+        val originalFrameBudgets = listOf(2, 5, 3)
+
+        val chapterStartingInsideShotTwo = StoryDirectorEngine.sliceShotPlans(
+            originalPlans, originalFrameBudgets, startFrame = 4, frameCount = 6
+        )
+        assertEquals(listOf(2, 3), chapterStartingInsideShotTwo.map { it.number })
+        val secondChapterImages = chapterStartingInsideShotTwo.map { shot ->
             sourceImages[StoryDirectorEngine.sourceShotIndex(shot.number)]
         }
-        assertEquals(listOf("image-2", "image-3"), mapped)
+        assertEquals(listOf("image-2", "image-3"), secondChapterImages)
+
+        val chapterStartingAtShotThree = StoryDirectorEngine.sliceShotPlans(
+            originalPlans, originalFrameBudgets, startFrame = 7, frameCount = 3
+        )
+        assertEquals(listOf(3), chapterStartingAtShotThree.map { it.number })
+        assertEquals(
+            listOf("image-3"),
+            chapterStartingAtShotThree.map { shot ->
+                sourceImages[StoryDirectorEngine.sourceShotIndex(shot.number)]
+            }
+        )
     }
 
     @Test
