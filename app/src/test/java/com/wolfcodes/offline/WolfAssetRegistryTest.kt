@@ -192,6 +192,7 @@ class WolfAssetRegistryTest {
             reviewer = "WOLF Asset Review",
             reviewedAtEpochMillis = 1_800_000_000_000,
             decisionReason = "All mandatory rights, visual, and technical evidence reviewed",
+            reviewEvidenceReference = "reviews/forest-review.json",
             rightsPassed = true,
             visualPassed = true,
             technicalPassed = true,
