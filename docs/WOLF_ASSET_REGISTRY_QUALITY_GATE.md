@@ -33,7 +33,7 @@ Each entry in the JSON `assets` array maps to `WolfAssetRegistryEntry` and must 
 - `license`: creator/rights holder, source name/location, acquisition timestamp/method, provenance reference, exact license ID/name/version, evidence reference, verification state, commercial-use permission, modification permission, redistribution permission, app-bundling permission, attribution requirement/text, and explicit restrictions.
 - `files`: one or more relative packaged file paths, format, exact byte size, and SHA-256 for each file.
 - `dependencies`: IDs of other registry entries required by this asset.
-- `technicalProfile`: explicit coordinate system, units, import settings, renderer requirements, and applicable geometry/material/texture/rig/animation profile details. Use `UNKNOWN` or `NOT_APPLICABLE` rather than guessing.
+- `technicalProfile`: explicit coordinate system, units, import settings, renderer requirements, and category-specific geometry/material/texture/rig/animation/audio/font/shader/generator profiles. Required category fields cannot be `UNKNOWN` or `PENDING`; use `NOT_APPLICABLE` only where genuinely inapplicable.
 - `resourceMeasurements`: measured packaged/runtime resource values where available; an empty/pending profile cannot be marked as a passed budget.
 - `compatibleRuntimes`: runtime identifier to exact tested version.
 - `approvedScopes`: explicitly approved use scopes.
@@ -95,6 +95,8 @@ The empty manifest is an honest implementation baseline, not evidence that the c
 - Absolute/traversal path rejection.
 - Missing dependency rejection.
 - Scope and tested-runtime restrictions.
+- Category-specific technical profiles and unresolved metadata rejection.
+- Cyclic dependency rejection.
 - Resource budget failure.
 - Runtime filtering to approved entries only.
 - Loading the empty bundled-registry schema without inventing assets.
