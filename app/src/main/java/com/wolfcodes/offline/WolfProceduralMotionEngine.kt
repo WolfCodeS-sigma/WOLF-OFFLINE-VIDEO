@@ -16,9 +16,9 @@ import kotlin.math.sin
 /**
  * Deterministic procedural motion layers for WOLF OFFLINE VIDEO.
  *
- * This renderer adds independently animated scene elements over the base artwork:
- * atmospheric fog, floating particles, spectral figures, wind-driven branches,
- * rain and restrained signal distortion. Every animation is driven by the frame
+ * This renderer adds independently animated environmental elements over the base artwork:
+ * atmospheric fog, floating particles, wind-driven branches, rain and restrained
+ * signal distortion. It does not synthesize human or creature silhouettes. Every animation is driven by the frame
  * progress supplied by the offline encoder, so the same project renders identically
  * on retry and after chapter recovery.
  */
