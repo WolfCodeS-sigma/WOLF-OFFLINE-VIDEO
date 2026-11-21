@@ -1,0 +1,192 @@
+package com.wolfcodes.offline
+
+import java.io.File
+import java.nio.file.Files
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+class WolfAssetRegistryTest {
+    private lateinit var root: File
+    private lateinit var packagedFile: File
+    private lateinit var manifestFile: WolfAssetFile
+    private lateinit var verifier: WolfAssetFileVerifier
+
+    @Before
+    fun setUp() {
+        root = Files.createTempDirectory("wolf-asset-gate").toFile()
+        packagedFile = File(root, "cinematic/forest.bin").apply {
+            parentFile?.mkdirs()
+            writeBytes(byteArrayOf(1, 2, 3, 4, 5))
+        }
+        manifestFile = WolfAssetFile(
+            relativePath = "cinematic/forest.bin",
+            format = "application/octet-stream",
+            byteSize = packagedFile.length(),
+            sha256 = WolfAssetFileVerifier.sha256(packagedFile)
+        )
+        verifier = WolfAssetFileVerifier(root)
+    }
+
+    @After
+    fun tearDown() {
+        root.deleteRecursively()
+    }
+
+    @Test
+    fun completeRealisticLicensedAssetPassesAndPendingBudgetIsOnlyWarning() {
+        val entry = validEntry()
+        val result = WolfAssetQualityGate(mapOf(entry.assetId to entry), verifier)
+            .evaluate(entry, request())
+
+        assertTrue(result.approved)
+        assertTrue(result.errors.isEmpty())
+        assertEquals(1, result.warnings.size)
+    }
+
+    @Test
+    fun nonCommercialOrUnverifiedLicenseFailsClosed() {
+        val entry = validEntry().copy(
+            license = validEntry().license.copy(commercialUse = false, verified = false)
+        )
+        val result = gate(entry).evaluate(entry, request())
+
+        assertFalse(result.approved)
+        assertTrue(result.errors.any { it.contains("تجاري") })
+        assertTrue(result.errors.any { it.contains("دليل الترخيص") })
+    }
+
+    @Test
+    fun cartoonAndToyLikeAssetsAreRejected() {
+        val entry = validEntry().copy(
+            tags = setOf("cinematic", "cartoon"),
+            review = validEntry().review.copy(visualStyle = WolfAssetVisualStyle.CARTOON)
+        )
+        val result = gate(entry).evaluate(entry, request())
+
+        assertFalse(result.approved)
+        assertTrue(result.errors.any { it.contains("وسم بصري") })
+        assertTrue(result.errors.any { it.contains("النمط البصري") })
+    }
+
+    @Test
+    fun alteredPackagedBytesFailHashVerification() {
+        packagedFile.writeBytes(byteArrayOf(9, 9, 9))
+        val entry = validEntry()
+        val result = gate(entry).evaluate(entry, request())
+
+        assertFalse(result.approved)
+        assertTrue(result.errors.any { it.contains("لا يطابق السجل") })
+    }
+
+    @Test
+    fun traversalAndAbsolutePathsAreRejected() {
+        assertFalse(WolfAssetFileVerifier.isSafeRelativePath("../outside.bin"))
+        assertFalse(WolfAssetFileVerifier.isSafeRelativePath("/outside.bin"))
+        assertFalse(WolfAssetFileVerifier.isSafeRelativePath("cinematic/../../outside.bin"))
+        assertTrue(WolfAssetFileVerifier.isSafeRelativePath("cinematic/forest.bin"))
+    }
+
+    @Test
+    fun missingDependencyBlocksApproval() {
+        val entry = validEntry().copy(dependencies = setOf("wolf_missing_dependency"))
+        val result = gate(entry).evaluate(entry, request())
+
+        assertFalse(result.approved)
+        assertTrue(result.errors.any { it.contains("اعتمادية غير موجودة") })
+    }
+
+    @Test
+    fun approvalIsRestrictedToDeclaredScopeAndTestedRuntime() {
+        val entry = validEntry()
+        val scopeResult = gate(entry).evaluate(entry, request(intendedScope = "closeup_character"))
+        val runtimeResult = gate(entry).evaluate(entry, request(targetRuntime = "UNTESTED_RENDERER"))
+
+        assertFalse(scopeResult.approved)
+        assertFalse(runtimeResult.approved)
+        assertTrue(scopeResult.errors.any { it.contains("نطاق الاستخدام") })
+        assertTrue(runtimeResult.errors.any { it.contains("توافق مختبر") })
+    }
+
+    @Test
+    fun failedResourceBudgetBlocksApproval() {
+        val entry = validEntry().copy(budgetStatus = WolfAssetBudgetStatus.FAIL)
+        val result = gate(entry).evaluate(entry, request())
+
+        assertFalse(result.approved)
+        assertTrue(result.errors.any { it.contains("ميزانية الموارد") })
+    }
+
+    @Test
+    fun onlyApprovedEntriesAreReturnedToRuntime() {
+        val approved = validEntry()
+        val candidate = validEntry().copy(assetId = "wolf_candidate_asset", lifecycle = WolfAssetLifecycle.CANDIDATE)
+        val gate = WolfAssetQualityGate(mapOf(approved.assetId to approved, candidate.assetId to candidate), verifier)
+
+        assertEquals(listOf(approved.assetId), gate.approvedAssets(request()).map { it.assetId })
+    }
+
+    @Test
+    fun bundledEmptyRegistryLoadsWithoutInventingAssets() {
+        val registry = WolfAssetRegistry.fromJson(
+            """{"schemaVersion":1,"assets":[]}""",
+            verifier
+        )
+
+        assertEquals(0, registry.size)
+        assertTrue(registry.approvedAssets(request()).isEmpty())
+        assertFalse(registry.evaluate("wolf_not_present", request()).approved)
+    }
+
+    private fun gate(entry: WolfAssetRegistryEntry) =
+        WolfAssetQualityGate(mapOf(entry.assetId to entry), verifier)
+
+    private fun request(
+        targetRuntime: String = "WOLF_ANDROID_CANVAS",
+        intendedScope: String = "environment_background"
+    ) = WolfAssetUseRequest(targetRuntime, intendedScope)
+
+    private fun validEntry() = WolfAssetRegistryEntry(
+        assetId = "wolf_cinematic_forest_001",
+        name = "Cinematic forest environment",
+        version = "1.0.0",
+        category = WolfAssetCategory.ENVIRONMENT,
+        tags = setOf("realistic", "forest", "night"),
+        lifecycle = WolfAssetLifecycle.APPROVED,
+        license = WolfAssetLicenseEvidence(
+            creatorOrRightsHolder = "Verified Rights Holder",
+            sourceName = "Documented Offline Source",
+            sourceLocation = "offline:verified-source-record",
+            licenseName = "Commercial Redistribution License",
+            licenseVersion = "1.0",
+            evidenceReference = "licenses/forest-license.txt",
+            verified = true,
+            commercialUse = true,
+            modificationAllowed = true,
+            redistributionAllowed = true,
+            appBundlingAllowed = true,
+            attributionRequired = true,
+            attributionText = "Credit required by license",
+            restrictions = "None for the declared scope"
+        ),
+        files = listOf(manifestFile),
+        dependencies = emptySet(),
+        compatibleRuntimes = mapOf("WOLF_ANDROID_CANVAS" to "1.0-tested"),
+        approvedScopes = setOf("environment_background"),
+        budgetStatus = WolfAssetBudgetStatus.PENDING,
+        review = WolfAssetReview(
+            reviewer = "WOLF Asset Review",
+            reviewedAtEpochMillis = 1_800_000_000_000,
+            decisionReason = "All mandatory rights, visual, and technical evidence reviewed",
+            rightsPassed = true,
+            visualPassed = true,
+            technicalPassed = true,
+            realismScore = 5,
+            visualStyle = WolfAssetVisualStyle.CINEMATIC_REALISTIC,
+            approvedStyleScopes = emptySet()
+        )
+    )
+}
