@@ -87,15 +87,22 @@ data class WolfAssetGateResult(
  * Verifies that a manifest entry resolves to a real, packaged local file and
  * that its exact byte length and SHA-256 match the reviewed manifest.
  */
-class WolfAssetFileVerifier(private val packagedAssetRoot: File) {
+class WolfAssetFileVerifier(
+    private val packagedAssetRoot: File? = null,
+    private val assetReader: ((String) -> ByteArray?)? = null
+) {
     fun verify(file: WolfAssetFile): Boolean {
         if (!isSafeRelativePath(file.relativePath)) return false
         return runCatching {
-            val root = packagedAssetRoot.canonicalFile
-            val candidate = File(root, file.relativePath).canonicalFile
-            if (!candidate.path.startsWith(root.path + File.separator)) return false
-            if (!candidate.isFile || candidate.length() != file.byteSize) return false
-            sha256(candidate) == file.sha256.lowercase()
+            val bytes = if (assetReader != null) {
+                assetReader.invoke(file.relativePath) ?: return false
+            } else {
+                val root = packagedAssetRoot?.canonicalFile ?: return false
+                val candidate = File(root, file.relativePath).canonicalFile
+                if (!candidate.path.startsWith(root.path + File.separator) || !candidate.isFile) return false
+                candidate.readBytes()
+            }
+            bytes.size.toLong() == file.byteSize && sha256(bytes) == file.sha256.lowercase()
         }.getOrDefault(false)
     }
 
@@ -108,18 +115,10 @@ class WolfAssetFileVerifier(private val packagedAssetRoot: File) {
             return segments.all { it.isNotBlank() && it != "." && it != ".." }
         }
 
-        fun sha256(file: File): String {
-            val digest = MessageDigest.getInstance("SHA-256")
-            file.inputStream().use { input ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    digest.update(buffer, 0, count)
-                }
-            }
-            return digest.digest().joinToString("") { "%02x".format(it) }
-        }
+        fun sha256(file: File): String = sha256(file.readBytes())
+
+        fun sha256(bytes: ByteArray): String =
+            MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     }
 }
 
@@ -269,8 +268,9 @@ class WolfAssetRegistry private constructor(
 
         fun loadBundled(context: Context): WolfAssetRegistry {
             val json = context.assets.open("wolf_asset_registry.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
-            return fromJson(json, WolfAssetFileVerifier(File(context.applicationInfo.sourceDir).parentFile
-                ?.resolve("assets") ?: context.filesDir))
+            return fromJson(json, WolfAssetFileVerifier(assetReader = { path ->
+                runCatching { context.assets.open(path).use { it.readBytes() } }.getOrNull()
+            }))
         }
 
         private fun parseEntry(item: JSONObject): WolfAssetRegistryEntry {
