@@ -1,10 +1,30 @@
 package com.wolfcodes.offline
 
 import org.junit.Assert.assertEquals
+import java.io.File
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WolfAudioMixerTest {
+    @Test
+    fun mixedPcmAlwaysFillsTheRequestedFilmDurationWhenSourcesEndEarly() {
+        val directory = createTempDir(prefix = "wolf-audio-duration-")
+        try {
+            val narration = File(directory, "narration.pcm").apply { writeBytes(ByteArray(200) { 40 }) }
+            val effects = File(directory, "effects.pcm").apply { writeBytes(ByteArray(100) { 20 }) }
+            val output = File(directory, "mixed.pcm")
+
+            WolfAudioMixer.mixPcmFiles(
+                narration, effects, output, 1_000_000L,
+                narrationGain = 0.92, effectsGain = 0.30
+            )
+
+            assertEquals(44_100L, output.length())
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
     @Test
     fun silenceRemainsSilent() {
         assertEquals(0, WolfAudioMixer.mixSample(0.0, 0.0).toInt())

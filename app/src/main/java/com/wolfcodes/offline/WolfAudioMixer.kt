@@ -221,7 +221,7 @@ object WolfAudioMixer {
         pcm.write((value shr 8) and 0xff)
     }
 
-    private fun mixPcmFiles(
+    internal fun mixPcmFiles(
         narration: File,
         effects: File,
         output: File,
@@ -247,7 +247,8 @@ object WolfAudioMixer {
                         sfx.seek(offset)
                         val voiceRead = voice.read(voiceBuffer, 0, aligned).coerceAtLeast(0)
                         val sfxRead = sfx.read(sfxBuffer, 0, aligned).coerceAtLeast(0)
-                        if (voiceRead == 0 && sfxRead == 0) break
+                        // Preserve the complete film timeline when both sources end early.
+                        // The zero-filled buffers encode silence for the remaining duration.
                         val frames = aligned / 2
                         val bytes = ByteArray(aligned)
                         for (i in 0 until frames) {
