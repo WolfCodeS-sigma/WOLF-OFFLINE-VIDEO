@@ -169,9 +169,9 @@ object StoryDirectorEngine {
     private fun buildShots(sceneNumber: Int, text: String, sceneDuration: Int, ratio: String,
         style: String, horror: String, setting: String, mood: String, continuity: String): List<ShotPlan> {
         val lower = text.lowercase(Locale.ROOT)
-        val chase = listOf("يطارد", "يجري", "هرب", "مطاردة", "يلحق", "ركض", "فرّ").any(lower::contains)
-        val sound = listOf("همس", "صوت", "أنفاس", "ينادي", "طرق", "خطوات", "صرير").any(lower::contains)
-        val reveal = listOf("ظهر", "انكشف", "وجد", "اكتشف", "رأى", "اختفى", "ظل", "وجه").any(lower::contains)
+        val chase = listOf("يطارد", "يجري", "هرب", "مطاردة", "يلحق", "ركض", "فرّ").any { keyword -> lower.contains(keyword) }
+        val sound = listOf("همس", "صوت", "أنفاس", "ينادي", "طرق", "خطوات", "صرير").any { keyword -> lower.contains(keyword) }
+        val reveal = listOf("ظهر", "انكشف", "وجد", "اكتشف", "رأى", "اختفى", "ظل", "وجه").any { keyword -> lower.contains(keyword) }
         val templates = when {
             chase -> listOf(
                 Triple("لقطة تتبّع واسعة", "لقطة واسعة بعدسة 24mm مع تتبّع جانبي مضبوط", "أظهر اتجاه الحركة والمسافة والعوائق المذكورة في النص"),
