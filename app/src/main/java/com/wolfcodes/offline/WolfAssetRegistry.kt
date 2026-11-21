@@ -185,6 +185,7 @@ class WolfAssetQualityGate(
         requireValue(entry.assetId.matches(Regex("wolf_[a-z0-9][a-z0-9._-]{2,63}")), "معرّف الأصل غير صالح")
         requireValue(entry.name.isNotBlank(), "اسم الأصل مفقود")
         requireValue(entry.version.isNotBlank(), "إصدار الأصل مفقود")
+        requireValue(entry.tags.isNotEmpty() && entry.tags.all { it.isNotBlank() }, "وسوم الأصل الوصفية مفقودة أو تحتوي على قيم فارغة")
         requireValue(entry.lifecycle == WolfAssetLifecycle.APPROVED, "حالة الأصل ليست APPROVED")
         requireValue(request.targetRuntime.isNotBlank(), "بيئة التشغيل المطلوبة غير محددة")
         requireValue(request.targetRuntimeVersion.isNotBlank(), "إصدار بيئة التشغيل المطلوبة غير محدد")

@@ -60,6 +60,15 @@ class WolfAssetRegistryTest {
     }
 
     @Test
+    fun missingDescriptiveTagsBlockApproval() {
+        val entry = validEntry().copy(tags = emptySet())
+        val result = gate(entry).evaluate(entry, request())
+
+        assertFalse(result.approved)
+        assertTrue(result.errors.any { it.contains("وسوم الأصل الوصفية") })
+    }
+
+    @Test
     fun cartoonAndToyLikeAssetsAreRejected() {
         val entry = validEntry().copy(
             tags = setOf("cinematic", "cartoon"),

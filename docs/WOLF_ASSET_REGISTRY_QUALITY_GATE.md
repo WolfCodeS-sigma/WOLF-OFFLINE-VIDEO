@@ -53,7 +53,7 @@ Unknown or missing values do not receive guessed defaults that can create approv
 
 The gate blocks approval when any of the following is true:
 
-1. Identity, name, version, state, request runtime, or intended scope is missing/invalid.
+1. Identity, name, version, required descriptive tags, state, request runtime, or intended scope is missing/invalid.
 2. Source, creator/rights holder, exact license/version, or verified license evidence is missing.
 3. Commercial use, modification, redistribution, or bundling inside the app is not explicitly permitted.
 4. Required attribution text is missing.
@@ -92,7 +92,7 @@ The empty manifest is an honest implementation baseline, not evidence that the c
 `WolfAssetRegistryTest` covers:
 - A complete, realistic, licensed entry passing the gate with a pending-budget warning.
 - Unverified/non-commercial rights rejection.
-- Cartoon/toy-like visual rejection.
+- Cartoon/toy-like visual rejection and missing descriptive-tag rejection.
 - Packaged byte/hash mismatch rejection.
 - Absolute/traversal path rejection.
 - Missing dependency rejection.
