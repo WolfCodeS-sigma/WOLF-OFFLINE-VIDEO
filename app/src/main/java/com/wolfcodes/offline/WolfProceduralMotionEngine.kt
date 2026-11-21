@@ -156,8 +156,11 @@ object WolfProceduralMotionEngine {
         canvas.translate(width * 0.5f + driftX, height * 0.5f + driftY)
         canvas.scale(scale, scale)
         canvas.translate(-width * 0.5f, -height * 0.5f)
-        draw.invoke(canvas)
-        canvas.restoreToCount(saved)
+        try {
+            draw.invoke(canvas)
+        } finally {
+            canvas.restoreToCount(saved)
+        }
     }
 
     fun featuresFor(caption: String): SceneFeatures {
