@@ -105,12 +105,29 @@ object OfflineProductionEngine {
         // narration duration is allowed to extend or truncate the requested runtime.
         val totalVideoSeconds = requestedTotal
         val bodySeconds = (totalVideoSeconds - introSeconds).coerceAtLeast(1)
-        val rawScenes = splitStory(story)
-        val scenes = StoryDirectorEngine.fitSceneTextsToDuration(rawScenes, bodySeconds)
+        // The storyboard director is the single source of scene boundaries and shot intent.
+        // Its exact-duration mode keeps every planned scene inside the film body timeline.
+        val filmPlan = StoryDirectorEngine.analyze(
+            story = story,
+            durationSeconds = bodySeconds,
+            aspectRatio = aspectRatio,
+            visualStyle = "رعب سينمائي مظلم",
+            horrorType = "رعب نفسي وخارق للطبيعة",
+            audioDrivenDuration = true,
+            includeIntro = false
+        )
+        val scenePlans = filmPlan.scenes
+        val scenes = scenePlans.map { it.sourceText }
         val total = bodySeconds
         val totalFrames = total * fps
         val minimumFrames = 1
         val framesPerScene = OfflineMotionEngine.allocateFrames(scenes, totalFrames, minimumFrames)
+        val shotFrameBudgets = scenePlans.mapIndexed { index, scenePlan ->
+            StoryDirectorEngine.allocateShotFrames(
+                framesPerScene[index],
+                scenePlan.shots.map { it.durationSeconds }
+            )
+        }
         val typographyCues = WolfHorrorTypographyEngine.plan(
             scenes, framesPerScene, fps, enabled = enableHorrorTypography
         )
@@ -156,6 +173,7 @@ object OfflineProductionEngine {
                 listOf(
                     includeWatermark.toString(),
                     "depth-segmentation-v${WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION}",
+                    "storyboard-planner-v2",
                     audioUri?.toString().orEmpty(),
                     sceneShotUris.flatten().joinToString("|"),
                     sceneImageAssignments.entries.sortedBy { it.key }
@@ -173,11 +191,13 @@ object OfflineProductionEngine {
                 encodeChaptered(
                     context, silentFile, checkpointProjectId, chapterFingerprint, chapterPlans,
                     scenes, w, h, fps, framesPerScene, sceneShotUris, includeWatermark,
-                    typographyCues, introSeconds, onSceneProgress, onChapterProgress, 1_600_000
+                    typographyCues, introSeconds, onSceneProgress, onChapterProgress, 1_600_000,
+                    shotFrameBudgets, scenePlans.map { it.shots }
                 )
             } else {
                 encode(context, silentFile, scenes, w, h, fps, framesPerScene, sceneShotUris,
-                    includeWatermark, typographyCues, introSeconds, onSceneProgress, 1_600_000)
+                    includeWatermark, typographyCues, introSeconds, onSceneProgress, 1_600_000,
+                    shotFrameBudgets, scenePlans.map { it.shots })
             }
         } catch (primaryError: Exception) {
             silentFile.delete()
@@ -201,7 +221,8 @@ object OfflineProductionEngine {
             )
             try {
                 encode(context, silentFile, scenes, fallbackDimensions.first, fallbackDimensions.second,
-                    fps, framesPerScene, sceneShotUris, includeWatermark, typographyCues, introSeconds, onSceneProgress, 720_000)
+                    fps, framesPerScene, sceneShotUris, includeWatermark, typographyCues, introSeconds, onSceneProgress, 720_000,
+                    shotFrameBudgets, scenePlans.map { it.shots })
                 outputWidth = fallbackDimensions.first
                 outputHeight = fallbackDimensions.second
                 usedReducedQualityFallback = true
@@ -358,7 +379,9 @@ object OfflineProductionEngine {
         introSeconds: Int,
         onSceneProgress: ((Int, Int) -> Unit)?,
         onChapterProgress: ((Int, Int, String) -> Unit)?,
-        bitRate: Int
+        bitRate: Int,
+        shotFrameBudgets: List<List<Int>>,
+        shotPlansPerScene: List<List<StoryDirectorEngine.ShotPlan>>
     ) {
         val session = WolfLongFilmCheckpointStore.begin(
             context, projectId, fingerprint, fps,
@@ -394,6 +417,21 @@ object OfflineProductionEngine {
                 val chapterImages = chapter.slices.map { slice ->
                     sceneImageUris.getOrElse(slice.sceneIndex) { emptyList() }
                 }
+                val chapterShotBudgets = chapter.slices.map { slice ->
+                    StoryDirectorEngine.sliceShotFrames(
+                        shotFrameBudgets.getOrElse(slice.sceneIndex) { emptyList() },
+                        slice.startFrame,
+                        slice.frameCount
+                    )
+                }
+                val chapterShotPlans = chapter.slices.map { slice ->
+                    StoryDirectorEngine.sliceShotPlans(
+                        shotPlansPerScene.getOrElse(slice.sceneIndex) { emptyList() },
+                        shotFrameBudgets.getOrElse(slice.sceneIndex) { emptyList() },
+                        slice.startFrame,
+                        slice.frameCount
+                    )
+                }
                 val chapterCues = chapter.slices.map { slice ->
                     val source = typographyCues.getOrNull(slice.sceneIndex) ?: return@map null
                     val start = (source.startFrame - slice.startFrame).coerceAtLeast(0)
@@ -411,7 +449,7 @@ object OfflineProductionEngine {
                             totalSlices
                         )
                     },
-                    bitRate
+                    bitRate, chapterShotBudgets, chapterShotPlans
                 )
                 WolfLongFilmCheckpointStore.markCompleted(
                     context, projectId, chapter.number, chapterFile
@@ -534,7 +572,9 @@ object OfflineProductionEngine {
     private fun encode(context: Context, file: File, scenes: List<String>, w: Int, h: Int, fps: Int,
         framesPerScene: List<Int>, sceneImageUris: List<List<Uri?>>, includeWatermark: Boolean,
         typographyCues: List<WolfHorrorTypographyEngine.Cue?>,
-        introSeconds: Int, onSceneProgress: ((Int, Int) -> Unit)?, bitRate: Int) {
+        introSeconds: Int, onSceneProgress: ((Int, Int) -> Unit)?, bitRate: Int,
+        shotFrameBudgets: List<List<Int>>? = null,
+        shotPlansPerScene: List<List<StoryDirectorEngine.ShotPlan>>? = null) {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, 0x7F000789)
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate.coerceIn(400_000, 2_500_000))
@@ -568,11 +608,16 @@ object OfflineProductionEngine {
             for (s in scenes.indices) {
                 WolfResourceGuard.ensureSafeToContinue(context)
                 val sceneFrames = framesPerScene[s]
-                val baseShotFrames = sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE
-                val extraShotFrames = sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE
+                val plannedShotFrames = shotFrameBudgets?.getOrNull(s)
+                    ?.takeIf { it.isNotEmpty() && it.all { count -> count > 0 } && it.sum() == sceneFrames }
+                val shotFrameCounts = plannedShotFrames ?: List(WolfSceneAssetStore.SHOTS_PER_SCENE) { index ->
+                    sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE +
+                        if (index < sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE) 1 else 0
+                }.filter { it > 0 }
                 var sceneFrameOffset = 0
-                for (shotIndex in 0 until WolfSceneAssetStore.SHOTS_PER_SCENE) {
-                    val shotFrames = baseShotFrames + if (shotIndex < extraShotFrames) 1 else 0
+                for (shotIndex in shotFrameCounts.indices) {
+                    val shotFrames = shotFrameCounts[shotIndex]
+                    val shotPlan = shotPlansPerScene?.getOrNull(s)?.getOrNull(shotIndex)
                     val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
@@ -598,7 +643,7 @@ object OfflineProductionEngine {
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
                                 w, h, scenes[s], s, shotIndex, shotProgress, image, imageLayers, includeWatermark,
-                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps
+                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps, shotPlan
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
                             track = drained.first
@@ -668,7 +713,8 @@ object OfflineProductionEngine {
         surface: Surface, w: Int, h: Int, caption: String, scene: Int,
         shotIndex: Int, t: Float, bitmap: Bitmap?, imageLayers: WolfImageDepthSegmenter.Layers?,
         includeWatermark: Boolean, typographyCue: WolfHorrorTypographyEngine.Cue?,
-        sceneFrameIndex: Int, fps: Int
+        sceneFrameIndex: Int, fps: Int,
+        shotPlan: StoryDirectorEngine.ShotPlan? = null
     ) {
         val c: Canvas = surface.lockCanvas(null)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -711,11 +757,17 @@ object OfflineProductionEngine {
                 val camera = if (depthLayersAvailable) {
                     OfflineMotionEngine.cameraFrame(shotProgress, scene, caption, safeShotIndex)
                 } else null
-                val baseZoom = if (depthLayersAvailable) when (shotIndex) {
-                    0 -> 1.012f
-                    1 -> 1.034f
-                    else -> 1.058f
-                } else 1f
+                val plannedZoom = when {
+                    shotPlan?.camera?.contains("24mm") == true -> 1.012f
+                    shotPlan?.camera?.contains("50mm") == true -> 1.034f
+                    shotPlan?.camera?.contains("85mm") == true -> 1.058f
+                    else -> when (shotIndex) {
+                        0 -> 1.012f
+                        1 -> 1.034f
+                        else -> 1.058f
+                    }
+                }
+                val baseZoom = if (depthLayersAvailable) plannedZoom else 1f
                 // Keep the original image static when segmentation is unavailable.
                 val scale = if (camera == null) 1f else (baseZoom + camera.zoom).coerceAtLeast(1.006f)
                 val dw = w * scale
