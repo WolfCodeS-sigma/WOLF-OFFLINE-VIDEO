@@ -92,11 +92,16 @@ No result may claim approval merely because generation completed successfully.
 
 ### 4.1 Deterministic seed derivation
 
-Sub-generators receive derived seeds from a documented stable hash of:
+Sub-generators use the versioned algorithm `WOLF-SEED-1`:
 
-`masterSeed + sceneId + shotId + generatorId + generatorVersion + subGeneratorKey`
+1. Serialize the fields in this exact order: `masterSeed` (unsigned 64-bit big-endian), `sceneId`, `shotId`, `generatorId`, `generatorVersion`, and `subGeneratorKey`.
+2. Encode each string as UTF-8 preceded by its unsigned 32-bit big-endian byte length. Do not normalize or reinterpret IDs after validation.
+3. Compute SHA-256 over the concatenated byte sequence.
+4. Interpret the first eight digest bytes as an unsigned 64-bit big-endian sub-seed.
 
-The derivation algorithm and canonical serialization must be versioned. Never use Kotlin/JVM object hash codes, unordered map iteration, device time, random UUIDs, or unseeded random APIs as reproducibility inputs.
+The canonical parameter digest uses UTF-8 canonical JSON: object keys sorted lexicographically, arrays kept in declared order, strings encoded as UTF-8, booleans/null represented as JSON literals, integers in base-10 without leading zeros, and decimal values normalized to a non-exponent decimal representation with trailing fractional zeros removed. NaN and infinity are invalid. The canonicalization version is recorded with every result.
+
+Never use Kotlin/JVM object hash codes, unordered map iteration, device time, random UUIDs, or unseeded random APIs as reproducibility inputs. A future algorithm change requires a new seed-algorithm ID and generator compatibility declaration.
 
 The same seed and request must produce the same logical effect descriptor and keyframe values on the same supported generator/runtime version. Any intentional output change requires a generator version change and a new verification run.
 
@@ -128,9 +133,9 @@ The generator source itself is a software asset. It must be recorded under Stage
 
 Lifecycle:
 
-`DRAFT → CANDIDATE → UNDER_REVIEW → APPROVED`
+`CANDIDATE → UNDER_REVIEW → APPROVED`
 
-Failure or withdrawal may move a generator to `REJECTED`, `QUARANTINED`, or `RETIRED`. Only `APPROVED` generators can be resolved for production requests. The current Stage 08 gate remains authoritative; this design adds no parallel approval database.
+Failure or withdrawal may move a generator to `REJECTED`, `QUARANTINED`, or `RETIRED`. These are the existing Stage 08 lifecycle values; the design does not introduce a new `DRAFT` registry state. Only `APPROVED` generators can be resolved for production requests. The current Stage 08 gate remains authoritative; this design adds no parallel approval database.
 
 ## 6. Generated output governance
 
