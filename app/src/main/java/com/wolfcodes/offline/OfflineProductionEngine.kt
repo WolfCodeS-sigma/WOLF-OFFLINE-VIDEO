@@ -173,6 +173,8 @@ object OfflineProductionEngine {
         val narrationLimitUs = audioTimeline.narrationLimitUs
         val name = "wolf_offline_${System.currentTimeMillis()}.mp4"
         val tempDir = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
+        // Remove only expired files created by this pipeline before checking free storage.
+        WolfMemoryManager.cleanupStaleOfflineTemps(context)
         // Reserve for overlapping temporary/final MP4 copies, optional AAC, and a safety margin.
         val estimatedOutputBytes = estimatePeakStorageBytes(
             totalVideoSeconds,
