@@ -28,14 +28,20 @@ class WolfOfflineVideoExporter(private val context: Context) {
         val dimensions = if (project.aspectRatio == "16:9") 1280 to 720 else 720 to 1280
         val fps = 24
         val frames = WolfScenePlanner.allocateFrames(scenes, project.durationSeconds * fps)
-        val name = "WOLF_" + System.currentTimeMillis() + ".mp4"
-        val temporary = File(context.cacheDir, "raw_$name")
-        val normalized = File(context.cacheDir, "normalized_$name")
+        val exportId = System.currentTimeMillis()
+        val name = "WOLF_$exportId.mp4"
+        val tempDir = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
+        WolfMemoryManager.cleanupStaleOfflineTemps(context)
+        // Use the shared WOLF temp prefixes so interrupted legacy exports are reclaimed later.
+        val temporary = File(tempDir, "wolf_offline_legacy_raw_$exportId.mp4")
+        val normalized = File(tempDir, "normalized_wolf_offline_legacy_$exportId.mp4")
         try {
             encode(temporary, scenes, frames, dimensions.first, dimensions.second, fps, onProgress)
             // Surface-input encoders may timestamp frames using wall-clock render time.
             // Repackage samples onto a deterministic frame clock before publishing the MP4.
             normalizeVideoTimestamps(temporary, normalized, fps)
+            // The raw timestamped copy is no longer needed; release its space before MediaStore copy.
+            temporary.delete()
             val uri = saveToMediaStore(normalized, name)
             onProgress(100, "اكتمل تصدير الفيديو")
             return WolfExportResult(uri, name, project.durationSeconds, dimensions.first, dimensions.second)
