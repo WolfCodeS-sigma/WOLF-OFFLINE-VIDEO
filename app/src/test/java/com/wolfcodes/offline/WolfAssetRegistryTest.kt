@@ -141,6 +141,17 @@ class WolfAssetRegistryTest {
     }
 
     @Test
+    fun pendingBudgetNeedsExplicitReviewerAcceptance() {
+        val entry = validEntry().copy(
+            review = validEntry().review.copy(budgetPendingAccepted = false)
+        )
+        val result = gate(entry).evaluate(entry, request())
+
+        assertFalse(result.approved)
+        assertTrue(result.errors.any { it.contains("قرارًا صريحًا") })
+    }
+
+    @Test
     fun failedResourceBudgetBlocksApproval() {
         val entry = validEntry().copy(budgetStatus = WolfAssetBudgetStatus.FAIL)
         val result = gate(entry).evaluate(entry, request())
@@ -201,7 +212,7 @@ class WolfAssetRegistryTest {
             attributionRequired = true,
             attributionText = "Credit required by license",
             restrictions = "None for the declared scope",
-            acquiredAtEpochMillis = 1_800_000_000_000,
+            acquiredAtEpochMillis = System.currentTimeMillis() - 1_000,
             acquisitionMethod = "Documented licensed acquisition",
             provenanceRecordReference = "provenance/forest-record.json"
         ),
@@ -221,13 +232,14 @@ class WolfAssetRegistryTest {
         budgetStatus = WolfAssetBudgetStatus.PENDING,
         review = WolfAssetReview(
             reviewer = "WOLF Asset Review",
-            reviewedAtEpochMillis = 1_800_000_000_000,
+            reviewedAtEpochMillis = System.currentTimeMillis() - 1_000,
             decisionReason = "All mandatory rights, visual, and technical evidence reviewed",
             reviewEvidenceReference = "reviews/forest-review.json",
             rightsPassed = true,
             visualPassed = true,
             technicalPassed = true,
             realismScore = 5,
+            budgetPendingAccepted = true,
             visualStyle = WolfAssetVisualStyle.CINEMATIC_REALISTIC,
             approvedStyleScopes = emptySet()
         )
