@@ -78,12 +78,7 @@ jobs:
           emulator-options: -no-window -gpu software -no-snapshot -noaudio -no-boot-anim -no-metrics
           disable-linux-hw-accel: false
           disable-animations: true
-          script: |
-            gradle --no-daemon -p engine-pocs/android \
-              :app:connectedGodotDebugAndroidTest \
-              :app:connectedFilamentDebugAndroidTest \
-              :app:connectedLibgdxDebugAndroidTest \
-              :app:connectedLottieDebugAndroidTest
+          script: gradle --no-daemon -p engine-pocs/android :app:connectedGodotDebugAndroidTest :app:connectedFilamentDebugAndroidTest :app:connectedLibgdxDebugAndroidTest :app:connectedLottieDebugAndroidTest
 
   korge-android-poc:
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'feature/stage-11-engine-compatibility-poc'
