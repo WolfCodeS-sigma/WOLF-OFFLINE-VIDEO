@@ -30,6 +30,8 @@ WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected
 
 Open the repository as an Android Gradle project in a compatible IDE, or use a Gradle installation to run the verification tasks.
 
+- `docs/WOLF_STAGE_11_ENGINE_COMPATIBILITY_POC.md` and `engine-pocs/`: isolated Stage 11 compatibility POCs for Godot, Filament, libGDX, KorGE and Lottie; SceneView is treated as a Filament facade, while Cocos remains blocked pending its native export toolchain. These POCs are not production dependencies.
+
 ## Verification policy
 
 The continuous-integration workflow builds the Debug APK, runs Android lint and JVM unit tests, then runs the Android 12 emulator regression suite for media export, audio, checkpoints, and the bundled asset registry. Testing on the physical Realme 7 remains a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
