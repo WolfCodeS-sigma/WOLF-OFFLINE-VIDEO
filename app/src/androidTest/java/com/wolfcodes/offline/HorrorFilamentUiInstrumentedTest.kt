@@ -20,10 +20,14 @@ class HorrorFilamentUiInstrumentedTest {
     fun debugUiExportsAndPublishesAReadableFiveSecondFilamentMp4() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
-        val activity = instrumentation.startActivitySync(
+        val launchedActivity = instrumentation.startActivitySync(
             Intent(context, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
+        val activity = launchedActivity as? MainActivity
+            ?: throw AssertionError(
+                "تم تشغيل نشاط غير متوقع بدلاً من MainActivity"
+            )
         var outputUri: Uri? = null
 
         try {
