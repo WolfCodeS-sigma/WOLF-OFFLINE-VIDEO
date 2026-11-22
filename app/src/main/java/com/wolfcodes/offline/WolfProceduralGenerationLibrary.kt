@@ -18,10 +18,10 @@ class WolfProceduralGenerationLibrary internal constructor(
         if (!isRequestWellFormed(request)) {
             return failed(WolfProceduralFailureCode.INVALID_REQUEST)
         }
-        val liveSnapshot = if (runtimeSnapshotProvider != null) {
-            runCatching { runtimeSnapshotProvider.invoke() }.getOrNull()
+        val liveSnapshot = runtimeSnapshotProvider?.let { provider ->
+            runCatching { provider.invoke() }.getOrNull()
                 ?: return failed(WolfProceduralFailureCode.RUNTIME_UNSAFE)
-        } else request.runtimeSnapshot
+        } ?: request.runtimeSnapshot
         val effectiveSnapshot = WolfGeneratorRuntimeSnapshot(
             availableMemoryBytes = minOf(request.runtimeSnapshot.availableMemoryBytes, liveSnapshot.availableMemoryBytes),
             freeStorageBytes = minOf(request.runtimeSnapshot.freeStorageBytes, liveSnapshot.freeStorageBytes),

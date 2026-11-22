@@ -216,6 +216,19 @@ class WolfProceduralGenerationLibraryTest {
     }
 
     @Test
+    fun liveRuntimeSnapshotProviderFailureFailsClosedInsteadOfUsingCallerSnapshot() {
+        val library = WolfProceduralGenerationLibrary(createRegistry(), testGenerators()) {
+            error("Runtime snapshot unavailable")
+        }
+
+        val result = library.generate(request())
+
+        assertFalse(result.succeeded)
+        assertEquals(WolfProceduralFailureCode.RUNTIME_UNSAFE, result.failureCode)
+        assertTrue(result.effects.isEmpty())
+    }
+
+    @Test
     fun generatorRejectsPayloadKindThatDoesNotMatchItsBinding() {
         val mismatched = testGenerators().mapIndexed { index, generator ->
             if (index == 0) object : WolfBuiltInProceduralGenerator {
