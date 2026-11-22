@@ -15,7 +15,7 @@
       "status": "ACQUIRED_CANDIDATE",
       "acquisition": {
         "batchId": "WOLF-ASSET-BATCH-001",
-        "acquiredAt": "2026-11-22T02:05:58+00:00",
+        "firstAcquiredAt": "2026-11-22T02:05:58+00:00",
         "resolution": "2k",
         "relativePath": "files/debris_basement_corridor_2k.hdr",
         "format": "image/vnd.radiance",
@@ -40,7 +40,7 @@
       "status": "ACQUIRED_CANDIDATE",
       "acquisition": {
         "batchId": "WOLF-ASSET-BATCH-001",
-        "acquiredAt": "2026-11-22T02:05:58+00:00",
+        "firstAcquiredAt": "2026-11-22T02:05:58+00:00",
         "resolution": "2k",
         "relativePath": "files/abandoned_hall_01_2k.hdr",
         "format": "image/vnd.radiance",

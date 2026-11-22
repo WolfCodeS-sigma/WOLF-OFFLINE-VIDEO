@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,18 @@ def _load_object(path: Path, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise LinkValidationError(f"{label} root must be an object")
     return value
+
+
+def _parse_timestamp(value: Any, label: str) -> datetime:
+    if not isinstance(value, str) or not value.strip():
+        raise LinkValidationError(f"{label} must be an ISO-8601 timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise LinkValidationError(f"{label} is not a valid ISO-8601 timestamp") from exc
+    if parsed.tzinfo is None:
+        raise LinkValidationError(f"{label} must include a timezone")
+    return parsed.astimezone(timezone.utc)
 
 
 def validate_acquisition_links(
@@ -96,8 +109,16 @@ def validate_acquisition_links(
             raise LinkValidationError(f"acquired lead lacks acquisition evidence: {source_url}")
         if acquisition.get("batchId") != batch_id:
             raise LinkValidationError(f"lead batchId mismatch: {source_url}")
-        if acquisition.get("acquiredAt") != source.get("acquiredAt"):
-            raise LinkValidationError(f"lead acquisition timestamp mismatch: {source_url}")
+        first_acquired_at = _parse_timestamp(
+            acquisition.get("firstAcquiredAt"), f"lead acquisition.firstAcquiredAt for {source_url}"
+        )
+        current_batch_acquired_at = _parse_timestamp(
+            source.get("acquiredAt"), f"manifest source.acquiredAt for {source_url}"
+        )
+        if first_acquired_at > current_batch_acquired_at:
+            raise LinkValidationError(
+                f"lead first-acquisition timestamp is later than the current batch acquisition: {source_url}"
+            )
         if acquisition.get("resolution") != "2k":
             raise LinkValidationError(f"lead resolution must be the acquired 2k variant: {source_url}")
         records = asset.get("files")

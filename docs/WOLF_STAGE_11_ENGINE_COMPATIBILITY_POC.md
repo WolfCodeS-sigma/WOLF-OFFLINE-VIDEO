@@ -94,7 +94,7 @@ The original Stage 08 agreement to collect and ingest real assets in batches dur
 
 The active intake track now consists of:
 - `asset-intake/acquisition-catalog.json`: exact source IDs, URLs, WOLF IDs, categories, and acquisition states.
-- `asset-intake/leads/source-leads.json`: both acquired candidates with acquisition timestamp, exact file path/format, size, provider MD5, and SHA-256.
+- `asset-intake/leads/source-leads.json`: both acquired candidates with first-acquisition timestamp, exact file path/format, size, provider MD5, and SHA-256.
 - `tools/asset-intake/acquire_polyhaven_batch.py`: developer/CI-only acquisition of the exact 2K Radiance HDR variants, with live license-page check, source metadata, provider MD5, byte-size verification, and WOLF SHA-256.
 - `tools/asset-intake/validate_acquisition_links.py`: fail-closed cross-check of the acquired batch manifest against the lead register and catalog, so a lead cannot remain DISCOVERED_NOT_ACQUIRED after appearing in a batch, nor claim ACQUIRED_CANDIDATE without matching files/hashes.
 - `tools/asset-intake/wolf_asset_intake.py`: generic file/provenance/licensing/review/budget gate.

@@ -55,7 +55,7 @@ def fixtures():
             "status": "ACQUIRED_CANDIDATE",
             "acquisition": {
                 "batchId": "WOLF-ASSET-BATCH-001",
-                "acquiredAt": source["acquiredAt"],
+                "firstAcquiredAt": source["acquiredAt"],
                 "resolution": file_record["resolution"],
                 **file_record,
             },
@@ -97,6 +97,19 @@ class AcquisitionLinkTests(unittest.TestCase):
     def test_rejects_candidate_lead_that_is_absent_from_batch(self):
         manifest, leads, catalog = fixtures()
         manifest["assets"].pop()
+        with self.assertRaises(LinkValidationError):
+            validate_acquisition_links(manifest, leads, catalog)
+
+    def test_reacquisition_later_than_first_acquisition_is_valid(self):
+        manifest, leads, catalog = fixtures()
+        for asset in manifest["assets"]:
+            asset["source"]["acquiredAt"] = "2026-11-22T21:21:35+00:00"
+        report = validate_acquisition_links(manifest, leads, catalog)
+        self.assertEqual(report["result"], "ACQUISITION_LINKS_VALIDATED")
+
+    def test_rejects_first_acquisition_timestamp_after_current_batch(self):
+        manifest, leads, catalog = fixtures()
+        leads["leads"][0]["acquisition"]["firstAcquiredAt"] = "2026-11-23T00:00:00+00:00"
         with self.assertRaises(LinkValidationError):
             validate_acquisition_links(manifest, leads, catalog)
 
