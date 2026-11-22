@@ -29,3 +29,19 @@ Official references:
 - Creator native project layout: https://docs.cocos.com/creator/3.8/manual/en/advanced-topics/native-secondary-development.html
 
 Do not add the editor binary to this repository or the WOLF APK. The editor is a separately licensed development tool. Keep the Cocos candidate blocked until a properly licensed Creator 3.8.7 build environment can export the project and the generated APK reaches a verified rendered frame. Only after that proof can Stage 12 assess its role; production integration remains a later, separate stage.
+
+
+## Technical disposition and preferred alternative
+
+The Cocos limitation is structural to the available hosted runner, not a missing Maven dependency. Creator 3.8 documents that command-line publishing still needs a GUI environment; the documented command-line examples target macOS and Windows, while the current WOLF CI runner is headless Ubuntu. Creator's native publishing workflow also uses its Build/Make steps to generate the native Android project before Android Studio/Gradle compilation. A headless native source build is not equivalent to a Creator export and cannot honestly close this compatibility gate.
+
+Official evidence:
+- Creator 3.8 command-line publishing, including the GUI requirement: https://docs.cocos.com/creator/3.8/manual/en/editor/publish/publish-in-command-line.html
+- Creator native Android publishing and Build/Make workflow: https://docs.cocos.com/creator/3.8/manual/en/editor/publish/native-options.html
+- Creator Android native development setup: https://docs.cocos.com/creator/3.8/manual/en/editor/publish/setup-native-development.html
+
+**Preferred strong alternative: Godot 4.7.2 stable.** Godot officially provides an Android library/AAR and supports embedding a Godot project inside an existing Android application through `GodotActivity` or `GodotFragment`. Godot's documentation explicitly supports placing the project under the host APK's `assets` directory. This fits WOLF better than relying on an unavailable Creator editor pipeline: Android/Kotlin continues to own the product shell, while Godot is a scene-runtime surface behind a controlled host contract.
+
+Known constraints remain: only one Godot engine instance is supported per Android process, and orientation/resize configuration events must be handled explicitly. See https://docs.godotengine.org/en/4.7/tutorials/platform/android/android_library.html.
+
+The isolated POC now includes a local Godot project and a host Activity. Its Android 12 instrumentation test checks the expected crimson scene pixel, not just API class linkage. Until that exact test passes, Godot remains a preferred fallback candidate, not a production-approved engine. If it passes, Godot can be considered in Stage 12 instead of Cocos; Stage 15 remains the separate controlled production integration stage. Cocos remains BLOCKED and is not added to the production APK.

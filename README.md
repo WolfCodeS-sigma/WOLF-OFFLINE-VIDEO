@@ -30,7 +30,7 @@ WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected
 
 Open the repository as an Android Gradle project in a compatible IDE, or use a Gradle installation to run the verification tasks.
 
-- `docs/WOLF_STAGE_11_ENGINE_COMPATIBILITY_POC.md` and `engine-pocs/`: isolated Stage 11 compatibility POCs for Godot, Filament, libGDX, KorGE and Lottie; SceneView is treated as a Filament facade, while Cocos remains blocked pending its native export toolchain. These POCs are not production dependencies.
+- `docs/WOLF_STAGE_11_ENGINE_COMPATIBILITY_POC.md` and `engine-pocs/`: isolated Stage 11 compatibility POCs. Godot is the preferred Cocos fallback candidate because it provides an Android library/host model; the isolated POC now tests a bundled project render. Cocos remains blocked pending a licensed Creator GUI export. No POC is a production dependency.
 
 ## Verification policy
 

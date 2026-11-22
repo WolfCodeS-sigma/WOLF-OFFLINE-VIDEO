@@ -14,6 +14,10 @@ android {
         versionCode = 1
         versionName = "1.0.0-poc"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Godot uses hidden project asset directories when present; retain them in this POC APK.
+        aaptOptions {
+            ignoreAssetsPattern = "!.svn:!.git:!.gitignore:!.ds_store:!*.scc:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"
+        }
     }
 
     flavorDimensions += "engine"

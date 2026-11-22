@@ -46,3 +46,31 @@ jobs:
           assert registry['assets'] == [], 'A source lead must never be promoted into production automatically'
           print(f"Verified {len(leads['leads'])} source lead(s) remain outside the production registry")
           PY
+
+  acquire-curated-cc0-assets:
+    name: Acquire and checksum real Poly Haven HDRI batch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out intake branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Acquire exact 2K Radiance HDR files and provenance
+        run: |
+          python3 tools/asset-intake/acquire_polyhaven_batch.py \
+            --output-root asset-intake/batches/WOLF-ASSET-BATCH-001
+
+      - name: Validate acquired files, source rights, size, and SHA-256
+        run: |
+          python3 -m unittest discover -s tools/asset-intake/tests -v
+          python3 tools/asset-intake/wolf_asset_intake.py \
+            --manifest asset-intake/batches/WOLF-ASSET-BATCH-001/manifest.json \
+            --repo-root .
+
+      - name: Upload acquired candidate files and provenance for review
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wolf-cinematic-asset-batch-001
+          path: asset-intake/batches/WOLF-ASSET-BATCH-001/
+          if-no-files-found: error
+          retention-days: 90

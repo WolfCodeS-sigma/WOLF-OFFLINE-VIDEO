@@ -105,3 +105,12 @@ This branch now establishes an executable intake track:
 Cocos Creator 3.8.7 remains **BLOCKED - NOT PASSED**. The earlier all-green Stage 11 POC run did not include a Cocos build/test job; it covered only the candidates explicitly listed in the run output. The Cocos documentation now records why a Creator editor plus GUI-capable native export environment is required and why a source-only test would be misleading.
 
 Keeping engine POCs under `engine-pocs/` and out of production Gradle settings is an intentional safety boundary, not a compatibility defect. Stage 11 establishes engine evidence; Stage 12 assigns approved roles; Stage 15 performs controlled production integration. Promoting an unproven Cocos package into production now would bypass those gates and risk the previously working build. No production Gradle file, production manifest, user-image flow, media pipeline, or project data was changed by this remediation.
+
+
+## 9. Real-asset acquisition and Cocos fallback proof update
+
+A developer/CI-only acquisition tool now retrieves the curated Poly Haven 2K Radiance HDR source files for `debris_basement_corridor` and `abandoned_hall_01`. It checks the current CC0 license page, obtains the exact source metadata, verifies provider MD5 and byte size, computes WOLF SHA-256, and writes a provenance-backed batch manifest. The intake validator then rechecks exact local file size/hash and emits the acquired batch as a CI artifact. Nothing is downloaded by the installed WOLF application.
+
+Both acquired records deliberately remain `CANDIDATE`: visual review, actual WOLF renderer import, measured resource budgets, and approved use scopes still need separate checks. The acquisition workflow does not modify the production Asset Registry.
+
+The Godot 4.7.2 POC now goes beyond API linkage: a local project is bundled under the Godot flavor's APK assets, hosted by an isolated `GodotActivity`, and an Android 12 instrumentation test checks the scene's expected rendered pixel. This is the selected technical alternative to the blocked Cocos Creator export path. Its status is determined only by the new CI result; it is not a production integration claim.

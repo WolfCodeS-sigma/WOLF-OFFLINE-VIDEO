@@ -4,7 +4,7 @@ These projects are intentionally outside the production Gradle settings and Andr
 
 ## Current candidate checks
 
-- **Godot 4.7.2 stable:** Android AAR dependency resolution and runtime loading of the documented Godot host API classes. This does not launch an exported Godot game project; a project-specific Android AAR is still required for that proof.
+- **Godot 4.7.2 stable:** Android AAR resolution, host API linkage, and an isolated `GodotActivity` hosting a real local Godot project in the flavor APK assets. CI checks its expected rendered frame on Android 12. This is an embedded-view POC, not production integration or a Realme 7 performance claim.
 - **Filament 1.75.0:** Android native engine initialization and creation/destruction of a renderer, scene, view, and camera resource graph. The POC uses the API-34-compatible stable release line; newer checked tags require compileSdk 37, beyond the selected AGP 8.13.2/compileSdk 36 toolchain. This does not establish final PBR image quality or performance on the Realme 7.
 - **libGDX 1.14.2:** Android backend Activity launch and an actual OpenGL frame on the API 31 emulator.
 - **KorGE 6.0.0:** isolated Android target packaging using the stable plugin line. Its settings plugin requires JDK 21, so only the isolated KorGE CI job uses JDK 21; WOLF production and the other engine POC app remain on JDK 17.
