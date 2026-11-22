@@ -11,10 +11,10 @@
       "license": "CC0",
       "licenseEvidenceUrl": "https://polyhaven.com/license",
       "targetDownload": "8K Tonemapped JPG",
-      "sourceReportedSizeBytes": 21036019,
       "status": "DISCOVERED_NOT_ACQUIRED",
       "blockingReason": "Binary acquisition, local file hash, visual review, exact runtime compatibility, and measured resource budget have not been completed.",
-      "notes": "A realistic abandoned basement corridor environment reference. This is a source lead only, not an acquired asset, not a WOLF library entry, and not approved for the production registry."
+      "notes": "A realistic abandoned basement corridor environment reference. This is a source lead only, not an acquired asset, not a WOLF library entry, and not approved for the production registry.",
+      "sourceReportedSizeLabel": "Approximately 21.04 MB as displayed by the source page; actual acquired byte size remains unmeasured."
     }
   ]
 }
