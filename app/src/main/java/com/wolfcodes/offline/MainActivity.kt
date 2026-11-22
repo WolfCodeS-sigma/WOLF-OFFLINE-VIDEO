@@ -239,8 +239,8 @@ class MainActivity : Activity() {
 
                 val savedUri = exporter.publishToMediaStore(outputFile)
                 runOnUiThread {
-                    filamentPrototypeResultUri = savedUri
                     filamentPrototypeReport = report
+                    filamentPrototypeResultUri = savedUri
                     filamentPrototypeRunning = false
                     progress.progress = 100
                     progress.visibility = View.GONE
