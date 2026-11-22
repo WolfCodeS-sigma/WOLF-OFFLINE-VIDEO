@@ -3,18 +3,53 @@
   "leads": [
     {
       "leadId": "PH-HDRI-DEBRIS-BASEMENT-CORRIDOR",
+      "sourceAssetId": "debris_basement_corridor",
       "name": "Debris Basement Corridor HDRI",
       "category": "ENVIRONMENT",
       "source": "Poly Haven",
       "sourceUrl": "https://polyhaven.com/a/debris_basement_corridor",
       "creator": "Elvis Posa",
-      "license": "CC0",
+      "license": "CC0 1.0 Universal",
       "licenseEvidenceUrl": "https://polyhaven.com/license",
-      "targetDownload": "8K Tonemapped JPG",
-      "status": "DISCOVERED_NOT_ACQUIRED",
-      "blockingReason": "Binary acquisition, local file hash, visual review, exact runtime compatibility, and measured resource budget have not been completed.",
-      "notes": "A realistic abandoned basement corridor environment reference. This is a source lead only, not an acquired asset, not a WOLF library entry, and not approved for the production registry.",
-      "sourceReportedSizeLabel": "Approximately 21.04 MB as displayed by the source page; actual acquired byte size remains unmeasured."
+      "targetDownload": "2K Radiance HDR",
+      "status": "ACQUIRED_CANDIDATE",
+      "acquisition": {
+        "batchId": "WOLF-ASSET-BATCH-001",
+        "acquiredAt": "2026-11-22T02:05:58+00:00",
+        "resolution": "2k",
+        "relativePath": "files/debris_basement_corridor_2k.hdr",
+        "format": "image/vnd.radiance",
+        "byteSize": 6402928,
+        "providerMd5": "815fbe853a286c294027425a375de393",
+        "sha256": "4636e5b2f308c44c550a236752ad171be7af16161789bb2ba07838c39cece78c"
+      },
+      "blockingReason": "WOLF visual review, import into the intended renderer, measured resource budget, and approved use scopes remain pending.",
+      "notes": "The 2K HDR binary has been acquired and checksummed in batch WOLF-ASSET-BATCH-001. It remains a candidate, is not in the production registry, and is not included in the WOLF APK."
+    },
+    {
+      "leadId": "PH-HDRI-ABANDONED-HALL-01",
+      "sourceAssetId": "abandoned_hall_01",
+      "name": "Abandoned Hall 01 HDRI",
+      "category": "ENVIRONMENT",
+      "source": "Poly Haven",
+      "sourceUrl": "https://polyhaven.com/a/abandoned_hall_01",
+      "creator": "Octavian Tudose",
+      "license": "CC0 1.0 Universal",
+      "licenseEvidenceUrl": "https://polyhaven.com/license",
+      "targetDownload": "2K Radiance HDR",
+      "status": "ACQUIRED_CANDIDATE",
+      "acquisition": {
+        "batchId": "WOLF-ASSET-BATCH-001",
+        "acquiredAt": "2026-11-22T02:05:58+00:00",
+        "resolution": "2k",
+        "relativePath": "files/abandoned_hall_01_2k.hdr",
+        "format": "image/vnd.radiance",
+        "byteSize": 6503079,
+        "providerMd5": "0ae542e79a5d5b0bf63816e704efade9",
+        "sha256": "3b3525a4caea1acb18200565acea70d3fd774bcc73b887b4eade0f65a54cd4e6"
+      },
+      "blockingReason": "WOLF visual review, import into the intended renderer, measured resource budget, and approved use scopes remain pending.",
+      "notes": "The 2K HDR binary has been acquired and checksummed in batch WOLF-ASSET-BATCH-001. It remains a candidate, is not in the production registry, and is not included in the WOLF APK."
     }
   ]
 }

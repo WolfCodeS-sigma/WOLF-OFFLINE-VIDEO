@@ -3,9 +3,9 @@
 **Stage:** 11  
 **Branch:** feature/stage-11-engine-compatibility-poc  
 **Base:** Stage 10 validated commit 1ef1b39b8aa2d9d5c8bd2d59fc01c0548b7b6b11  
-**Status:** CI-verified isolated POCs for Godot, Filament, libGDX, KorGE, and Lottie; SceneView artifact resolution verified; Cocos remains blocked pending a Creator-generated Android native project  
+**Status:** CI-verified isolated POCs for Godot (bundled sample-scene render), Filament, libGDX, KorGE, and Lottie; SceneView artifact resolution verified; Cocos remains blocked pending a Creator-generated Android native project  
 **Production integration:** none  
-**Asset intake:** no real cinematic assets were added by this stage
+**Asset intake:** two real Poly Haven CC0 environment HDRIs acquired as CANDIDATE assets; none is production-approved or bundled in the APK
 
 ## 1. Acceptance boundary
 
@@ -17,7 +17,7 @@ A POC result is limited to the exact test level stated below. Library resolution
 
 | Candidate | Pinned POC version | Isolated proof target | Result classification |
 |---|---:|---|---|
-| Godot Engine | 4.7.2 stable | Android AAR resolution + Godot host API class loading | API-linkage only; exported game runtime not yet proven |
+| Godot Engine | 4.7.2 stable | Android AAR/host API + bundled local sample project + expected rendered-pixel assertion on Android 12 | Embedded sample-scene frame proof passed; no production integration or Realme 7 claim |
 | Filament | 1.75.0 | Native Android engine + renderer/scene/view/camera resource lifecycle | Native runtime/resource-graph proof; no final surface-quality claim |
 | Cocos Creator / native engine | 3.8.7 | Creator-generated Android native project, then NDK build and emulator rendered-frame test | **BLOCKED - NOT PASSED** |
 | libGDX | 1.14.2 | Launch Android backend Activity and render at least one GLES frame | Android runtime frame proof |
@@ -29,7 +29,9 @@ A POC result is limited to the exact test level stated below. Library resolution
 
 ### Godot
 
-The Android AAR exposes embedding APIs such as GodotHost, GodotFragment, and GodotActivity. The test confirms those host classes are packaged and loadable. It does not claim that a WOLF Godot game has been exported or executed: official embedding requires a project-specific AAR generated from a Godot project and then included with its export dependencies. Only one Godot engine instance is supported per Android process; orientation/resizing must also be handled according to the embedding documentation.
+The pinned Android AAR exposes embedding APIs such as GodotHost, GodotFragment, and GodotActivity. The isolated POC packages a local Godot sample project under the flavor APK assets, launches it through GodotPocActivity, and captures the Android 12 emulator screen until the expected crimson proof region is detected. The test also verifies the host API classes. The complete Godot instrumentation task passed in Stage 11 CI.
+
+This proves the tested Godot sample project can be hosted and rendered inside the isolated Android APK. It does not prove that WOLF's production scenes, assets, camera contract, or renderer have been ported, nor does it prove Realme 7 performance. Only one Godot engine instance is supported per Android process; orientation/resizing must be handled according to the embedding documentation. Godot remains a candidate for the Stage 12 role decision, not an automatically approved production dependency.
 
 ### Filament and SceneView
 
@@ -49,8 +51,9 @@ libGDX is tested by launching its Android backend and observing a GLES frame. Th
 
 ## 4. Registry, licensing, and asset boundaries
 
-- No POC fixture is a cinematic asset.
-- No real asset was downloaded, added to the production manifest, or marked approved by this stage.
+- No synthetic POC fixture is a cinematic asset.
+- Two genuine Poly Haven 2K Radiance HDR files were acquired in the separate WOLF-ASSET-BATCH-001: Debris Basement Corridor and Abandoned Hall 01. Both are CANDIDATE only; their visual/runtime review, resource measurements, and approved scopes remain pending.
+- The acquired files are delivered as a CI artifact with provenance and hashes; they have not been copied into the production manifest or APK.
 - No third-party engine binary is copied into the production application.
 - Any future engine inclusion requires a separate version/license/dependency/ABI review and an explicit integration stage.
 - Any real cinematic asset must independently pass the Stage 08 Asset Registry & Quality Gate, rights evidence, realism review, file/hash checks, target-runtime compatibility, scope, dependencies, and measured resource limits.
@@ -72,33 +75,33 @@ CI outcomes must be recorded from the run on this exact branch head. No POC is a
 
 ## 6. CI execution evidence
 
-The Stage 11 POC implementation was first verified on commit
-`9e07568b032d9ff2350d81b20301d6f19146e9bb`. The subsequent commit
-`fd89bd89e9d16eb1d8713a52a51d232003163314` changed only this Stage 11 report;
-it did not change any POC source, Gradle configuration, production file, or
-engine test. The two workflow runs below therefore validate the same POC
-implementation and its documentation-only follow-up:
+The following runs all completed on the exact PR head `f3c61eb1e125713d0012014f8952d604b303c9e8`:
 
-- [Stage 11 isolated engine POC workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44970929424): **success**. All four Android 12 instrumentation tests completed (Godot, Filament, libGDX, and Lottie), the isolated POC variants built, SceneView 4.70.0 dependency resolution completed, and the separate KorGE 6.0.0 Android APK/AAB packaging job succeeded.
-- [Stage 01–08 regression workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44970929423): **success**. The Debug APK, Android lint, and JVM unit-test tasks passed; the Android 12 emulator regression suite completed all 13 instrumentation tests with zero skipped and zero failed. The emulator job needed a retry after its first attempt could not resolve external Gradle classpath artifacts; the retry passed.
-- The emulator logs contained ADB, console, EGL, and graphics warnings. They did not prevent the successful POC or regression test runs.
+- [Stage 11 isolated engine POC workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44974469590): **success**. The Android 12 tasks for Godot, Filament, libGDX, and Lottie all completed successfully; Godot's test includes both host API linkage and the local sample-scene rendered-pixel assertion. SceneView 4.70.0 dependency resolution and isolated Android POC builds passed. The separate KorGE 6.0.0 Android APK/AAB packaging job also succeeded.
+- [Stage 01–08 regression audit](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44974469628), attempt 2: **success**. Debug APK, Android lint, and JVM unit tests passed. The Android 12 emulator completed all 13 instrumentation tests with zero skipped and zero failed. Attempt 1 failed before test execution while Gradle could not resolve multiple external Maven classpath artifacts; retrying the same job on the same commit passed.
+- [WOLF cinematic asset intake](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44974469575): **success**. Two files were acquired (12,906,007 bytes total), provider MD5 and byte sizes were verified, WOLF SHA-256 values were calculated, and all 11 intake/acquisition unit tests passed. The resulting batch artifact contains the two HDR files and source provenance.
 
-These results validate only the POC proof targets stated in the candidate matrix. They do not prove Godot project-specific game embedding, Cocos compatibility, production renderer integration, visual quality, or physical-device performance. Cocos remains **BLOCKED - NOT PASSED** until a Creator-generated native Android project is built and shown rendering on an emulator.
+The emulator logs include ADB/console, EGL, ColorBuffer, and graphics warnings. They did not prevent the successful test tasks; this does not mean the emulator logs were warning-free.
 
-No real cinematic assets were acquired or ingested by Stage 11. The production asset manifest remains empty; all local motion/scene samples are synthetic test fixtures and must not be treated as cinematic library assets.
+These results prove only the stated isolated POC levels and Stage 01–08 regression coverage. They do not prove production renderer integration, final visual quality, or physical-device performance. Cocos remains **BLOCKED - NOT PASSED** because a Creator-generated Android native project and rendered-frame test are still absent.
+
+The acquired HDRIs remain candidates, not production assets. The production registry remains empty and unchanged. All sample scenes and Lottie fixtures remain synthetic POC inputs, not cinematic library content.
 
 
 ## 7. Parallel asset-intake remediation and current evidence
 
-The earlier Stage 08 agreement to collect and ingest real assets in batches during Stages 09–20 had no executable queue, batch contract, validator, or CI check. That was the root cause of the workstream remaining only a documented intention.
+The original Stage 08 agreement to collect and ingest real assets in batches during Stages 09–20 had no executable acquisition queue or cross-file consistency check. The first remediation introduced the acquisition tool and CI artifact, but the source-lead register still said that an already acquired source had not been acquired. That bookkeeping inconsistency is corrected in this revision.
 
-This branch now establishes an executable intake track:
-- `asset-intake/parallel-intake-plan.json` records evidence checkpoints for every stage from 09 through 20.
-- `asset-intake/batches/000-baseline/manifest.json` is the first machine-validated batch baseline.
-- `tools/asset-intake/wolf_asset_intake.py` and its eight unit tests check provenance fields, exact local file bytes, hashes, path safety, rights assertions, realism review, exact tested runtime/version, scopes, and measured PASS budgets.
-- `.github/workflows/wolf-asset-intake.yml` runs the validator tests and asserts source leads cannot silently enter the production registry.
+The active intake track now consists of:
+- `asset-intake/acquisition-catalog.json`: exact source IDs, URLs, WOLF IDs, categories, and acquisition states.
+- `asset-intake/leads/source-leads.json`: both acquired candidates with acquisition timestamp, exact file path/format, size, provider MD5, and SHA-256.
+- `tools/asset-intake/acquire_polyhaven_batch.py`: developer/CI-only acquisition of the exact 2K Radiance HDR variants, with live license-page check, source metadata, provider MD5, byte-size verification, and WOLF SHA-256.
+- `tools/asset-intake/validate_acquisition_links.py`: fail-closed cross-check of the acquired batch manifest against the lead register and catalog, so a lead cannot remain DISCOVERED_NOT_ACQUIRED after appearing in a batch, nor claim ACQUIRED_CANDIDATE without matching files/hashes.
+- `tools/asset-intake/wolf_asset_intake.py`: generic file/provenance/licensing/review/budget gate.
+- `.github/workflows/wolf-asset-intake.yml`: unit tests, lead/catalog consistency checks, acquired-file validation, and the candidate-batch artifact upload.
 
-**Actual collection status remains deliberately honest:** Batch 000 has zero files. The source-lead register contains one Poly Haven abandoned-basement-corridor HDRI lead (CC0 source terms) but its binary has not been acquired, hashed, visually reviewed, or tested on a WOLF runtime. It is not a library asset and is not in the APK. No Stage 11 result can therefore claim real cinematic asset intake completion.
+**Actual collection status:** WOLF-ASSET-BATCH-001 contains two acquired CC0 environment HDRI candidates. Their binaries and source provenance are available in the GitHub Actions artifact with 90-day retention; they are not committed as production source files and are not inside the APK. Batch 000 remains the intentionally empty baseline. The two acquired candidates still need WOLF renderer-import tests, measured resource budgets, explicit use scopes, and human approval. This is the start of real collection, not completion of the cinematic library or the 100% coverage requirement.
+
 
 ## 8. Cocos and production integration boundary
 
@@ -113,4 +116,4 @@ A developer/CI-only acquisition tool now retrieves the curated Poly Haven 2K Rad
 
 Both acquired records deliberately remain `CANDIDATE`: visual review, actual WOLF renderer import, measured resource budgets, and approved use scopes still need separate checks. The acquisition workflow does not modify the production Asset Registry.
 
-The Godot 4.7.2 POC now goes beyond API linkage: a local project is bundled under the Godot flavor's APK assets, hosted by an isolated `GodotActivity`, and an Android 12 instrumentation test checks the scene's expected rendered pixel. This is the selected technical alternative to the blocked Cocos Creator export path. Its status is determined only by the new CI result; it is not a production integration claim.
+The Godot 4.7.2 POC has passed the sample-scene rendered-pixel assertion on Android 12, in addition to host API linkage. It is therefore the preferred evidence-backed Cocos fallback candidate for the Stage 12 role assessment. This does not select or integrate it into production; that requires the separate Stage 12 decision and later Stage 15 integration gate.

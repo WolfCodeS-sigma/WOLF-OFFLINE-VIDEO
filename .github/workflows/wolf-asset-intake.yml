@@ -42,9 +42,21 @@ jobs:
           from pathlib import Path
           leads = json.loads(Path('asset-intake/leads/source-leads.json').read_text())
           registry = json.loads(Path('app/src/main/assets/wolf_asset_registry.json').read_text())
-          assert all(x['status'] == 'DISCOVERED_NOT_ACQUIRED' for x in leads['leads'])
-          assert registry['assets'] == [], 'A source lead must never be promoted into production automatically'
-          print(f"Verified {len(leads['leads'])} source lead(s) remain outside the production registry")
+          catalog = json.loads(Path('asset-intake/acquisition-catalog.json').read_text())
+          catalog_by_url = {x['sourceUrl']: x for x in catalog['assets']}
+          allowed = {'DISCOVERED_NOT_ACQUIRED', 'ACQUIRED_CANDIDATE'}
+          assert all(x['status'] in allowed for x in leads['leads'])
+          for lead in leads['leads']:
+              if lead['status'] == 'ACQUIRED_CANDIDATE':
+                  assert lead.get('acquisition', {}).get('batchId') == catalog['batchId']
+                  item = catalog_by_url.get(lead['sourceUrl'])
+                  assert item is not None and item['status'] == 'ACQUIRED_CANDIDATE'
+                  assert item['assetId'] == lead['sourceAssetId']
+              else:
+                  assert lead['sourceUrl'] not in catalog_by_url
+          assert registry['assets'] == [], 'Acquired candidates must never be promoted automatically'
+          acquired = sum(x['status'] == 'ACQUIRED_CANDIDATE' for x in leads['leads'])
+          print(f"Verified {acquired} acquired candidate(s); production registry remains empty")
           PY
 
   acquire-curated-cc0-assets:
@@ -59,6 +71,13 @@ jobs:
         run: |
           python3 tools/asset-intake/acquire_polyhaven_batch.py \
             --output-root asset-intake/batches/WOLF-ASSET-BATCH-001
+
+      - name: Cross-check acquisition manifest, source leads, and catalog
+        run: |
+          python3 tools/asset-intake/validate_acquisition_links.py \
+            --manifest asset-intake/batches/WOLF-ASSET-BATCH-001/manifest.json \
+            --lead-register asset-intake/leads/source-leads.json \
+            --catalog asset-intake/acquisition-catalog.json
 
       - name: Validate acquired files, source rights, size, and SHA-256
         run: |
