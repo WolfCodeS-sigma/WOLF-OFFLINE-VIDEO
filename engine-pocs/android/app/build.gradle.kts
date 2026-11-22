@@ -39,6 +39,17 @@ android {
 }
 
 val sceneViewPoc by configurations.creating
+val libgdxNativeArtifacts by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
+val libgdxNativeAbis = mapOf(
+    "arm64-v8a" to "natives-arm64-v8a",
+    "armeabi-v7a" to "natives-armeabi-v7a",
+    "x86" to "natives-x86",
+    "x86_64" to "natives-x86_64"
+)
 
 dependencies {
     add("godotImplementation", "org.godotengine:godot:4.7.2.stable")
@@ -51,6 +62,9 @@ dependencies {
 
     add("libgdxImplementation", "com.badlogicgames.gdx:gdx:1.14.2")
     add("libgdxImplementation", "com.badlogicgames.gdx:gdx-backend-android:1.14.2")
+    libgdxNativeAbis.values.forEach { classifier ->
+        add("libgdxNativeArtifacts", "com.badlogicgames.gdx:gdx-platform:1.14.2:$classifier")
+    }
 
     add("lottieImplementation", "com.airbnb.android:lottie:6.7.1")
 
@@ -62,4 +76,30 @@ dependencies {
     androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
+}
+
+// libGDX's Android backend loads libgdx.so at runtime. The Maven native
+// classifiers are ZIP/JAR archives, so unpack each ABI into this POC flavor's
+// generated jniLibs tree before AGP merges native libraries into its APK.
+android.sourceSets.getByName("libgdx").jniLibs.srcDir(
+    layout.buildDirectory.dir("generated/libgdx/jniLibs")
+)
+
+val extractLibgdxNativeTasks = libgdxNativeAbis.map { (abi, classifier) ->
+    tasks.register<Copy>("extractLibgdxNative${abi.replace("-", "").replace("_", "")}") {
+        from(providers.provider {
+            zipTree(libgdxNativeArtifacts.files.single { it.name.endsWith("$classifier.jar") })
+        }) {
+            include("*.so")
+        }
+        into(layout.buildDirectory.dir("generated/libgdx/jniLibs/$abi"))
+    }
+}
+
+tasks.configureEach {
+    if (name.startsWith("mergeLibgdx") &&
+        (name.endsWith("NativeLibs") || name.endsWith("JniLibFolders"))
+    ) {
+        dependsOn(extractLibgdxNativeTasks)
+    }
 }

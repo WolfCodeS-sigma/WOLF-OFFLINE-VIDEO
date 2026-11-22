@@ -3,7 +3,7 @@
 **Stage:** 11  
 **Branch:** feature/stage-11-engine-compatibility-poc  
 **Base:** Stage 10 validated commit 1ef1b39b8aa2d9d5c8bd2d59fc01c0548b7b6b11  
-**Status:** Isolated POC suite prepared; automated outcomes pending CI  
+**Status:** Isolated POC suite under CI validation; Android runtime checks are being refined from observed native-library requirements  
 **Production integration:** none  
 **Asset intake:** no real cinematic assets were added by this stage
 
@@ -45,7 +45,7 @@ The POC cannot be marked compatible until a Creator-generated Android native pro
 
 ### libGDX, KorGE, and Lottie
 
-libGDX is tested by launching its Android backend and observing a GLES frame. KorGE is tested with its separate stable Android target packaging task, without changing WOLF's root Gradle settings. KorGE 6.0.0's settings plugin requires a JDK 21 runtime; only the KorGE POC packaging job uses JDK 21, while the WOLF production project and the other Android POC variants remain on JDK 17. Lottie is tested using a locally bundled synthetic JSON fixture; the test neither downloads an animation nor promotes the fixture into the cinematic asset library.
+libGDX is tested by launching its Android backend and observing a GLES frame. The Android POC explicitly unpacks the official 1.14.2 gdx-platform ABI native classifier jars into the isolated libGDX flavor's generated jniLibs tree; without these native libraries the backend fails at startup with `libgdx.so` missing. KorGE is tested with its separate stable Android target packaging task, without changing WOLF's root Gradle settings. KorGE 6.0.0's settings plugin requires a JDK 21 runtime; only the KorGE POC packaging job uses JDK 21, while the WOLF production project and the other Android POC variants remain on JDK 17. Lottie is tested using a locally bundled synthetic JSON fixture; the test neither downloads an animation nor promotes the fixture into the cinematic asset library.
 
 ## 4. Registry, licensing, and asset boundaries
 
