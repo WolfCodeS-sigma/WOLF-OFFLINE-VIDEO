@@ -86,3 +86,22 @@ implementation and its documentation-only follow-up:
 These results validate only the POC proof targets stated in the candidate matrix. They do not prove Godot project-specific game embedding, Cocos compatibility, production renderer integration, visual quality, or physical-device performance. Cocos remains **BLOCKED - NOT PASSED** until a Creator-generated native Android project is built and shown rendering on an emulator.
 
 No real cinematic assets were acquired or ingested by Stage 11. The production asset manifest remains empty; all local motion/scene samples are synthetic test fixtures and must not be treated as cinematic library assets.
+
+
+## 7. Parallel asset-intake remediation and current evidence
+
+The earlier Stage 08 agreement to collect and ingest real assets in batches during Stages 09–20 had no executable queue, batch contract, validator, or CI check. That was the root cause of the workstream remaining only a documented intention.
+
+This branch now establishes an executable intake track:
+- `asset-intake/parallel-intake-plan.json` records evidence checkpoints for every stage from 09 through 20.
+- `asset-intake/batches/000-baseline/manifest.json` is the first machine-validated batch baseline.
+- `tools/asset-intake/wolf_asset_intake.py` and its eight unit tests check provenance fields, exact local file bytes, hashes, path safety, rights assertions, realism review, exact tested runtime/version, scopes, and measured PASS budgets.
+- `.github/workflows/wolf-asset-intake.yml` runs the validator tests and asserts source leads cannot silently enter the production registry.
+
+**Actual collection status remains deliberately honest:** Batch 000 has zero files. The source-lead register contains one Poly Haven abandoned-basement-corridor HDRI lead (CC0 source terms) but its binary has not been acquired, hashed, visually reviewed, or tested on a WOLF runtime. It is not a library asset and is not in the APK. No Stage 11 result can therefore claim real cinematic asset intake completion.
+
+## 8. Cocos and production integration boundary
+
+Cocos Creator 3.8.7 remains **BLOCKED - NOT PASSED**. The earlier all-green Stage 11 POC run did not include a Cocos build/test job; it covered only the candidates explicitly listed in the run output. The Cocos documentation now records why a Creator editor plus GUI-capable native export environment is required and why a source-only test would be misleading.
+
+Keeping engine POCs under `engine-pocs/` and out of production Gradle settings is an intentional safety boundary, not a compatibility defect. Stage 11 establishes engine evidence; Stage 12 assigns approved roles; Stage 15 performs controlled production integration. Promoting an unproven Cocos package into production now would bypass those gates and risk the previously working build. No production Gradle file, production manifest, user-image flow, media pipeline, or project data was changed by this remediation.

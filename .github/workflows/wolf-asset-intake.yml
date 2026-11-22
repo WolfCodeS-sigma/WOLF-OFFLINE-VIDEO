@@ -1,0 +1,48 @@
+name: WOLF cinematic asset intake validation
+
+on:
+  pull_request:
+    branches:
+      - docs/stage-07-cinematic-asset-inventory
+    paths:
+      - "asset-intake/**"
+      - "tools/asset-intake/**"
+      - ".github/workflows/wolf-asset-intake.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wolf-asset-intake-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-intake-batches:
+    name: Validate intake manifests, provenance, and file integrity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run fail-closed intake validator tests
+        run: |
+          python3 --version
+          python3 -m unittest discover -s tools/asset-intake/tests -v
+
+      - name: Validate initial batch and write audit report
+        run: |
+          python3 tools/asset-intake/wolf_asset_intake.py --manifest asset-intake/batches/000-baseline/manifest.json --repo-root . --report "$RUNNER_TEMP/wolf-asset-intake-report.json"
+
+      - name: Confirm source leads are not production registry assets
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          leads = json.loads(Path('asset-intake/leads/source-leads.json').read_text())
+          registry = json.loads(Path('app/src/main/assets/wolf_asset_registry.json').read_text())
+          assert all(x['status'] == 'DISCOVERED_NOT_ACQUIRED' for x in leads['leads'])
+          assert registry['assets'] == [], 'A source lead must never be promoted into production automatically'
+          print(f"Verified {len(leads['leads'])} source lead(s) remain outside the production registry")
+          PY

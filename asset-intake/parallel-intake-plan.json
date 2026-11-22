@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "planId": "WOLF-CINEMATIC-ASSET-INTAKE-09-20",
+  "policyId": "WOLF-ASSET-POLICY-001",
+  "registryId": "WOLF-ASSET-REGISTRY-001",
+  "operatingMode": "reviewed-batches-parallel-to-stages-09-through-20",
+  "runtimeRule": "offline-only; only separately approved and packaged files may enter app/src/main/assets",
+  "checkpoints": [
+    {"stage": 9, "focus": "environment and PBR source batches", "requiredEvidence": ["provenance", "license", "file hashes", "realism review"]},
+    {"stage": 10, "focus": "asset-generator cooperation fixtures and source assets", "requiredEvidence": ["generator dependency closure", "asset immutability", "deterministic fixture tests"]},
+    {"stage": 11, "focus": "engine-specific compatibility candidates", "requiredEvidence": ["exact engine/version", "actual import or render proof", "measured resources"]},
+    {"stage": 12, "focus": "asset compatibility mapped to approved engine roles", "requiredEvidence": ["approved target runtime matrix", "unsupported-use exclusions"]},
+    {"stage": 13, "focus": "asset metadata and Scene Contract bindings", "requiredEvidence": ["stable IDs", "scene-use scopes", "dependency graph"]},
+    {"stage": 14, "focus": "Motion Hub asset resolution", "requiredEvidence": ["offline lookup", "integrity check", "safe missing-asset behavior"]},
+    {"stage": 15, "focus": "approved assets integrated with selected runtime adapters", "requiredEvidence": ["target build", "render/import tests", "resource measurements"]},
+    {"stage": 16, "focus": "user-image support kept project-scoped", "requiredEvidence": ["no silent library promotion", "source image preserved"]},
+    {"stage": 17, "focus": "logo, watermark, and licensed font batch", "requiredEvidence": ["identity approval", "font/logo rights", "render tests"]},
+    {"stage": 18, "focus": "licensed audio and ambience batches", "requiredEvidence": ["audio rights", "format/codec", "offline playback and mix tests"]},
+    {"stage": 19, "focus": "packaging, compression, and asset gap closure", "requiredEvidence": ["APK contents", "hash parity", "resource budgets", "notice files"]},
+    {"stage": 20, "focus": "three reference-story coverage and final gap closure", "requiredEvidence": ["story-to-asset coverage", "no comic substitutions", "all mandatory gaps closed"]}
+  ],
+  "batchRules": [
+    "Every batch receives a stable WOLF-ASSET-BATCH-NNN ID and a manifest.",
+    "Candidates are stored under asset-intake, never in production assets.",
+    "Only APPROVED records that pass all mechanical checks may be handed to a separately reviewed production-registry change.",
+    "Source leads do not count as acquired assets; acquired files do not count as approved assets.",
+    "An empty or blocked category remains an explicit gap and cannot be reported complete."
+  ]
+}

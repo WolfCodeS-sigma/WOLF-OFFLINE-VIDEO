@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "leads": [
+    {
+      "leadId": "PH-HDRI-DEBRIS-BASEMENT-CORRIDOR",
+      "name": "Debris Basement Corridor HDRI",
+      "category": "ENVIRONMENT",
+      "source": "Poly Haven",
+      "sourceUrl": "https://polyhaven.com/a/debris_basement_corridor",
+      "creator": "Elvis Posa",
+      "license": "CC0",
+      "licenseEvidenceUrl": "https://polyhaven.com/license",
+      "targetDownload": "8K Tonemapped JPG",
+      "sourceReportedSizeBytes": 21036019,
+      "status": "DISCOVERED_NOT_ACQUIRED",
+      "blockingReason": "Binary acquisition, local file hash, visual review, exact runtime compatibility, and measured resource budget have not been completed.",
+      "notes": "A realistic abandoned basement corridor environment reference. This is a source lead only, not an acquired asset, not a WOLF library entry, and not approved for the production registry."
+    }
+  ]
+}

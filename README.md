@@ -43,3 +43,5 @@ Project records, narration recordings, rendering, and exported media are stored 
 ## Output
 
 Rendered videos are exported to the device's Movies/WOLF CODE S media collection when the platform media provider is available.
+
+- `asset-intake/` and `tools/asset-intake/`: executable, fail-closed reviewed-batch intake for the offline cinematic library; source leads and the initial empty baseline are explicitly not acquired or production-approved. See `asset-intake/README.md`.
