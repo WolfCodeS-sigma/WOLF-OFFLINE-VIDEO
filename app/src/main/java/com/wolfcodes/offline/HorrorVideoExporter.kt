@@ -287,7 +287,7 @@ class HorrorVideoExporter(private val context: Context) {
         var lightEntity = 0
 
         try {
-            val activeEngine = Engine.create()
+            val activeEngine = Engine.create(Engine.Backend.OPENGL)
             engine = activeEngine
             val activeRenderer = activeEngine.createRenderer()
             renderer = activeRenderer
@@ -401,7 +401,9 @@ class HorrorVideoExporter(private val context: Context) {
 
                 val actualFrameStart = System.nanoTime()
                 val presentationTime = presentationOrigin + frameIndex * frameIntervalNanos
-                activeRenderer.beginFrame(activeSwapChain, actualFrameStart)
+                check(activeRenderer.beginFrame(activeSwapChain, actualFrameStart)) {
+                    "تعذر بدء إطار Filament رقم " + (frameIndex + 1)
+                }
                 activeRenderer.setPresentationTime(presentationTime)
                 activeRenderer.setDesiredPresentationTime(presentationTime)
                 activeRenderer.render(activeView)
