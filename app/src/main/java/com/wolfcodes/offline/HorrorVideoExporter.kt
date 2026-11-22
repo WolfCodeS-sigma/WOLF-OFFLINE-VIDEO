@@ -381,21 +381,19 @@ class HorrorVideoExporter(private val context: Context) {
             val frameCount = durationSeconds * fps
             val frameIntervalNanos = 1_000_000_000L / fps.toLong()
             val presentationOrigin = System.nanoTime()
-            val requiresInputPacing = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+            // Keep Surface input paced to the encoder's configured frame rate on every API level.
             var nextFrameStartNanos = presentationOrigin
 
             swapChain = activeEngine.createSwapChain(surface)
             val activeSwapChain = requireNotNull(swapChain)
 
             for (frameIndex in 0 until frameCount) {
-                if (requiresInputPacing) {
-                    val remainingNanos = nextFrameStartNanos - System.nanoTime()
-                    if (remainingNanos > 0L) {
-                        Thread.sleep(
-                            remainingNanos / 1_000_000L,
-                            (remainingNanos % 1_000_000L).toInt()
-                        )
-                    }
+                val remainingNanos = nextFrameStartNanos - System.nanoTime()
+                if (remainingNanos > 0L) {
+                    Thread.sleep(
+                        remainingNanos / 1_000_000L,
+                        (remainingNanos % 1_000_000L).toInt()
+                    )
                 }
 
                 val progress = if (frameCount <= 1) {
@@ -428,14 +426,12 @@ class HorrorVideoExporter(private val context: Context) {
                 activeEngine.flushAndWait()
                 onFrame(frameIndex + 1, frameCount)
 
-                if (requiresInputPacing) {
-                    val earliestNextFrame = actualFrameStart + frameIntervalNanos
-                    val frameCompletedAt = System.nanoTime()
-                    nextFrameStartNanos = if (frameCompletedAt > earliestNextFrame) {
-                        frameCompletedAt
-                    } else {
-                        earliestNextFrame
-                    }
+                val earliestNextFrame = actualFrameStart + frameIntervalNanos
+                val frameCompletedAt = System.nanoTime()
+                nextFrameStartNanos = if (frameCompletedAt > earliestNextFrame) {
+                    frameCompletedAt
+                } else {
+                    earliestNextFrame
                 }
             }
         } finally {
