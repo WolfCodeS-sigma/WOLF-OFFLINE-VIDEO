@@ -73,13 +73,11 @@ CI outcomes must be recorded from the run on this exact branch head. No POC is a
 ## 6. CI execution evidence
 
 The Stage 11 POC implementation was first verified on commit
-`9e07568b032d9ff2350d81b20301d6f19146e9bb`. A follow-up documentation-only
-commit produced the current PR head
-`fd89bd89e9d16eb1d8713a52a51d232003163314`; the only file changed between
-those two commits is this Stage 11 report.
-
-Both workflows were rerun on the **current PR head**
-`fd89bd89e9d16eb1d8713a52a51d232003163314`:
+`9e07568b032d9ff2350d81b20301d6f19146e9bb`. The subsequent commit
+`fd89bd89e9d16eb1d8713a52a51d232003163314` changed only this Stage 11 report;
+it did not change any POC source, Gradle configuration, production file, or
+engine test. The two workflow runs below therefore validate the same POC
+implementation and its documentation-only follow-up:
 
 - [Stage 11 isolated engine POC workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44970929424): **success**. All four Android 12 instrumentation tests completed (Godot, Filament, libGDX, and Lottie), the isolated POC variants built, SceneView 4.70.0 dependency resolution completed, and the separate KorGE 6.0.0 Android APK/AAB packaging job succeeded.
 - [Stage 01–08 regression workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44970929423): **success**. The Debug APK, Android lint, and JVM unit-test tasks passed; the Android 12 emulator regression suite completed all 13 instrumentation tests with zero skipped and zero failed. The emulator job needed a retry after its first attempt could not resolve external Gradle classpath artifacts; the retry passed.
