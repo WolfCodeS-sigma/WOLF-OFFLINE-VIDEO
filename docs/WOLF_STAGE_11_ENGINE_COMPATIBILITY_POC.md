@@ -3,7 +3,7 @@
 **Stage:** 11  
 **Branch:** feature/stage-11-engine-compatibility-poc  
 **Base:** Stage 10 validated commit 1ef1b39b8aa2d9d5c8bd2d59fc01c0548b7b6b11  
-**Status:** Isolated POC suite under CI validation; Android runtime checks are being refined from observed native-library requirements  
+**Status:** CI-verified isolated POCs for Godot, Filament, libGDX, KorGE, and Lottie; SceneView artifact resolution verified; Cocos remains blocked pending a Creator-generated Android native project  
 **Production integration:** none  
 **Asset intake:** no real cinematic assets were added by this stage
 
@@ -68,3 +68,18 @@ The separate KorGE 6.0.0 Android executable is packaged using the task names exp
 `assembleDebug` creates the debug APK; `packageAndroidDebug` is the KorGE 6.0.0 task that depends on Android's `bundleDebug` and creates the debug AAB. The older `bundleAndroid` task name in the general KorGE Android page is not registered by the pinned 6.0.0 plugin.
 
 CI outcomes must be recorded from the run on this exact branch head. No POC is approved for production merely because its isolated build/test passes.
+
+
+## 7. CI execution evidence
+
+The following results were completed on the exact Stage 11 head
+`9e07568b032d9ff2350d81b20301d6f19146e9bb`:
+
+- [Stage 11 isolated engine POC workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44970270442): **success**.
+- The isolated Android POC variants built successfully and SceneView 4.70.0 dependency resolution completed.
+- Android 12 instrumentation ran one test each for Godot, Filament, libGDX, and Lottie; all four test tasks finished and the Gradle invocation ended with `BUILD SUCCESSFUL`.
+- The separate KorGE 6.0.0 job successfully produced its isolated Android debug APK and AAB using JDK 21 only in that job.
+- [Stage 01–08 regression workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44970270658): **success**. Debug APK, lint, and JVM unit-test tasks passed; the Android 12 regression suite completed all 13 instrumentation tests with zero skipped and zero failed.
+- The emulator emitted non-blocking ADB/console/graphics startup warnings. They did not prevent the four POC tests or the 13 regression tests from completing successfully.
+
+These results validate only the POC proof targets in the candidate matrix. They do not prove Godot project-specific game embedding, Cocos compatibility, production renderer integration, visual quality, or physical-device performance. Cocos remains **BLOCKED - NOT PASSED** until a Creator-generated native Android project is supplied and rendered on an emulator.
