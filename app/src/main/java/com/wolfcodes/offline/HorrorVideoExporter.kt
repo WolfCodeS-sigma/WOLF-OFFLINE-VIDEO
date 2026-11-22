@@ -190,6 +190,19 @@ class HorrorVideoExporter(private val context: Context) {
             setInteger(MediaFormat.KEY_BIT_RATE, 6_000_000)
             setInteger(MediaFormat.KEY_FRAME_RATE, fps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+
+            // Preserve every submitted frame on API 29+ surface-input encoders.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                setLong(
+                    MediaFormat.KEY_MAX_PTS_GAP_TO_ENCODER,
+                    -(1_000_000L / fps.toLong())
+                )
+            }
+
+            // API 31+ surfaces can otherwise discard unconsumed buffers under load.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                setInteger(MediaFormat.KEY_ALLOW_FRAME_DROP, 0)
+            }
         }
 
         val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
@@ -376,11 +389,23 @@ class HorrorVideoExporter(private val context: Context) {
             val frameCount = durationSeconds * fps
             val frameIntervalNanos = 1_000_000_000L / fps.toLong()
             val presentationOrigin = System.nanoTime()
+            val requiresInputPacing = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+            var nextFrameStartNanos = presentationOrigin
 
             swapChain = activeEngine.createSwapChain(surface)
             val activeSwapChain = requireNotNull(swapChain)
 
             for (frameIndex in 0 until frameCount) {
+                if (requiresInputPacing) {
+                    val remainingNanos = nextFrameStartNanos - System.nanoTime()
+                    if (remainingNanos > 0L) {
+                        Thread.sleep(
+                            remainingNanos / 1_000_000L,
+                            (remainingNanos % 1_000_000L).toInt()
+                        )
+                    }
+                }
+
                 val progress = if (frameCount <= 1) {
                     1.0
                 } else {
@@ -410,6 +435,16 @@ class HorrorVideoExporter(private val context: Context) {
                 activeRenderer.endFrame()
                 activeEngine.flushAndWait()
                 onFrame(frameIndex + 1, frameCount)
+
+                if (requiresInputPacing) {
+                    val earliestNextFrame = actualFrameStart + frameIntervalNanos
+                    val frameCompletedAt = System.nanoTime()
+                    nextFrameStartNanos = if (frameCompletedAt > earliestNextFrame) {
+                        frameCompletedAt
+                    } else {
+                        earliestNextFrame
+                    }
+                }
             }
         } finally {
             val activeEngine = engine
