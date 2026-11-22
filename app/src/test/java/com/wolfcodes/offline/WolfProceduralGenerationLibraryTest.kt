@@ -193,11 +193,11 @@ class WolfProceduralGenerationLibraryTest {
     @Test
     fun generatorDependenciesArePinnedToExactUpstreamVersions() {
         val registry = createRegistry()
-        assertEquals(mapOf(WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to "1.0.0"),
+        assertEquals(mapOf(WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to WolfBuiltInGeneratorBindings.ATMOSPHERE.generatorVersion),
             registry.find(WolfBuiltInGeneratorBindings.WEATHER.assetId)!!.dependencies)
         assertEquals(
             mapOf(WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to "1.0.0",
-                WolfBuiltInGeneratorBindings.WEATHER.assetId to "1.0.0"),
+                WolfBuiltInGeneratorBindings.WEATHER.assetId to WolfBuiltInGeneratorBindings.WEATHER.generatorVersion),
             registry.find(WolfBuiltInGeneratorBindings.LIGHTING.assetId)!!.dependencies
         )
         assertTrue(stage10Library(registry).generate(request()).succeeded)

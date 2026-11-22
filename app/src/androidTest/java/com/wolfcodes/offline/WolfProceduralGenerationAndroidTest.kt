@@ -206,10 +206,10 @@ class WolfProceduralGenerationAndroidTest {
     private fun expectedDependencies(binding: WolfGeneratorBinding): Map<String, String> =
         when (binding.family) {
             WolfGeneratorFamily.ATMOSPHERE -> emptyMap()
-            WolfGeneratorFamily.WEATHER -> mapOf(WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to "1.0.0")
+            WolfGeneratorFamily.WEATHER -> mapOf(WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to WolfBuiltInGeneratorBindings.ATMOSPHERE.generatorVersion)
             WolfGeneratorFamily.LIGHTING_EFFECT -> mapOf(
                 WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to "1.0.0",
-                WolfBuiltInGeneratorBindings.WEATHER.assetId to "1.0.0"
+                WolfBuiltInGeneratorBindings.WEATHER.assetId to WolfBuiltInGeneratorBindings.WEATHER.generatorVersion
             )
         }
 

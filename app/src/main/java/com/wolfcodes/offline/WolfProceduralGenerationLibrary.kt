@@ -1,6 +1,7 @@
 package com.wolfcodes.offline
 
 import android.content.Context
+import java.util.concurrent.TimeUnit
 
 /**
  * Stage 10 cooperation core. It emits renderer-neutral, transient effect
@@ -113,9 +114,9 @@ class WolfProceduralGenerationLibrary internal constructor(
                 )
                 val startedAtNanos = System.nanoTime()
                 val payload = generator.generate(context)
-                val elapsedMillis = ((System.nanoTime() - startedAtNanos).coerceAtLeast(0L)) / 1_000_000L
+                val elapsedNanos = (System.nanoTime() - startedAtNanos).coerceAtLeast(0L)
                 val deadlineMillis = minOf(request.resourceEnvelope.maxExecutionMillis, binding.hardLimits.maxExecutionMillis)
-                if (elapsedMillis > deadlineMillis) {
+                if (elapsedNanos > TimeUnit.MILLISECONDS.toNanos(deadlineMillis)) {
                     return failed(WolfProceduralFailureCode.GENERATOR_EXECUTION_LIMIT_EXCEEDED)
                 }
                 if (!payloadMatchesBinding(payload, binding) || !payloadIsBounded(payload)) {
