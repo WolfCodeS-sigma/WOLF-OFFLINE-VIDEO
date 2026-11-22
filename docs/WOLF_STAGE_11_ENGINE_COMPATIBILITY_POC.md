@@ -18,12 +18,12 @@ A POC result is limited to the exact test level stated below. Library resolution
 | Candidate | Pinned POC version | Isolated proof target | Result classification |
 |---|---:|---|---|
 | Godot Engine | 4.7.2 stable | Android AAR resolution + Godot host API class loading | API-linkage only; exported game runtime not yet proven |
-| Filament | 1.81.0 | Native Android engine + renderer/scene/view/camera resource lifecycle | Native runtime/resource-graph proof; no final surface-quality claim |
+| Filament | 1.75.0 | Native Android engine + renderer/scene/view/camera resource lifecycle | Native runtime/resource-graph proof; no final surface-quality claim |
 | Cocos Creator / native engine | 3.8.7 | Creator-generated Android native project, then NDK build and emulator rendered-frame test | **BLOCKED - NOT PASSED** |
 | libGDX | 1.14.2 | Launch Android backend Activity and render at least one GLES frame | Android runtime frame proof |
 | KorGE | 6.0.0 stable | Build/package the isolated Android target | Android packaging proof; no physical-device performance claim |
 | Lottie Android | 6.7.1 | Parse local JSON and rasterize a vector animation without network access | Local animation rendering proof |
-| SceneView | 4.70.0 | Separate artifact-resolution check only | Filament-based UI façade; not an independent engine |
+| SceneView | 4.70.0 | Separate artifact-resolution check only | Filament-based UI facade; not an independent engine |
 
 ## 3. Candidate-specific constraints
 
@@ -32,6 +32,8 @@ A POC result is limited to the exact test level stated below. Library resolution
 The Android AAR exposes embedding APIs such as GodotHost, GodotFragment, and GodotActivity. The test confirms those host classes are packaged and loadable. It does not claim that a WOLF Godot game has been exported or executed: official embedding requires a project-specific AAR generated from a Godot project and then included with its export dependencies. Only one Godot engine instance is supported per Android process; orientation/resizing must also be handled according to the embedding documentation.
 
 ### Filament and SceneView
+
+Filament 1.75.0 is pinned for the isolated POC because its Android module remains on compileSdk 34. The newer checked releases 1.76.0 through 1.81.0 declare compileSdk 37; the isolated app stays on compileSdk 36 and AGP 8.13.2 rather than adopting an Android preview/API 37 toolchain solely for this experiment.
 
 Filament's test initializes the Android native runtime and creates/destroys the core resource graph. A later surface-render proof must use a real render target and check output; this POC alone is not a PBR quality or target-device performance verdict.
 
@@ -43,7 +45,7 @@ The POC cannot be marked compatible until a Creator-generated Android native pro
 
 ### libGDX, KorGE, and Lottie
 
-libGDX is tested by launching its Android backend and observing a GLES frame. KorGE is tested with its separate stable Android target packaging task, without changing WOLF's root Gradle settings. Lottie is tested using a locally bundled synthetic JSON fixture; the test neither downloads an animation nor promotes the fixture into the cinematic asset library.
+libGDX is tested by launching its Android backend and observing a GLES frame. KorGE is tested with its separate stable Android target packaging task, without changing WOLF's root Gradle settings. KorGE 6.0.0's settings plugin requires a JDK 21 runtime; only the KorGE POC packaging job uses JDK 21, while the WOLF production project and the other Android POC variants remain on JDK 17. Lottie is tested using a locally bundled synthetic JSON fixture; the test neither downloads an animation nor promotes the fixture into the cinematic asset library.
 
 ## 4. Registry, licensing, and asset boundaries
 

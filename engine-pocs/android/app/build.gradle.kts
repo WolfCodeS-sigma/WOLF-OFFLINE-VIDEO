@@ -45,7 +45,9 @@ dependencies {
     add("godotImplementation", "androidx.fragment:fragment:1.9.1")
     add("godotImplementation", "androidx.core:core-splashscreen:1.2.0")
 
-    add("filamentImplementation", "com.google.android.filament:filament-android:1.81.0")
+    // Filament 1.75.0 is the newest checked stable line in this POC that
+    // remains on compileSdk 34; newer checked tags require API 37.
+    add("filamentImplementation", "com.google.android.filament:filament-android:1.75.0")
 
     add("libgdxImplementation", "com.badlogicgames.gdx:gdx:1.14.2")
     add("libgdxImplementation", "com.badlogicgames.gdx:gdx-backend-android:1.14.2")
