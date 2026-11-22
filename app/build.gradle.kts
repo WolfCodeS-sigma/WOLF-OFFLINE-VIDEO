@@ -14,6 +14,30 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            abiFilters.add("arm64-v8a")
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            ndk {
+                abiFilters.clear()
+                abiFilters.addAll(listOf("arm64-v8a", "x86_64"))
+            }
+        }
+
+        getByName("release") {
+            ndk {
+                abiFilters.clear()
+                abiFilters.add("arm64-v8a")
+            }
+        }
+    }
+
+    androidResources {
+        noCompress += listOf("filamat", "ktx", "ktx2", "glb", "gltf")
     }
 
     compileOptions {
@@ -31,6 +55,10 @@ android {
 }
 
 dependencies {
+    implementation("com.google.android.filament:filament-android:1.75.0")
+    implementation("com.google.android.filament:gltfio-android:1.75.0")
+    implementation("com.google.android.filament:filament-utils-android:1.75.0")
+
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 
