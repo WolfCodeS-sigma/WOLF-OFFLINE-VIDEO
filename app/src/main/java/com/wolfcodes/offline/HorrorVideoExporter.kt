@@ -308,7 +308,7 @@ class HorrorVideoExporter(private val context: Context) {
                 enabled = true
                 distance = 2.2f
                 maximumOpacity = 0.94f
-                height = 0.4f
+                this.height = 0.4f
                 heightFalloff = 0.18f
                 color = floatArrayOf(0.035f, 0.041f, 0.052f)
                 density = 0.085f
