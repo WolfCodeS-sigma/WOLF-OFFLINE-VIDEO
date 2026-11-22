@@ -191,14 +191,6 @@ class HorrorVideoExporter(private val context: Context) {
             setInteger(MediaFormat.KEY_FRAME_RATE, fps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
 
-            // Preserve every submitted frame on API 29+ surface-input encoders.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                setLong(
-                    MediaFormat.KEY_MAX_PTS_GAP_TO_ENCODER,
-                    -(1_000_000L / fps.toLong())
-                )
-            }
-
             // API 31+ surfaces can otherwise discard unconsumed buffers under load.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 setInteger(MediaFormat.KEY_ALLOW_FRAME_DROP, 0)
