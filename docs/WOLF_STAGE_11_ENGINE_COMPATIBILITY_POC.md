@@ -61,8 +61,10 @@ From the repository root, the Android POC project is built and run independently
 
     gradle --no-daemon -p engine-pocs/android :app:assembleGodotDebug :app:connectedGodotDebugAndroidTest :app:assembleFilamentDebug :app:connectedFilamentDebugAndroidTest :app:assembleLibgdxDebug :app:connectedLibgdxDebugAndroidTest :app:assembleLottieDebug :app:connectedLottieDebugAndroidTest :app:dependencies --configuration sceneViewPoc
 
-The separate KorGE target is packaged with:
+The separate KorGE 6.0.0 Android executable is packaged using the task names exposed by this exact plugin version:
 
-    gradle --no-daemon -p engine-pocs/korge bundleAndroid
+    gradle --no-daemon -p engine-pocs/korge assembleDebug packageAndroidDebug
+
+`assembleDebug` creates the debug APK; `packageAndroidDebug` is the KorGE 6.0.0 task that depends on Android's `bundleDebug` and creates the debug AAB. The older `bundleAndroid` task name in the general KorGE Android page is not registered by the pinned 6.0.0 plugin.
 
 CI outcomes must be recorded from the run on this exact branch head. No POC is approved for production merely because its isolated build/test passes.

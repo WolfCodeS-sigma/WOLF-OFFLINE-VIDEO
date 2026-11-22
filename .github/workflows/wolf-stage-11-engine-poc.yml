@@ -111,5 +111,5 @@ jobs:
           gradle-version: "8.13"
           cache-provider: basic
 
-      - name: Package KorGE Android target
-        run: gradle --no-daemon -p engine-pocs/korge bundleAndroid
+      - name: Build KorGE Android APK and AAB
+        run: gradle --no-daemon -p engine-pocs/korge assembleDebug packageAndroidDebug
