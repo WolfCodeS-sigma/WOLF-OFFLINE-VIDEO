@@ -70,16 +70,21 @@ The separate KorGE 6.0.0 Android executable is packaged using the task names exp
 CI outcomes must be recorded from the run on this exact branch head. No POC is approved for production merely because its isolated build/test passes.
 
 
-## 7. CI execution evidence
+## 6. CI execution evidence
 
-The following results were completed on the exact Stage 11 head
-`9e07568b032d9ff2350d81b20301d6f19146e9bb`:
+The Stage 11 POC implementation was first verified on commit
+`9e07568b032d9ff2350d81b20301d6f19146e9bb`. A follow-up documentation-only
+commit produced the current PR head
+`fd89bd89e9d16eb1d8713a52a51d232003163314`; the only file changed between
+those two commits is this Stage 11 report.
 
-- [Stage 11 isolated engine POC workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44970270442): **success**.
-- The isolated Android POC variants built successfully and SceneView 4.70.0 dependency resolution completed.
-- Android 12 instrumentation ran one test each for Godot, Filament, libGDX, and Lottie; all four test tasks finished and the Gradle invocation ended with `BUILD SUCCESSFUL`.
-- The separate KorGE 6.0.0 job successfully produced its isolated Android debug APK and AAB using JDK 21 only in that job.
-- [Stage 01–08 regression workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44970270658): **success**. Debug APK, lint, and JVM unit-test tasks passed; the Android 12 regression suite completed all 13 instrumentation tests with zero skipped and zero failed.
-- The emulator emitted non-blocking ADB/console/graphics startup warnings. They did not prevent the four POC tests or the 13 regression tests from completing successfully.
+Both workflows were rerun on the **current PR head**
+`fd89bd89e9d16eb1d8713a52a51d232003163314`:
 
-These results validate only the POC proof targets in the candidate matrix. They do not prove Godot project-specific game embedding, Cocos compatibility, production renderer integration, visual quality, or physical-device performance. Cocos remains **BLOCKED - NOT PASSED** until a Creator-generated native Android project is supplied and rendered on an emulator.
+- [Stage 11 isolated engine POC workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44970929424): **success**. All four Android 12 instrumentation tests completed (Godot, Filament, libGDX, and Lottie), the isolated POC variants built, SceneView 4.70.0 dependency resolution completed, and the separate KorGE 6.0.0 Android APK/AAB packaging job succeeded.
+- [Stage 01–08 regression workflow](https://github.com/WolfCodeS-sigma/WOLF-OFFLINE-VIDEO/actions/runs/44970929423): **success**. The Debug APK, Android lint, and JVM unit-test tasks passed; the Android 12 emulator regression suite completed all 13 instrumentation tests with zero skipped and zero failed. The emulator job needed a retry after its first attempt could not resolve external Gradle classpath artifacts; the retry passed.
+- The emulator logs contained ADB, console, EGL, and graphics warnings. They did not prevent the successful POC or regression test runs.
+
+These results validate only the POC proof targets stated in the candidate matrix. They do not prove Godot project-specific game embedding, Cocos compatibility, production renderer integration, visual quality, or physical-device performance. Cocos remains **BLOCKED - NOT PASSED** until a Creator-generated native Android project is built and shown rendering on an emulator.
+
+No real cinematic assets were acquired or ingested by Stage 11. The production asset manifest remains empty; all local motion/scene samples are synthetic test fixtures and must not be treated as cinematic library assets.
