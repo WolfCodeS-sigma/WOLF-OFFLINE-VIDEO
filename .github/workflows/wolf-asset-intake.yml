@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wolf-asset-intake-\${{ github.ref }}
+  group: wolf-asset-intake-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
