@@ -8,16 +8,26 @@ import android.content.Context
  */
 class WolfProceduralGenerationLibrary internal constructor(
     private val registry: WolfAssetRegistry,
-    private val generators: List<WolfBuiltInProceduralGenerator>
+    private val generators: List<WolfBuiltInProceduralGenerator>,
+    private val runtimeSnapshotProvider: (() -> WolfGeneratorRuntimeSnapshot)? = null
 ) {
-    constructor(registry: WolfAssetRegistry) : this(registry, WolfBuiltInGeneratorCatalog.generators)
+    constructor(registry: WolfAssetRegistry) : this(registry, WolfBuiltInGeneratorCatalog.generators, null)
+
     fun generate(request: WolfProceduralGenerationRequest): WolfProceduralGenerationResult {
         if (!isRequestWellFormed(request)) {
             return failed(WolfProceduralFailureCode.INVALID_REQUEST)
         }
-        if (!request.runtimeSnapshot.isSafe()) {
-            return failed(WolfProceduralFailureCode.RUNTIME_UNSAFE)
-        }
+        val liveSnapshot = if (runtimeSnapshotProvider != null) {
+            runCatching { runtimeSnapshotProvider.invoke() }.getOrNull()
+                ?: return failed(WolfProceduralFailureCode.RUNTIME_UNSAFE)
+        } else request.runtimeSnapshot
+        val effectiveSnapshot = WolfGeneratorRuntimeSnapshot(
+            availableMemoryBytes = minOf(request.runtimeSnapshot.availableMemoryBytes, liveSnapshot.availableMemoryBytes),
+            freeStorageBytes = minOf(request.runtimeSnapshot.freeStorageBytes, liveSnapshot.freeStorageBytes),
+            lowMemory = request.runtimeSnapshot.lowMemory || liveSnapshot.lowMemory,
+            thermalStatus = maxOf(request.runtimeSnapshot.thermalStatus, liveSnapshot.thermalStatus)
+        )
+        if (!effectiveSnapshot.isSafe()) return failed(WolfProceduralFailureCode.RUNTIME_UNSAFE)
 
         val approvedEntries = registry.approvedAssets(request.assetUseRequest)
         val approvedGeneratorEntries = approvedEntries
@@ -65,7 +75,8 @@ class WolfProceduralGenerationLibrary internal constructor(
             if (approved.version != binding.generatorVersion ||
                 approved.technicalProfile["generatorProfile"] != binding.canonicalProfileJson() ||
                 approved.technicalProfile["dependencyProfile"] !=
-                    WolfProceduralCanonicalJson.dependencyProfile(approved.dependencies)
+                    WolfProceduralCanonicalJson.dependencyProfile(approved.dependencies) ||
+                approved.dependencies != expectedDependencies(binding)
             ) {
                 return failed(WolfProceduralFailureCode.GENERATOR_PROFILE_MISMATCH)
             }
@@ -75,7 +86,7 @@ class WolfProceduralGenerationLibrary internal constructor(
             if (!hasValidResourceMeasurements(approved, binding)) {
                 return failed(WolfProceduralFailureCode.GENERATOR_RESOURCE_MEASUREMENTS_INVALID)
             }
-            if (!requestFitsGenerator(request, binding)) {
+            if (!requestFitsGenerator(request, binding, effectiveSnapshot)) {
                 return failed(WolfProceduralFailureCode.REQUEST_RESOURCE_LIMITS_INVALID)
             }
             selectedGenerators += generator to approved
@@ -100,8 +111,14 @@ class WolfProceduralGenerationLibrary internal constructor(
                     approvedAssets = approvedAssets.toList(),
                     previousEffects = effects.toList()
                 )
+                val startedAtNanos = System.nanoTime()
                 val payload = generator.generate(context)
-                if (!payloadIsBounded(payload)) {
+                val elapsedMillis = ((System.nanoTime() - startedAtNanos).coerceAtLeast(0L)) / 1_000_000L
+                val deadlineMillis = minOf(request.resourceEnvelope.maxExecutionMillis, binding.hardLimits.maxExecutionMillis)
+                if (elapsedMillis > deadlineMillis) {
+                    return failed(WolfProceduralFailureCode.GENERATOR_EXECUTION_LIMIT_EXCEEDED)
+                }
+                if (!payloadMatchesBinding(payload, binding) || !payloadIsBounded(payload)) {
                     return failed(WolfProceduralFailureCode.GENERATION_FAILED)
                 }
                 val upstreamDigests = effects.map { it.outputDigest }
@@ -153,7 +170,8 @@ class WolfProceduralGenerationLibrary internal constructor(
 
     private fun requestFitsGenerator(
         request: WolfProceduralGenerationRequest,
-        binding: WolfGeneratorBinding
+        binding: WolfGeneratorBinding,
+        runtimeSnapshot: WolfGeneratorRuntimeSnapshot
     ): Boolean {
         val envelope = request.resourceEnvelope
         val limits = binding.hardLimits
@@ -176,9 +194,26 @@ class WolfProceduralGenerationLibrary internal constructor(
             Math.addExact(envelope.maxTemporaryStorageBytes, envelope.maxReusableOutputBytes)
         }.getOrNull() ?: return false
 
-        return request.runtimeSnapshot.availableMemoryBytes >= envelope.maxWorkingSetBytes &&
-            request.runtimeSnapshot.freeStorageBytes >= requiredStorage
+        return runtimeSnapshot.availableMemoryBytes >= envelope.maxWorkingSetBytes &&
+            runtimeSnapshot.freeStorageBytes >= requiredStorage
     }
+
+    private fun expectedDependencies(binding: WolfGeneratorBinding): Map<String, String> =
+        when (binding.family) {
+            WolfGeneratorFamily.ATMOSPHERE -> emptyMap()
+            WolfGeneratorFamily.WEATHER -> mapOf(WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to WolfBuiltInGeneratorBindings.ATMOSPHERE.generatorVersion)
+            WolfGeneratorFamily.LIGHTING_EFFECT -> mapOf(
+                WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to WolfBuiltInGeneratorBindings.ATMOSPHERE.generatorVersion,
+                WolfBuiltInGeneratorBindings.WEATHER.assetId to WolfBuiltInGeneratorBindings.WEATHER.generatorVersion
+            )
+        }
+
+    private fun payloadMatchesBinding(payload: WolfProceduralEffectPayload, binding: WolfGeneratorBinding): Boolean =
+        when (binding.family) {
+            WolfGeneratorFamily.ATMOSPHERE -> binding.outputKind == "ATMOSPHERE_LAYER" && payload is WolfAtmosphereLayer
+            WolfGeneratorFamily.WEATHER -> binding.outputKind == "WEATHER_LAYER" && payload is WolfWeatherLayer
+            WolfGeneratorFamily.LIGHTING_EFFECT -> binding.outputKind == "LIGHTING_LAYER" && payload is WolfLightingLayer
+        }
 
     private fun hasValidResourceMeasurements(
         entry: WolfAssetRegistryEntry,
@@ -227,7 +262,17 @@ class WolfProceduralGenerationLibrary internal constructor(
         )
 
     companion object {
-        fun loadBundled(context: Context): WolfProceduralGenerationLibrary =
-            WolfProceduralGenerationLibrary(WolfAssetRegistry.loadBundled(context))
+        fun loadBundled(context: Context): WolfProceduralGenerationLibrary {
+            val registry = WolfAssetRegistry.loadBundled(context)
+            return WolfProceduralGenerationLibrary(registry, WolfBuiltInGeneratorCatalog.generators) {
+                val snapshot = WolfResourceGuard.snapshot(context, context.cacheDir)
+                WolfGeneratorRuntimeSnapshot(
+                    availableMemoryBytes = Math.multiplyExact(snapshot.availableMemoryMb, 1024L * 1024L),
+                    freeStorageBytes = snapshot.freeStorageBytes,
+                    lowMemory = snapshot.lowMemory,
+                    thermalStatus = snapshot.thermalStatus
+                )
+            }
+        }
     }
 }

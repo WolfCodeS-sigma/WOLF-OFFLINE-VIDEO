@@ -27,9 +27,9 @@ The library calls WolfAssetRegistry.approvedAssets(request) and explicitly filte
 - source repository path, Git blob revision, and SHA-256 source fingerprint;
 - exact target runtime version and approved use scope.
 
-The selected generator must be APPROVED through Stage 08, have budgetStatus == PASS, and carry finite, non-negative resource measurements with evidence. The production built-in bindings currently retain zero/PENDING resource ceilings and therefore cannot run. They may only be enabled after actual target-runtime measurements are reviewed and added to the binding and Stage 08 record. Each measured high-water value is compared with its corresponding hard limit. Missing, non-numeric, UNKNOWN, PENDING, over-limit, or unsupported values block production dispatch.
+The selected generator must be APPROVED through Stage 08, have budgetStatus == PASS, carry finite, non-negative resource measurements with evidence, and declare the exact upstream generator dependency IDs and versions required by its family. Atmosphere has no generator dependency; weather pins atmosphere 1.0.0; lighting pins atmosphere 1.0.0 and weather 1.0.0. Missing, extra, or version-mismatched dependencies are rejected. The production built-in bindings currently retain zero/PENDING resource ceilings and therefore cannot run. They may only be enabled after actual target-runtime measurements are reviewed and added to the binding and Stage 08 record. Each measured high-water value is compared with its corresponding hard limit. Missing, non-numeric, UNKNOWN, PENDING, over-limit, or unsupported values block production dispatch.
 
-The caller also supplies a finite resource envelope and a current runtime safety snapshot. The envelope cannot exceed the approved generator limits; low-memory or severe-thermal snapshots are rejected; available memory and free storage must cover the request envelope before generation begins.
+The caller supplies a finite resource envelope. Production construction additionally reads a live Android snapshot through WolfResourceGuard and combines it conservatively with the request snapshot (minimum memory/storage, maximum thermal state, and logical-OR low-memory flag); failure to read live state blocks dispatch. Each generator's elapsed wall-clock execution time is checked against both request and approved hard limits after it returns. This detects overruns for the current bounded built-ins; it is not preemptive cancellation, which remains outside this stage until generators expose a cooperative cancellation contract.
 
 The current implementation targets the environment_background scope and requires exact, approved ENVIRONMENT asset pins. A non-environment category cannot be used as an environment target.
 
@@ -39,7 +39,7 @@ The generators receive immutable references containing only the approved environ
 
 Outputs are transient descriptors in memory. They are not promoted to the shared cinematic asset library. If a later stage chooses to bake an output into a reusable file, that file must become a new candidate and pass Stage 08 rights, technical, hash, scope, and realism review independently.
 
-Any generator failure is isolated and returns no partial chain. The caller receives BASE_SCENE_NO_EFFECT, allowing the existing approved base-scene/fallback path to continue without changing film duration, frame count, audio, or timestamps.
+Every returned payload must match the output kind declared by its generator binding and pass family-specific numeric bounds. A generator exceeding its measured execution deadline is rejected. Any generator failure is isolated and returns no partial chain. The caller receives BASE_SCENE_NO_EFFECT, allowing the existing approved base-scene/fallback path to continue without changing film duration, frame count, audio, or timestamps.
 
 ## 4. Static implementation and source provenance
 
@@ -54,7 +54,8 @@ The Stage 10 JVM suite covers:
 - approved generator and environment resolution, fixed cooperation order, upstream digest handoff, and asset immutability;
 - repeatability for the same seed/frame identity, independent frame recovery, and distinct seeded outputs;
 - empty generator records, wrong category, pending budgets, altered profiles, missing/pending measurements, and measurements above hard limits;
-- caller envelopes above reviewed limits, unsafe runtime snapshots, unapproved assets, and asset-version mismatch;
+- caller envelopes above reviewed limits, unsafe request/live Android runtime snapshots, unapproved assets, and asset-version mismatch;
+- exact upstream dependency-version pins, wrong payload-kind rejection, and execution-deadline overrun fallback;
 - required upstream atmosphere/weather outputs;
 - closed static catalog identity and exact source Git blob/SHA-256 fingerprints.
 
@@ -66,4 +67,4 @@ The production app/src/main/assets/wolf_asset_registry.json remains intentionall
 
 The test registry records and byte files are synthetic, test-only fixtures. They are not cinematic assets, do not demonstrate visual realism, do not satisfy the real-asset collection target, and are not added to the production APK. No genuine cinematic environment asset has been approved or integrated by this stage.
 
-Stage 10 proves the software contracts and cooperation order only. Visual quality, renderer adapter behavior, actual licensed cinematic asset coverage, and end-to-end rendered scene quality remain for their later stages. The existing production renderer, story/camera planners, audio, frame timing, checkpoints, and MP4 export were not changed.
+Stage 10 proves the software contracts and cooperation order only. Visual quality, renderer adapter behavior, actual licensed cinematic asset coverage, and end-to-end rendered scene quality remain for their later stages. The existing production renderer, story/camera planners, audio, frame timing, checkpoints, and MP4 export were not changed. Stage 10 does not add camera-motion candidates; StoryDirectorEngine and OfflineMotionEngine remain the only camera authorities.

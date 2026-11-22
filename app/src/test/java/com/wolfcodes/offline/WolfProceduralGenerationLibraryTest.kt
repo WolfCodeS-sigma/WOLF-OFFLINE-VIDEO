@@ -191,6 +191,63 @@ class WolfProceduralGenerationLibraryTest {
     }
 
     @Test
+    fun generatorDependenciesArePinnedToExactUpstreamVersions() {
+        val registry = createRegistry()
+        assertEquals(mapOf(WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to "1.0.0"),
+            registry.find(WolfBuiltInGeneratorBindings.WEATHER.assetId)!!.dependencies)
+        assertEquals(
+            mapOf(WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to "1.0.0",
+                WolfBuiltInGeneratorBindings.WEATHER.assetId to "1.0.0"),
+            registry.find(WolfBuiltInGeneratorBindings.LIGHTING.assetId)!!.dependencies
+        )
+        assertTrue(stage10Library(registry).generate(request()).succeeded)
+    }
+
+    @Test
+    fun liveRuntimeSnapshotCanOnlyTightenCallerSuppliedSafetyState() {
+        val callerSnapshot = request().runtimeSnapshot
+        val library = WolfProceduralGenerationLibrary(createRegistry(), testGenerators()) {
+            WolfGeneratorRuntimeSnapshot(callerSnapshot.availableMemoryBytes, callerSnapshot.freeStorageBytes, true, 0)
+        }
+        val result = library.generate(request())
+        assertFalse(result.succeeded)
+        assertEquals(WolfProceduralFailureCode.RUNTIME_UNSAFE, result.failureCode)
+        assertTrue(result.effects.isEmpty())
+    }
+
+    @Test
+    fun generatorRejectsPayloadKindThatDoesNotMatchItsBinding() {
+        val mismatched = testGenerators().mapIndexed { index, generator ->
+            if (index == 0) object : WolfBuiltInProceduralGenerator {
+                override val binding = generator.binding
+                override fun generate(context: WolfGeneratorExecutionContext): WolfProceduralEffectPayload = WolfWeatherLayer(100, 10, 200)
+            } else generator
+        }
+        val result = WolfProceduralGenerationLibrary(createRegistry(), mismatched).generate(request())
+        assertFalse(result.succeeded)
+        assertEquals(WolfProceduralFailureCode.GENERATION_FAILED, result.failureCode)
+        assertTrue(result.effects.isEmpty())
+    }
+
+    @Test
+    fun generatorExecutionOverrunFailsClosedWithoutPartialEffects() {
+        val slow = testGenerators().mapIndexed { index, generator ->
+            if (index == 0) object : WolfBuiltInProceduralGenerator {
+                override val binding = generator.binding
+                override fun generate(context: WolfGeneratorExecutionContext): WolfProceduralEffectPayload {
+                    Thread.sleep(15L)
+                    return generator.generate(context)
+                }
+            } else generator
+        }
+        val deadlineRequest = request().copy(resourceEnvelope = request().resourceEnvelope.copy(maxExecutionMillis = 1L))
+        val result = WolfProceduralGenerationLibrary(createRegistry(), slow).generate(deadlineRequest)
+        assertFalse(result.succeeded)
+        assertEquals(WolfProceduralFailureCode.GENERATOR_EXECUTION_LIMIT_EXCEEDED, result.failureCode)
+        assertTrue(result.effects.isEmpty())
+    }
+
+    @Test
     fun callerResourceEnvelopeCannotExceedReviewedGeneratorLimits() {
         val oversized = request().copy(
             resourceEnvelope = request().resourceEnvelope.copy(maxWorkingSetBytes = 999999L)
@@ -345,13 +402,14 @@ class WolfProceduralGenerationLibraryTest {
                             put("importSettings", "Static test binding metadata")
                             put("rendererRequirements", "WOLF_ANDROID_CANVAS")
                             put("generatorProfile", profile)
-                            put("dependencyProfile", "{}")
+                            put("dependencyProfile", WolfProceduralCanonicalJson.dependencyProfile(expectedDependencies(binding)))
                             if (category == WolfAssetCategory.ENVIRONMENT) {
                                 put("geometryProfile", "Test-only environment metadata")
                                 put("materialProfile", "Test-only environment metadata")
                             }
                         },
                         resourceMeasurements = measurements,
+                        dependencies = expectedDependencies(binding),
                         budgetStatus = if (binding.assetId == pendingGeneratorId) {
                             WolfAssetBudgetStatus.PENDING
                         } else {
@@ -418,7 +476,8 @@ class WolfProceduralGenerationLibraryTest {
         file: WolfAssetFile,
         technicalProfile: Map<String, String>,
         resourceMeasurements: Map<String, String>,
-        budgetStatus: WolfAssetBudgetStatus
+        budgetStatus: WolfAssetBudgetStatus,
+        dependencies: Map<String, String> = emptyMap()
     ): JSONObject {
         val now = System.currentTimeMillis() - 1000L
         val license = JSONObject()
@@ -471,7 +530,7 @@ class WolfProceduralGenerationLibraryTest {
             .put("lifecycle", WolfAssetLifecycle.APPROVED.name)
             .put("license", license)
             .put("files", JSONArray().put(fileJson))
-            .put("dependencies", JSONObject())
+            .put("dependencies", JSONObject().apply { dependencies.forEach { (id, version) -> put(id, version) } })
             .put("technicalProfile", profileJson)
             .put("resourceMeasurements", measurementsJson)
             .put("compatibleRuntimes", JSONObject().put("WOLF_ANDROID_CANVAS", "stage10-test-1"))
@@ -479,6 +538,16 @@ class WolfProceduralGenerationLibraryTest {
             .put("budgetStatus", budgetStatus.name)
             .put("review", review)
     }
+
+    private fun expectedDependencies(binding: WolfGeneratorBinding): Map<String, String> =
+        when (binding.family) {
+            WolfGeneratorFamily.ATMOSPHERE -> emptyMap()
+            WolfGeneratorFamily.WEATHER -> mapOf(WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to "1.0.0")
+            WolfGeneratorFamily.LIGHTING_EFFECT -> mapOf(
+                WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to "1.0.0",
+                WolfBuiltInGeneratorBindings.WEATHER.assetId to "1.0.0"
+            )
+        }
 
     private fun defaultMeasurements(): Map<String, String> = mapOf(
         "peakWorkingSetBytes" to "8192",

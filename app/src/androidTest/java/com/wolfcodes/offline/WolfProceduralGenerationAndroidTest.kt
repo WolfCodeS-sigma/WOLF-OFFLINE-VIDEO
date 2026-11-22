@@ -88,8 +88,9 @@ class WolfProceduralGenerationAndroidTest {
                         "importSettings" to "Static test binding metadata",
                         "rendererRequirements" to "WOLF_ANDROID_CANVAS",
                         "generatorProfile" to binding.canonicalProfileJson(),
-                        "dependencyProfile" to "{}"
+                        "dependencyProfile" to WolfProceduralCanonicalJson.dependencyProfile(expectedDependencies(binding))
                     ),
+                    dependencies = expectedDependencies(binding),
                     budgetStatus = WolfAssetBudgetStatus.PASS
                 )
             )
@@ -130,7 +131,8 @@ class WolfProceduralGenerationAndroidTest {
         fileSize: Long,
         fileSha256: String,
         technicalProfile: Map<String, String>,
-        budgetStatus: WolfAssetBudgetStatus
+        budgetStatus: WolfAssetBudgetStatus,
+        dependencies: Map<String, String> = emptyMap()
     ): JSONObject {
         val now = System.currentTimeMillis() - 1000L
         val license = JSONObject()
@@ -192,7 +194,7 @@ class WolfProceduralGenerationAndroidTest {
             .put("lifecycle", WolfAssetLifecycle.APPROVED.name)
             .put("license", license)
             .put("files", JSONArray().put(file))
-            .put("dependencies", JSONObject())
+            .put("dependencies", JSONObject().apply { dependencies.forEach { (id, version) -> put(id, version) } })
             .put("technicalProfile", profile)
             .put("resourceMeasurements", measurements)
             .put("compatibleRuntimes", JSONObject().put("WOLF_ANDROID_CANVAS", "stage10-instrumented-1"))
@@ -200,6 +202,16 @@ class WolfProceduralGenerationAndroidTest {
             .put("budgetStatus", budgetStatus.name)
             .put("review", review)
     }
+
+    private fun expectedDependencies(binding: WolfGeneratorBinding): Map<String, String> =
+        when (binding.family) {
+            WolfGeneratorFamily.ATMOSPHERE -> emptyMap()
+            WolfGeneratorFamily.WEATHER -> mapOf(WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to "1.0.0")
+            WolfGeneratorFamily.LIGHTING_EFFECT -> mapOf(
+                WolfBuiltInGeneratorBindings.ATMOSPHERE.assetId to "1.0.0",
+                WolfBuiltInGeneratorBindings.WEATHER.assetId to "1.0.0"
+            )
+        }
 
     private fun testBindings(): List<WolfGeneratorBinding> = WolfBuiltInGeneratorCatalog.bindings.map {
         it.copy(hardLimits = TEST_ONLY_LIMITS)
