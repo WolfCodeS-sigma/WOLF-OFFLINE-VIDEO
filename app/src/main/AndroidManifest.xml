@@ -2,6 +2,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application android:allowBackup="false" android:label="WOLF OFFLINE VIDEO"
         android:supportsRtl="true" android:theme="@android:style/Theme.Material.NoActionBar">
+        <activity android:name=".WolfOfflineStoryAiActivity" android:screenOrientation="portrait" android:exported="false" />
+        <activity android:name=".WolfHorrorKnowledgeLibraryActivity" android:screenOrientation="portrait" android:exported="false" />
         <activity android:name=".MainActivity" android:screenOrientation="portrait" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
