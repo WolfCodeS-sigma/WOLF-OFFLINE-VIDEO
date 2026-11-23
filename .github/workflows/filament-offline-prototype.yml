@@ -43,8 +43,20 @@ jobs:
         with:
           cache-provider: basic
 
-      - name: Build Debug APK, lint and JVM unit tests
-        run: ./gradlew --no-daemon :app:assembleDebug :app:lintDebug :app:testDebugUnitTest
+      - name: Compilation and dependency check
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Static lint check
+        run: ./gradlew lintDebug
+
+      - name: Verify Filament ARM64 native library in APK
+        shell: bash
+        run: |
+          set -o pipefail
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep "lib/arm64-v8a/libfilament-jni.so"
+
+      - name: Run JVM unit tests
+        run: ./gradlew testDebugUnitTest
 
   android-emulator:
     name: Five-second Filament UI export and Android regression tests
