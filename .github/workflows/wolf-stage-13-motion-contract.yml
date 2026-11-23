@@ -152,7 +152,7 @@ jobs:
 
       - name: Build isolated Android engine POC variants and resolve SceneView
         run: |
-          gradle --no-daemon -p engine-pocs/android \
+          gradle --no-daemon --max-workers=2 -p engine-pocs/android \
             :app:assembleGodotDebug \
             :app:assembleFilamentDebug \
             :app:assembleLibgdxDebug \
