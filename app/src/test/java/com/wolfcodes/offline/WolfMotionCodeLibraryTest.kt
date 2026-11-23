@@ -109,7 +109,7 @@ class WolfMotionCodeLibraryTest {
         assertEquals(1_000_000L, WolfMotionCodeLibrary.framePresentationTimeUs(24L, 24L, 1L))
         assertEquals(41_667L, WolfMotionCodeLibrary.framePresentationTimeUs(1L, 24L, 1L))
         assertEquals(
-            WolfMotionCodeLibrary.framePresentationTimeUs(173L, 30_000L, 1_001L),
+            5_772_433L,
             WolfMotionCodeLibrary.framePresentationTimeUs(173L, 30_000L, 1_001L)
         )
     }
@@ -151,6 +151,26 @@ class WolfMotionCodeLibraryTest {
         } catch (_: IllegalArgumentException) {
             // Expected: size is checked before ArrayList copies or iterates the source.
         }
+    }
+
+    @Test
+    fun vectorCurveCanSampleIntoReusableScratchStorage() {
+        val curve = WolfVector3Curve(
+            listOf(
+                WolfVector3Keyframe(0.0, WolfVector3(1.0, 2.0, 3.0)),
+                WolfVector3Keyframe(1.0, WolfVector3(9.0, 6.0, -1.0))
+            ),
+            WolfCurveInterpolation.SMOOTHSTEP
+        )
+        val scratch = DoubleArray(3)
+        curve.sampleInto(0.5, scratch)
+        assertEquals(5.0, scratch[0], 0.000001)
+        assertEquals(4.0, scratch[1], 0.000001)
+        assertEquals(1.0, scratch[2], 0.000001)
+        curve.sampleInto(1.0, scratch)
+        assertEquals(9.0, scratch[0], 0.000001)
+        assertEquals(6.0, scratch[1], 0.000001)
+        assertEquals(-1.0, scratch[2], 0.000001)
     }
 
     @Test
