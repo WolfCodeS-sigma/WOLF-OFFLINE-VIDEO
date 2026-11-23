@@ -83,6 +83,18 @@ class StoryPipelineTest {
     }
 
     @Test
+    fun narrationLongerThanFilmIsTrimmedToRequestedFilmDuration() {
+        val timeline = OfflineProductionEngine.buildAudioTimeline(
+            requestedFilmSeconds = 30,
+            narrationTimingEnabled = true,
+            audioDurationMs = 45_000L
+        )
+
+        assertEquals(30_000_000L, timeline.filmDurationUs)
+        assertEquals(30_000_000L, timeline.narrationLimitUs)
+    }
+
+    @Test
     fun renderRevisionInvalidatesLegacyStoryboardCheckpointFingerprint() {
         assertEquals("storyboard-planner-v3", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
         assertEquals(2, WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION)
