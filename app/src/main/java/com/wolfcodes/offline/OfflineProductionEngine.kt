@@ -85,6 +85,16 @@ object OfflineProductionEngine {
         )
     }
 
+    /**
+     * Keeps narration aligned after transcoding moves it from the original URI
+     * to a temporary AAC file supplied to muxAudio as a generated file.
+     * Effects-only audio has no narration offset and still begins at zero.
+     */
+    internal fun narrationOffsetForMux(
+        originalNarrationSelected: Boolean,
+        narrationOffsetUs: Long
+    ): Long = if (originalNarrationSelected) narrationOffsetUs else 0L
+
     data class Result(
         val scenes: Int,
         val frames: Int,
@@ -325,7 +335,13 @@ object OfflineProductionEngine {
                     muxAudio(
                         context, silentFile, muxAudioUri, muxAudioFile, mixedFile,
                         filmDurationUs, narrationEndUs, fps,
-                        audioOffsetUs = if (muxAudioUri != null) audioTimeline.narrationOffsetUs else 0L
+                        // Base the offset on the original source role, not the temporary mux input.
+                        // A converted narration file is passed as generatedAudioFile but must
+                        // retain the same intro offset as the original narration URI.
+                        audioOffsetUs = narrationOffsetForMux(
+                            originalNarrationSelected = audioUri != null,
+                            narrationOffsetUs = audioTimeline.narrationOffsetUs
+                        )
                     )
                 }
                 silentFile.delete()
