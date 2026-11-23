@@ -50,6 +50,7 @@ private class WolfFilamentMuxerState {
     var videoTrack = -1
     var started = false
     var endOfStream = false
+    var encodedFrames = 0L
 }
 
 class HorrorVideoExporter(private val context: Context) {
@@ -192,6 +193,9 @@ class HorrorVideoExporter(private val context: Context) {
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
 
             // API 31+ surfaces can otherwise discard unconsumed buffers under load.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 setInteger(MediaFormat.KEY_ALLOW_FRAME_DROP, 0)
             }
@@ -229,7 +233,8 @@ class HorrorVideoExporter(private val context: Context) {
                     muxer = activeMuxer,
                     state = muxerState,
                     bufferInfo = bufferInfo,
-                    waitForEndOfStream = false
+                    waitForEndOfStream = false,
+                    minimumEncodedFrames = (frameIndex.toLong() - 4L).coerceAtLeast(0L)
                 )
                 if (frameIndex % fps == 0 || frameIndex == frameCount) {
                     val percent = (5 + frameIndex * 88 / frameCount).coerceIn(5, 94)
@@ -251,6 +256,11 @@ class HorrorVideoExporter(private val context: Context) {
             check(muxerState.endOfStream) { "لم يرسل مرمّز الفيديو علامة نهاية الإطارات" }
             check(muxerState.started && muxerState.videoTrack >= 0) {
                 "لم يتم إنشاء مسار فيديو MP4 من Filament"
+            }
+            val expectedFrames = durationSeconds.toLong() * fps.toLong()
+            check(muxerState.encodedFrames >= expectedFrames - 2L) {
+                "فقد مرمّز Filament إطارات قبل إنشاء MP4: " +
+                    muxerState.encodedFrames + " من " + expectedFrames
             }
             activeMuxer.stop()
             muxerState.started = false
@@ -380,9 +390,9 @@ class HorrorVideoExporter(private val context: Context) {
 
             val frameCount = durationSeconds * fps
             val frameIntervalNanos = 1_000_000_000L / fps.toLong()
-            val presentationOrigin = System.nanoTime()
-            // Keep Surface input paced to the encoder's configured frame rate on every API level.
-            var nextFrameStartNanos = presentationOrigin
+            // Offline MP4 timestamps are assigned deterministically after encoding.
+            // Do not schedule Filament frames against wall-clock display presentation times.
+            var nextFrameStartNanos = System.nanoTime()
 
             swapChain = activeEngine.createSwapChain(surface)
             val activeSwapChain = requireNotNull(swapChain)
@@ -415,12 +425,9 @@ class HorrorVideoExporter(private val context: Context) {
                 )
 
                 val actualFrameStart = System.nanoTime()
-                val presentationTime = presentationOrigin + frameIndex * frameIntervalNanos
                 check(activeRenderer.beginFrame(activeSwapChain, actualFrameStart)) {
                     "تعذر بدء إطار Filament رقم " + (frameIndex + 1)
                 }
-                activeRenderer.setPresentationTime(presentationTime)
-                activeRenderer.setDesiredPresentationTime(presentationTime)
                 activeRenderer.render(activeView)
                 activeRenderer.endFrame()
                 activeEngine.flushAndWait()
@@ -475,23 +482,28 @@ class HorrorVideoExporter(private val context: Context) {
         muxer: MediaMuxer,
         state: WolfFilamentMuxerState,
         bufferInfo: MediaCodec.BufferInfo,
-        waitForEndOfStream: Boolean
+        waitForEndOfStream: Boolean,
+        minimumEncodedFrames: Long = 0L
     ) {
-        val deadline = SystemClock.elapsedRealtime() + 90_000L
+        val timeoutMs = if (waitForEndOfStream) 90_000L else 45_000L
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
 
-        while (!state.endOfStream) {
-            val outputIndex = encoder.dequeueOutputBuffer(
-                bufferInfo,
-                if (waitForEndOfStream) 10_000L else 0L
-            )
+        while (
+            !state.endOfStream &&
+            (waitForEndOfStream || state.encodedFrames < minimumEncodedFrames)
+        ) {
+            val outputIndex = encoder.dequeueOutputBuffer(bufferInfo, 10_000L)
 
             when {
                 outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> {
-                    if (!waitForEndOfStream) return
                     if (SystemClock.elapsedRealtime() >= deadline) {
-                        throw IllegalStateException("انتهت مهلة انتظار اكتمال ترميز Filament")
+                        val waitPurpose = if (waitForEndOfStream) {
+                            "اكتمال ترميز Filament"
+                        } else {
+                            "استلام الإطارات المشفّرة قبل متابعة الرندر"
+                        }
+                        throw IllegalStateException("انتهت مهلة انتظار " + waitPurpose)
                     }
-                    SystemClock.sleep(5L)
                 }
 
                 outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
@@ -515,6 +527,7 @@ class HorrorVideoExporter(private val context: Context) {
                         outputBuffer.position(bufferInfo.offset)
                         outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
                         muxer.writeSampleData(state.videoTrack, outputBuffer, bufferInfo)
+                        state.encodedFrames++
                     }
 
                     val isEndOfStream =
