@@ -154,6 +154,9 @@ jobs:
           cache-provider: basic
           cache-read-only: false
 
+      - name: Prepare embedded Godot project with pinned Godot 4.7.2 editor
+        run: bash engine-pocs/android/scripts/prepare-godot-project.sh
+
       - name: Build isolated Android engine POC variants and resolve SceneView
         run: |
           gradle --no-daemon --max-workers=2 -p engine-pocs/android \
@@ -162,6 +165,14 @@ jobs:
             :app:assembleLibgdxDebug \
             :app:assembleLottieDebug \
             :app:dependencies --configuration sceneViewPoc
+
+      - name: Verify imported Godot project cache is packaged in the flavor APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT_APK="engine-pocs/android/app/build/outputs/apk/godot/debug/app-godot-debug.apk"
+          test -s "$GODOT_APK"
+          unzip -Z1 "$GODOT_APK" | grep -F "assets/.godot/global_script_class_cache.cfg"
 
       - name: Run isolated engine POC tests on Android 12
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0

@@ -56,6 +56,9 @@ jobs:
           cache-provider: basic
           cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
+      - name: Prepare embedded Godot project with pinned Godot 4.7.2 editor
+        run: bash engine-pocs/android/scripts/prepare-godot-project.sh
+
       - name: Build isolated Android POC variants and resolve SceneView
         run: |
           gradle --no-daemon -p engine-pocs/android \
