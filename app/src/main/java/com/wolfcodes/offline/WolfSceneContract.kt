@@ -467,10 +467,13 @@ object WolfSceneContractValidator {
         val requestedLayers = request.layers.filter { it.visible }.map { it.layerId }.toSet()
         val expectedOutputCount = request.timeline.frameCount.toLong() * requestedLayers.size.toLong()
         if (expectedOutputCount > WolfSceneContractLimits.MAX_OUTPUT_COUNT ||
-            result.outputs.size.toLong() != expectedOutputCount
+            result.outputs.size.toLong() > WolfSceneContractLimits.MAX_OUTPUT_COUNT
         ) {
-            errors += "result output count does not match the bounded request"
+            errors += "result output count exceeds contract limits"
             return WolfSceneContractValidation(errors.distinct())
+        }
+        if (result.outputs.size.toLong() != expectedOutputCount) {
+            errors += "result output count does not match the bounded request"
         }
 
         val outputsByLayer = request.layers.filter { it.visible }.associate { it.layerId to ArrayList<WolfSceneFrameOutput>() }
