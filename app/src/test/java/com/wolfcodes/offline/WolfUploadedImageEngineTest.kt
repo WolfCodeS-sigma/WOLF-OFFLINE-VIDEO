@@ -14,7 +14,9 @@ class WolfUploadedImageEngineTest {
         assertFalse(WolfUploadedImageEngine.shouldUseDepthLayers(false, 0.99f, true))
         assertFalse(WolfUploadedImageEngine.shouldUseDepthLayers(true, 0.119f, true))
         assertFalse(WolfUploadedImageEngine.shouldUseDepthLayers(false, 0f, false))
-        assertTrue(WolfUploadedImageEngine.shouldUseDepthLayers(true, 0.12f, true))
+        // An asserted validation flag cannot bypass the engine-level semantic readiness gate.
+        assertFalse(WolfImageDepthSegmenter.isSemanticSegmentationReady())
+        assertFalse(WolfUploadedImageEngine.shouldUseDepthLayers(true, 0.12f, true))
     }
 
     @Test
