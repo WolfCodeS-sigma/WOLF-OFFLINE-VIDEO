@@ -1,40 +1,79 @@
 # WOLF OFFLINE VIDEO
 
-Standalone Android application for local horror-film production. This repository contains the offline production path only; it does not contain the WOLF online engines, WebView workspace, API hub, or cloud services.
+تطبيق Android أصلي لإنتاج أفلام الرعب محليًا. هذا المستودع يحتوي مسار الإنتاج Offline فقط؛ ولا يضم محركات WOLF السحابية أو مساحة WebView أو API Hub.
 
-## Product direction
+## اتجاه المنتج
 
-WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected images, procedural artwork, layered motion, horror typography, procedural sound effects, and an optional approved voice recording. It does not require a large video-generation model.
+يبني WOLF الفيلم محليًا من نص القصة، والصور التي يختارها المستخدم عند الحاجة، وخطط اللقطات، والرندر المحلي، والمؤثرات، والتعليق الصوتي المعتمد، ثم إخراج MP4. لا يعتمد مسار الإنتاج على مولد فيديو سحابي.
 
-## Current source layout
+## مكونات التطبيق الموحّدة
 
-- `MainActivity.kt`: independent offline project and production interface.
-- `WolfProjectStore.kt`: durable local project records with atomic file replacement.
-- `StoryDirectorEngine.kt` and `OfflineSupportEngines.kt`: deterministic story segmentation, shot planning, pacing, and local visual helpers.
-- `WolfSceneArtEngine.kt`, `WolfSceneAssetStore.kt`, and `WolfProceduralMotionEngine.kt`: scene artwork, optional image slots, procedural character/environment motion, fog, particles, rain, spectral silhouettes, and visual effects.
-- `OfflineProductionEngine.kt`: local frame rendering, H.264 MP4 encoding, audio integration, long-film chapter handling, checkpoint support, recovery paths, and export quality inspection.
-- `WolfStoryVoiceEngine.kt`, `WolfAudioMixer.kt`, `WolfAudioTranscoder.kt`, and `WolfSoundFxEngine.kt`: local narration recording, approval state, audio processing, and procedural sound effects.
-- `WolfLongFilmEngine.kt`: chapter planning and resumable chapter checkpoints.
-- `WolfDiagnostics.kt`, `WolfResourceGuard.kt`, `WolfMemoryManager.kt`, and `WolfFilmQualityInspector.kt`: diagnostics, resource protection, memory safeguards, and output inspection.
-- `app/src/test`: offline unit tests.
+### القصة والذاكرة المحلية
+- `MainActivity.kt`: واجهة المشروعات والإنتاج المحلية.
+- `WolfOfflineStoryAiEngine.kt` و`WolfOfflineStoryAiActivity.kt`: تخطيط وكتابة القصة عبر LiteRT-LM على الجهاز، مع استكمال الفصول ونقاط التوقف والاعتماد النهائي.
+- `WolfStoryLengthStructureEngine.kt`: تقسيم النص العربي/الإنجليزي، ميزانيات الكلمات، البنية السردية وقياس الطول.
+- `WolfStoryOriginalityReviewEngine.kt`: مراجعة التداخل النصي مع المراجع المحلية وسياسة إظهار المصادر واعتماد القصة.
+- `WolfHorrorKnowledgeLibrary.kt` و`WolfHorrorKnowledgeLibraryActivity.kt`: مكتبة TXT خاصة بالجهاز، والتصنيف والمجلدات والوسوم والفهرسة والبحث المحلي وحفظ النص الأصلي.
+- `WolfProjectStore.kt`: حفظ سجلات المشاريع محليًا باستبدال ذري.
 
-## Build requirements
+### التخطيط والرندر والإطارات
+- `StoryDirectorEngine.kt`: تخطيط المشاهد واللقطات، وصف الكاميرا والتكوين والإضاءة والحركة، وتوزيع/تقطيع إطارات اللقطات عند استكمال الفصل.
+- `OfflineProductionEngine.kt`: خط الإنتاج الأساسي؛ يحافظ على إعداد المدة والتوقيت في `WolfCinematicAudioTimeline`، وملفات اللقطات المستقلة، وفحص عدد الإطارات قبل إعادة الاستخدام، ونقاط استئناف الفصول وإعادة اللقطة المتعثرة، ثم تجميع H.264/MP4.
+- `WolfSceneRenderPipeline.kt` و`WolfUploadedImageEngine.kt` و`Wolf25DCinematicImageEngine.kt`: اختيار مسار الصورة التي رفعها المستخدم أو المسار الإجرائي، مع حفظ الصورة الأصلية.
+- `WolfImageDepthSegmenter.kt`: تحليل محدود الذاكرة والشفافية واتصال 8 اتجاهات. نتائج تحليل الألوان تظل heuristic فقط؛ لا يسمح Parallax ما لم يوجد تحقق دلالي حقيقي. حتى ذلك الوقت تُعرض صورة المستخدم ثابتة دون حركة كاميرا عند عدم تأهل الفصل.
+- `WolfSceneDepthComposer.kt`: تجميع طبقات العمق مع قفل `safeForParallax` والتحقق من صلاحية الـBitmaps وحفظ Canvas state.
+- `WolfSceneArtEngine.kt` و`WolfProceduralMotionEngine.kt` و`WolfProceduralVisualSystem.kt`: بدائل جوية وبيئية فقط مثل الضباب والمطر والجسيمات والظلال الجوية؛ لا ترسم أجسادًا هندسية بديلة لشخصيات أو أشباح أو مبانٍ أو Props.
+- `WolfSceneAssetStore.kt`: صور مستقلة لكل لقطة في المشروع، مع إصدار فصل عمق يمنع إعادة استخدام نقاط استكمال صُنعت بالنسخة القديمة.
+
+### الصوت والإخراج
+- `WolfStoryVoiceEngine.kt` و`WolfVoiceSegmentStore.kt`: التسجيل البشري المرتبط ببصمة القصة، مع التسجيل المجزأ والاستيراد والاستعادة والدمج والاعتماد.
+- `WolfCinematicAudioTimeline.kt`: ساعة موحدة للمقدمة والراوي؛ تبدأ الرواية بعد المقدمة، وتدخل مدة المقدمة والراوي الكامل في الخط الزمني وفق سياسة المشروع.
+- `WolfAudioMixer.kt`: مرشّح high-pass، وخفض ضوضاء، وDucking، ومحدد مستوى، وملء كامل المدة بالصمت إذا انتهت مصادر الصوت مبكرًا.
+- `WolfAudioTranscoder.kt` و`WolfSoundFxEngine.kt`: تحويل الصوت إلى AAC ومؤثرات صوتية إجرائية.
+- `WolfOfflineVideoExporter.kt`: مسار إخراج Android/MediaStore مع تطبيع طوابع الفيديو عند الحاجة.
+- `WolfLongFilmEngine.kt` و`WolfLongFilmCheckpointStore.kt`: تقسيم الأفلام الطويلة ونقاط الاستكمال.
+- `WolfDiagnostics.kt` و`WolfResourceGuard.kt` و`WolfMemoryManager.kt` و`WolfFilmQualityInspector.kt`: التشخيص وحماية الموارد وتنظيف الملفات المؤقتة المملوكة للتطبيق وفحص ملف التسليم.
+
+## إضافات Stage التي تم إدخالها دون دمج التاريخ المتباعد
+
+- `WolfAssetRegistry.kt` و`app/src/main/assets/wolf_asset_registry.json`: سجل أصول وفحص بصمات وترخيص وتوافق وجودة Fail-Closed. السجل الأولي فارغ؛ لا توجد أصول إنتاج معتمدة بسبب مجرد وجود ملفات مرشحة.
+- `WolfProceduralGenerationLibrary.kt` وملفات النماذج والمولدات: مولدات جو وطقس وإضاءة إجرائية، مع مدخلات حتمية وحدود موارد ونتائج مرشحة.
+- `WolfMotionCodeLibrary.kt` و`WolfSceneContract.kt`: أوامر حركة وعقد مشهد محايد للمحرك، بإصدار محدد. لا يزال العقد غير موصول بمسار الرندر الإنتاجي إلى أن يمر Adapter مستقل باختبار واعتماد لاحق.
+- `asset-intake/` و`tools/asset-intake/`: أدوات فحص استلام الأصول والمصدر والرخصة والبصمة؛ المرشحات تبقى مرشحات ولا تترقى تلقائيًا إلى سجل الإنتاج.
+- `engine-pocs/`: تجارب Godot وFilament وlibGDX وLottie وKorGE في مشاريع مستقلة. SceneView يُعامل واجهة مبنية على Filament وليس محركًا مستقلًا. لا تُحمّل POC Filament ضمن اعتماديات APK الإنتاج.
+- ملفات Stage الخاصة بالاختبارات والعقود وسجل الأصول محفوظة إلى جانب ملفات Phase الفريدة.
+
+## حدود الإثبات الحالية
+
+- إضافة مصدر أو اختبار POC لا تعني أن المحرك أو الأصل أصبح جزءًا معتمدًا من خط الإنتاج.
+- ميزانيات أداء المولدات الإنتاجية تظل PENDING حتى القياس على الجهاز؛ حدود الاختبارات الآلية TEST_ONLY.
+- Cocos Creator يبقى BLOCKED — NOT PASSED حتى توفير مشروع Android أصلي مولّد من Creator وإثبات إطار مرسوم.
+- لا يدعي هذا المستودع أن مكتبة الأصول السينمائية مكتملة، أو أن مولدات البشر الواقعيين جاهزة.
+- ميزة Android Native TTS وقاموس النطق العربي ما زالت مواصفة مرجعية منفصلة وليست كودًا منفذًا داخل التطبيق.
+
+## متطلبات البناء
 
 - Android SDK 35
 - JDK 17
-- Gradle 8.13 or a compatible Gradle 8.x release
-- Android device API 26 or later for the application runtime
+- Gradle 8.13
+- الحد الأدنى للجهاز Android API 26
 
-Open the repository as an Android Gradle project in a compatible IDE, or use a Gradle installation to run the verification tasks.
+يمكن استخدام `./gradlew` لتنفيذ مهام Gradle من بيئة تطوير مناسبة.
 
-## Verification policy
+## التحقق والاختبارات
 
-The continuous-integration workflow is intentionally limited to Android lint and local JVM unit tests. It does not build an APK, start an emulator, or run instrumentation tests. Device/runtime verification is a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
+- `offline-quality.yml`: فحص Offline Runtime Guard، وبناء Debug APK، وAndroid Lint، واختبارات JVM.
+- `wolf-stage-13-motion-contract.yml`: مسار انحدار متكامل عند تغييرات الاستعادة؛ يشمل فحوص التطبيق، واختبارات Android 12، واختبارات أدوات استلام الأصول، وPOCs المعزولة.
+- `phase-17-android-runtime.yml`: يبني APK، ويعيد فحوص Offline، ثم يثبت التطبيق ويشغله على Android 12 مع تعطيل الشبكة، ويحفظ أدلة الإقلاع.
+- فشل مهمة أو غياب تشغيل على SHA الحالي لا يُحسب اجتيازًا. يجب ربط كل نتيجة برأس الفرع الذي اختُبر.
+- اختبار الهاتف الفعلي Realme 7 يظل بوابة مستقلة؛ محاكي Android 12 لا يحل محله.
 
-## Privacy and connectivity
+## الخصوصية والاتصال
 
-Project records, narration recordings, rendering, and exported media are stored locally. The offline production path does not require an account, API key, paid service, remote controller, or cloud backup. User-selected image URIs are retained as local document references.
+لا يطلب Manifest إذن Internet أو Network State. وتمنع مهمة `:app:verifyOfflineRuntime` أذونات الشبكة وواجهات الاتصال المعروفة والروابط الصلبة واعتماديات Runtime غير المعتمدة. هذه الحماية فحص مصدر وManifest واعتماديات؛ ولا تُعد وحدها التقاطًا فعليًا لحركة الشبكة على الجهاز.
 
-## Output
+تُخزن المشاريع والتسجيلات والمكتبة والمخرجات محليًا. نموذج LiteRT-LM لا يُنزّل من التطبيق؛ يجب على المستخدم استيراد نموذج `.litertlm` متوافق من التخزين المحلي قبل توليد القصص بالذكاء الاصطناعي. عند غياب النموذج، يظل إنشاء قصة يدويًا وإنتاج فيلم محلي متاحين.
 
-Rendered videos are exported to the device's Movies/WOLF CODE S media collection when the platform media provider is available.
+## المخرجات
+
+تُحفظ أفلام MP4 في مجموعة `Movies/WOLF CODE S` عبر MediaStore عندما تكون خدمة الوسائط متاحة.

@@ -25,11 +25,11 @@ class OfflineStorageEstimateTest {
     }
 
     @Test
-    fun longFilmEstimateIncludesThePersistentChapterIntermediates() {
+    fun longFilmEstimateIncludesShotChapterAndExportIntermediates() {
         val belowChapterLimit = OfflineProductionEngine.estimatePeakStorageBytes(300, false)
         val aboveChapterLimit = OfflineProductionEngine.estimatePeakStorageBytes(301, false)
         val expectedDifference =
-            (301L * 1_600_000L / 8L) * 3L - (300L * 1_600_000L / 8L) * 2L
+            (301L * 1_600_000L / 8L) * 4L - (300L * 1_600_000L / 8L) * 2L
         assertEquals(expectedDifference, aboveChapterLimit - belowChapterLimit)
     }
 
@@ -40,4 +40,35 @@ class OfflineStorageEstimateTest {
 
         assertEquals(maximum, capped)
     }
+
+    @Test
+    fun staleCleanupRecognizesEveryOfflineAudioAndVideoTemporaryPrefix() {
+        val generatedTemporaryFiles = listOf(
+            "silent_wolf_offline_test.mp4",
+            "sfx_wolf_offline_test.m4a",
+            "normalized_wolf_offline_test.mp4",
+            "converted_wolf_offline_test.m4a",
+            "layered_wolf_offline_test.m4a",
+            "layered_wolf_offline_test.mp4_voice.pcm",
+            "layered_wolf_offline_test.mp4_sfx.pcm",
+            "layered_wolf_offline_test.mp4_mix.pcm",
+            "wolf_offline_test.mp4"
+        )
+        generatedTemporaryFiles.forEach { name ->
+            assertTrue("Offline temporary file was not recognised: $name",
+                WolfMemoryManager.isOwnedTemporaryFile(name))
+        }
+
+        val userOrProjectFiles = listOf(
+            "user_photo.png",
+            "project_voice.m4a",
+            "project.json",
+            "unrelated_cache.pcm"
+        )
+        userOrProjectFiles.forEach { name ->
+            assertTrue("A user/project file was classified as WOLF temporary: $name",
+                !WolfMemoryManager.isOwnedTemporaryFile(name))
+        }
+    }
+
 }

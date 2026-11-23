@@ -63,12 +63,15 @@ object WolfSceneDepthComposer {
             drawMidground(midgroundCanvas)
             drawForeground(foregroundCanvas)
 
-            canvas.save()
-            canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
-            compositePlane(canvas, background, width, height, sceneIndex, safeProgress, Plane.BACKGROUND)
-            compositePlane(canvas, midground, width, height, sceneIndex, safeProgress, Plane.MIDGROUND)
-            compositePlane(canvas, foreground, width, height, sceneIndex, safeProgress, Plane.FOREGROUND)
-            canvas.restore()
+            val saved = canvas.save()
+            try {
+                canvas.clipRect(0f, 0f, width.toFloat(), height.toFloat())
+                compositePlane(canvas, background, width, height, sceneIndex, safeProgress, Plane.BACKGROUND)
+                compositePlane(canvas, midground, width, height, sceneIndex, safeProgress, Plane.MIDGROUND)
+                compositePlane(canvas, foreground, width, height, sceneIndex, safeProgress, Plane.FOREGROUND)
+            } finally {
+                canvas.restoreToCount(saved)
+            }
         }
     }
 
@@ -88,7 +91,12 @@ object WolfSceneDepthComposer {
         rotationDegrees: Float
     ) {
         if (width <= 0 || height <= 0) return
-        if (layers.background.isRecycled || layers.midground.isRecycled || layers.foreground.isRecycled) return
+        check(layers.safeForParallax) {
+            "Depth layers are heuristic-only and have not passed semantic validation"
+        }
+        check(!layers.background.isRecycled && !layers.midground.isRecycled && !layers.foreground.isRecycled) {
+            "Depth layer bitmap was recycled before composition"
+        }
         canvas.drawColor(Color.BLACK)
         drawImagePlane(canvas, width, height, sceneIndex, progress, layers.background, source, destination, rotationDegrees, Plane.BACKGROUND)
         drawImagePlane(canvas, width, height, sceneIndex, progress, layers.midground, source, destination, rotationDegrees, Plane.MIDGROUND)
@@ -110,12 +118,15 @@ object WolfSceneDepthComposer {
         val offset = depthOffset(width, height, progress, sceneIndex, plane)
         val scale = depthScale(progress, plane)
         val saved = canvas.save()
-        canvas.translate(width * 0.5f + offset.first, height * 0.5f + offset.second)
-        canvas.scale(scale, scale)
-        canvas.rotate(rotationDegrees, 0f, 0f)
-        canvas.translate(-width * 0.5f, -height * 0.5f)
-        canvas.drawBitmap(bitmap, source, destination, compositePaint)
-        canvas.restoreToCount(saved)
+        try {
+            canvas.translate(width * 0.5f + offset.first, height * 0.5f + offset.second)
+            canvas.scale(scale, scale)
+            canvas.rotate(rotationDegrees, 0f, 0f)
+            canvas.translate(-width * 0.5f, -height * 0.5f)
+            canvas.drawBitmap(bitmap, source, destination, compositePaint)
+        } finally {
+            canvas.restoreToCount(saved)
+        }
     }
 
     private fun ensureLayerBitmaps(width: Int, height: Int) {
@@ -145,10 +156,13 @@ object WolfSceneDepthComposer {
         val offset = depthOffset(width, height, progress, sceneIndex, plane)
         val scale = depthScale(progress, plane)
         val saved = canvas.save()
-        canvas.translate(width * 0.5f + offset.first, height * 0.5f + offset.second)
-        canvas.scale(scale, scale)
-        canvas.drawBitmap(bitmap, -width * 0.5f, -height * 0.5f, compositePaint)
-        canvas.restoreToCount(saved)
+        try {
+            canvas.translate(width * 0.5f + offset.first, height * 0.5f + offset.second)
+            canvas.scale(scale, scale)
+            canvas.drawBitmap(bitmap, -width * 0.5f, -height * 0.5f, compositePaint)
+        } finally {
+            canvas.restoreToCount(saved)
+        }
     }
 
     internal fun parallaxFactor(plane: Plane): Float = when (plane) {
