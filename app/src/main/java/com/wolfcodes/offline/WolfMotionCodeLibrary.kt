@@ -2,7 +2,6 @@ package com.wolfcodes.offline
 
 import java.math.BigInteger
 import kotlin.math.acos
-import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -24,7 +23,9 @@ object WolfMotionCodeLibrary {
         require(start.isFinite() && end.isFinite() && progress.isFinite()) {
             "Lerp inputs must be finite"
         }
-        return start + (end - start) * progress
+        val value = start + (end - start) * progress
+        require(value.isFinite()) { "Lerp result must be finite" }
+        return value
     }
 
     fun smoothStep(progress: Double): Double {
@@ -139,7 +140,7 @@ data class WolfVector3(
 
     fun normalized(): WolfVector3 {
         val magnitude = length()
-        require(magnitude > EPSILON) { "A zero-length vector cannot be normalized" }
+        require(magnitude.isFinite() && magnitude > EPSILON) { "Vector magnitude must be finite and non-zero" }
         return this * (1.0 / magnitude)
     }
 
@@ -202,7 +203,7 @@ data class WolfQuaternion(
 
     fun normalized(): WolfQuaternion {
         val magnitude = sqrt(x * x + y * y + z * z + w * w)
-        require(magnitude > WolfVector3.EPSILON) { "A zero quaternion cannot be normalized" }
+        require(magnitude.isFinite() && magnitude > WolfVector3.EPSILON) { "Quaternion magnitude must be finite and non-zero" }
         return WolfQuaternion(x / magnitude, y / magnitude, z / magnitude, w / magnitude)
     }
 

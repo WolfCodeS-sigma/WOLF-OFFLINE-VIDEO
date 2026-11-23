@@ -78,7 +78,7 @@ class WolfSceneContractTest {
                     colorSpace = WolfSceneColorSpace.SRGB,
                     alphaMode = WolfSceneAlphaMode.STRAIGHT,
                     sha256 = "b".repeat(64),
-                    outputReference = "memory:${layer.layerId}:$frameIndex"
+                    outputReference = "memory:" + layer.layerId + ":" + frameIndex
                 )
             }
         }

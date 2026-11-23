@@ -239,6 +239,7 @@ object WolfSceneContractValidator {
         if (!request.coordinateSystem.isValid()) errors += "coordinateSystem is invalid"
         if (request.camera != null && !request.camera.isValid()) errors += "camera command is invalid"
         if (request.layers.isEmpty()) errors += "at least one scene layer is required"
+        if (request.layers.none { it.visible }) errors += "at least one visible scene layer is required"
         if (request.layers.any { !it.isWellFormed() }) errors += "one or more layer commands are invalid"
         if (request.layers.map { it.layerId }.distinct().size != request.layers.size) {
             errors += "layerId values must be unique"
@@ -312,11 +313,9 @@ object WolfSceneContractValidator {
                 errors += "output dimensions do not match the requested canvas"
             }
             if (!Regex("[0-9a-f]{64}").matches(output.sha256)) errors += "output SHA-256 is invalid"
-            if (output.outputReference.isBlank()) errors += "outputReference is missing"
-            if (output.alphaMode == WolfSceneAlphaMode.OPAQUE &&
-                output.pixelFormat in setOf(WolfScenePixelFormat.JPEG)
-            ) {
-                // JPEG is compatible with an opaque output; this explicit branch documents that pairing.
+            if (!output.outputReference.isIdentifier()) errors += "outputReference must be an opaque identifier, not a path or URL"
+            if (output.pixelFormat == WolfScenePixelFormat.JPEG && output.alphaMode != WolfSceneAlphaMode.OPAQUE) {
+                errors += "JPEG output must use OPAQUE alpha mode"
             }
         }
 
