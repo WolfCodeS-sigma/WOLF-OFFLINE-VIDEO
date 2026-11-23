@@ -362,10 +362,15 @@ class WolfQuaternionCurve(
         if (keyframes.size == 1 || t <= keyframes.first().position) return keyframes.first().value.normalized()
         if (t >= keyframes.last().position) return keyframes.last().value.normalized()
 
-        val rightIndex = keyframes.indexOfFirst { it.position >= t }
-        val right = keyframes[rightIndex]
+        var low = 1
+        var high = keyframes.lastIndex
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (keyframes[middle].position >= t) high = middle else low = middle + 1
+        }
+        val right = keyframes[low]
         if (t == right.position) return right.value.normalized()
-        val left = keyframes[rightIndex - 1]
+        val left = keyframes[low - 1]
         val local = (t - left.position) / (right.position - left.position)
         return left.value.slerp(right.value, local)
     }

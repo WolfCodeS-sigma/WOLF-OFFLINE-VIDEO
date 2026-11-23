@@ -48,7 +48,15 @@ object WolfSceneContractLimits {
     const val MAX_KEYFRAME_COUNT = WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES
     const val MAX_PIXEL_ASPECT_COMPONENT = 1000
     const val MAX_IDENTIFIER_LENGTH = 128
+    const val MAX_ARTIFACT_REFERENCE_LENGTH = 137
 }
+
+private object WolfSceneContractPatterns {
+    val identifier = Regex("[A-Za-z0-9][A-Za-z0-9._:-]*")
+    val sha256 = Regex("[0-9a-f]{64}")
+}
+
+private const val SCENE_ARTIFACT_PREFIX = "artifact:"
 
 data class WolfSceneCoordinateSystem(
     val handedness: WolfSceneHandedness,
@@ -101,16 +109,34 @@ data class WolfSceneTimeline(
             return Math.addExact(startFrameIndex, frameCount.toLong())
         }
 
-    fun contains(frameIndex: Long): Boolean =
-        isValid() && frameIndex >= startFrameIndex && frameIndex < endFrameExclusive
+    /**
+     * Fast membership check for callers that have already validated this timeline.
+     * Frame indices and counts are non-negative and bounded, so subtraction is safe
+     * once frameIndex >= startFrameIndex.
+     */
+    internal fun containsValidatedFrameIndex(frameIndex: Long): Boolean =
+        startFrameIndex >= 0L &&
+            frameCount in 1..WolfSceneContractLimits.MAX_FRAME_COUNT &&
+            frameIndex >= startFrameIndex &&
+            frameIndex - startFrameIndex < frameCount.toLong()
 
-    fun presentationTimeUs(frameIndex: Long): Long {
-        require(contains(frameIndex)) { "Frame is outside the requested scene timeline" }
+    internal fun presentationTimeUsForValidatedFrame(frameIndex: Long): Long {
+        require(containsValidatedFrameIndex(frameIndex)) {
+            "Frame is outside the validated scene timeline"
+        }
         return WolfMotionCodeLibrary.framePresentationTimeUs(
             frameIndex,
             frameRateNumerator,
             frameRateDenominator
         )
+    }
+
+    fun contains(frameIndex: Long): Boolean =
+        isValid() && containsValidatedFrameIndex(frameIndex)
+
+    fun presentationTimeUs(frameIndex: Long): Long {
+        require(contains(frameIndex)) { "Frame is outside the requested scene timeline" }
+        return presentationTimeUsForValidatedFrame(frameIndex)
     }
 }
 
@@ -129,12 +155,27 @@ data class WolfSceneCameraCommand(
             nearClip <= 0.0 || farClip <= nearClip
         ) return false
 
-        val direction = runCatching { target - position }.getOrNull() ?: return false
-        val directionLength = runCatching { direction.length() }.getOrNull() ?: return false
-        val upLength = runCatching { up.length() }.getOrNull() ?: return false
-        if (directionLength <= WolfVector3.EPSILON || upLength <= WolfVector3.EPSILON) return false
-        val crossLength = runCatching { direction.cross(up).length() }.getOrNull() ?: return false
-        return crossLength.isFinite() && crossLength > WolfVector3.EPSILON
+        // Validate the camera basis directly. This avoids temporary vectors and
+        // exception-wrapper allocations in the per-frame camera-motion validation path.
+        val directionX = target.x - position.x
+        val directionY = target.y - position.y
+        val directionZ = target.z - position.z
+        if (!directionX.isFinite() || !directionY.isFinite() || !directionZ.isFinite()) return false
+
+        val directionLengthSquared =
+            directionX * directionX + directionY * directionY + directionZ * directionZ
+        val upLengthSquared = up.x * up.x + up.y * up.y + up.z * up.z
+        val minimumLengthSquared = WolfVector3.EPSILON * WolfVector3.EPSILON
+        if (!directionLengthSquared.isFinite() || directionLengthSquared <= minimumLengthSquared ||
+            !upLengthSquared.isFinite() || upLengthSquared <= minimumLengthSquared
+        ) return false
+
+        val crossX = directionY * up.z - directionZ * up.y
+        val crossY = directionZ * up.x - directionX * up.z
+        val crossZ = directionX * up.y - directionY * up.x
+        if (!crossX.isFinite() || !crossY.isFinite() || !crossZ.isFinite()) return false
+        val crossLengthSquared = crossX * crossX + crossY * crossY + crossZ * crossZ
+        return crossLengthSquared.isFinite() && crossLengthSquared > minimumLengthSquared
     }
 }
 
@@ -150,12 +191,21 @@ data class WolfSceneCameraMotionTrack(
         if (frameCount !in 1..WolfSceneContractLimits.MAX_FRAME_COUNT ||
             !nearClip.isFinite() || !farClip.isFinite() || nearClip <= 0.0 || farClip <= nearClip
         ) return false
-        val positions = position.keyframes.map { it.position }
-        if (target.keyframes.map { it.position } != positions ||
-            up.keyframes.map { it.position } != positions ||
-            verticalFieldOfViewDegrees.keyframes.map { it.position } != positions
+        val positionKeys = position.keyframes
+        val targetKeys = target.keyframes
+        val upKeys = up.keyframes
+        val fieldOfViewKeys = verticalFieldOfViewDegrees.keyframes
+        if (targetKeys.size != positionKeys.size || upKeys.size != positionKeys.size ||
+            fieldOfViewKeys.size != positionKeys.size
         ) return false
-        return runCatching {
+        for (index in positionKeys.indices) {
+            val keyPosition = positionKeys[index].position
+            if (targetKeys[index].position != keyPosition ||
+                upKeys[index].position != keyPosition ||
+                fieldOfViewKeys[index].position != keyPosition
+            ) return false
+        }
+        return try {
             for (frame in 0 until frameCount) {
                 val progress = if (frameCount == 1) 0.0 else frame.toDouble() / (frameCount - 1).toDouble()
                 val valid = WolfSceneCameraCommand(
@@ -169,7 +219,9 @@ data class WolfSceneCameraMotionTrack(
                 if (!valid) return false
             }
             true
-        }.getOrDefault(false)
+        } catch (_: IllegalArgumentException) {
+            false
+        }
     }
 }
 
@@ -182,7 +234,7 @@ data class WolfSceneAssetReference(
     fun isWellFormed(): Boolean =
         assetId.isSceneIdentifier() &&
             version.isNotBlank() && version.length <= 64 &&
-            Regex("[0-9a-f]{64}").matches(sha256) &&
+            sha256.isSha256Digest() &&
             usage.isSceneIdentifier()
 }
 
@@ -519,6 +571,12 @@ object WolfSceneContractValidator {
             errors += "result output count does not match the bounded request"
         }
 
+        // One PTS computation per requested frame, rather than one BigInteger
+        // calculation for every layer/frame output pair.
+        val expectedPtsByFrameOffset = LongArray(request.timeline.frameCount) { offset ->
+            val frameIndex = Math.addExact(request.timeline.startFrameIndex, offset.toLong())
+            request.timeline.presentationTimeUsForValidatedFrame(frameIndex)
+        }
         val outputsByLayer = request.layers.filter { it.visible }.associate { it.layerId to ArrayList<WolfSceneFrameOutput>() }
         val seenFrames = HashSet<Pair<String, Long>>()
         val seenReferences = HashSet<String>()
@@ -526,30 +584,33 @@ object WolfSceneContractValidator {
         var totalReusableBytes = 0L
 
         result.outputs.forEach { output ->
-            if (output.layerId !in requestedLayers) {
+            if (!output.layerId.isSceneIdentifier() || output.layerId !in requestedLayers) {
                 errors += "output layerId is not requested"
                 return@forEach
             }
-            if (!request.timeline.contains(output.frameIndex)) {
+            if (!request.timeline.containsValidatedFrameIndex(output.frameIndex)) {
                 errors += "output frameIndex is outside the request"
                 return@forEach
             }
             if (!seenFrames.add(output.layerId to output.frameIndex)) {
                 errors += "result contains duplicate layer/frame outputs"
             }
-            if (output.presentationTimeUs != request.timeline.presentationTimeUs(output.frameIndex)) {
+            val frameOffset = (output.frameIndex - request.timeline.startFrameIndex).toInt()
+            if (output.presentationTimeUs != expectedPtsByFrameOffset[frameOffset]) {
                 errors += "output presentationTimeUs does not match the film timeline"
             }
             if (output.widthPx != request.canvas.widthPx || output.heightPx != request.canvas.heightPx) {
                 errors += "output dimensions do not match the requested canvas"
             }
             if (output.byteCount <= 0L) errors += "output byteCount must be positive"
-            if (!Regex("[0-9a-f]{64}").matches(output.sha256)) errors += "output SHA-256 is invalid"
+            if (!output.sha256.isSha256Digest()) errors += "output SHA-256 is invalid"
             val referenceIsValid = output.outputReference.isSceneArtifactReference()
             if (!referenceIsValid) {
                 errors += "outputReference must be an opaque artifact identifier, not a path or URL"
             }
-            if (!seenReferences.add(output.outputReference)) errors += "outputReference values must be unique"
+            if (referenceIsValid && !seenReferences.add(output.outputReference)) {
+                errors += "outputReference values must be unique"
+            }
             if (output.imageEncoding == WolfSceneImageEncoding.JPEG && output.alphaMode != WolfSceneAlphaMode.OPAQUE) {
                 errors += "JPEG output must use OPAQUE alpha mode"
             }
@@ -619,7 +680,15 @@ object WolfSceneContractValidator {
 
 private fun String.isSceneIdentifier(): Boolean =
     length in 1..WolfSceneContractLimits.MAX_IDENTIFIER_LENGTH &&
-        matches(Regex("[A-Za-z0-9][A-Za-z0-9._:-]*"))
+        WolfSceneContractPatterns.identifier.matches(this)
 
-private fun String.isSceneArtifactReference(): Boolean =
-    startsWith("artifact:") && substringAfter("artifact:").isSceneIdentifier()
+private fun String.isSha256Digest(): Boolean =
+    length == 64 && WolfSceneContractPatterns.sha256.matches(this)
+
+private fun String.isSceneArtifactReference(): Boolean {
+    if (length !in (SCENE_ARTIFACT_PREFIX.length + 1)..WolfSceneContractLimits.MAX_ARTIFACT_REFERENCE_LENGTH) {
+        return false
+    }
+    if (!startsWith(SCENE_ARTIFACT_PREFIX)) return false
+    return substring(SCENE_ARTIFACT_PREFIX.length).isSceneIdentifier()
+}

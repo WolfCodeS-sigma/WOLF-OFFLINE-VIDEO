@@ -73,6 +73,21 @@ class WolfMotionCodeLibraryTest {
     }
 
     @Test
+    fun quaternionCurveUsesBinarySearchAcrossMultipleSegments() {
+        val quarterTurn = WolfQuaternion(0.0, 0.0, kotlin.math.sin(Math.PI / 4.0), kotlin.math.cos(Math.PI / 4.0))
+        val halfTurn = WolfQuaternion(0.0, 0.0, 1.0, 0.0)
+        val curve = WolfQuaternionCurve(
+            listOf(
+                WolfQuaternionKeyframe(0.0, WolfQuaternion.IDENTITY),
+                WolfQuaternionKeyframe(0.5, quarterTurn),
+                WolfQuaternionKeyframe(1.0, halfTurn)
+            )
+        )
+        assertEquals(quarterTurn.normalized(), curve.sample(0.5))
+        assertEquals(quarterTurn.slerp(halfTurn, 0.5), curve.sample(0.75))
+    }
+
+    @Test
     fun transformSupportsNegativeScaleForMirroring() {
         val mirrored = WolfTransform3(scale = WolfVector3(-1.0, 1.0, -1.0))
         assertEquals(WolfVector3(-2.0, 3.0, -4.0), mirrored.applyToPoint(WolfVector3(2.0, 3.0, 4.0)))

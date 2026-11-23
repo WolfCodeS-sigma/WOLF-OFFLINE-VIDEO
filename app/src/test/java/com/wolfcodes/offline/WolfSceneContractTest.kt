@@ -376,12 +376,15 @@ class WolfSceneContractTest {
         val manyLayers = (0..WolfSceneContractLimits.MAX_LAYER_COUNT).map {
             WolfSceneLayerCommand("layer-" + it, it, WolfSceneBlendMode.NORMAL, 1000)
         }
-        val invalidLayers = WolfSceneRenderRequest(
-            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
-            base.timeline, base.canvas, base.coordinateSystem, base.camera,
-            manyLayers, emptyList(), base.resourceEnvelope, base.runtimeTarget
-        )
-        assertFalse(WolfSceneContractValidator.validateRequest(invalidLayers).isValid)
+        val oversizedRejection = runCatching {
+            WolfSceneRenderRequest(
+                base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+                base.timeline, base.canvas, base.coordinateSystem, base.camera,
+                manyLayers, emptyList(), base.resourceEnvelope, base.runtimeTarget
+            )
+        }.exceptionOrNull()
+        assertTrue(oversizedRejection is IllegalArgumentException)
+        assertTrue(oversizedRejection?.message?.contains("Scene layers") == true)
     }
 
     @Test
@@ -412,6 +415,36 @@ class WolfSceneContractTest {
             )
         })
         assertTrue(WolfSceneContractValidator.validateResult(request, result, verifier).isValid)
+    }
+
+    @Test
+    fun resultRejectsOversizedArtifactReferenceWithoutPassingItToVerifier() {
+        val request = request()
+        val valid = successfulResult(request)
+        val oversizedReference = "artifact:" + "x".repeat(WolfSceneContractLimits.MAX_IDENTIFIER_LENGTH + 1)
+        val outputs = valid.outputs.mapIndexed { index, output ->
+            if (index == 0) output.copy(outputReference = oversizedReference) else output
+        }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, outputs,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val metadata = valid.outputs.associate { output ->
+            output.outputReference to WolfSceneOutputArtifactMetadata(
+                output.byteCount, output.sha256, output.widthPx, output.heightPx,
+                output.pixelFormat, output.imageEncoding, output.colorSpace, output.alphaMode
+            )
+        }
+        val inspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            metadata[reference]
+        }
+
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("opaque artifact identifier") })
+        assertFalse(inspected.contains(oversizedReference))
     }
 
     @Test
