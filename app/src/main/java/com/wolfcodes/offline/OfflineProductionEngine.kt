@@ -72,7 +72,8 @@ object OfflineProductionEngine {
         val narrationLimitUs = if (
             narrationTimingEnabled && audioDurationMs != null && audioDurationMs in 1_000L..1_800_000L
         ) {
-            audioDurationMs * 1_000L
+            // Narration may end before the film, but it must never extend the requested film timeline.
+            minOf(audioDurationMs * 1_000L, filmDurationUs)
         } else {
             filmDurationUs
         }
