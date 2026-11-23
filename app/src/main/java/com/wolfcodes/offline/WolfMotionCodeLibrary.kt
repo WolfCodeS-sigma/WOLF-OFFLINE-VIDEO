@@ -262,6 +262,60 @@ class WolfVector3Curve(
             WolfMotionCodeLibrary.lerp(left.value.z, right.value.z, resolved)
         )
     }
+
+    /**
+     * Samples into caller-owned scratch storage. Camera validation reuses this
+     * buffer for every frame, avoiding per-frame Vector3 allocations.
+     */
+    internal fun sampleInto(progress: Double, components: DoubleArray) {
+        require(components.size >= 3) { "Vector3 sample output needs three components" }
+        val t = WolfMotionCodeLibrary.clampUnit(progress)
+        val first = keyframes[0]
+        val last = keyframes[keyframes.lastIndex]
+        if (keyframes.size == 1 || t <= first.position) {
+            components[0] = first.value.x
+            components[1] = first.value.y
+            components[2] = first.value.z
+            return
+        }
+        if (t >= last.position) {
+            components[0] = last.value.x
+            components[1] = last.value.y
+            components[2] = last.value.z
+            return
+        }
+
+        var low = 1
+        var high = keyframes.lastIndex
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (keyframes[middle].position >= t) high = middle else low = middle + 1
+        }
+        val right = keyframes[low]
+        if (t == right.position) {
+            components[0] = right.value.x
+            components[1] = right.value.y
+            components[2] = right.value.z
+            return
+        }
+        val left = keyframes[low - 1]
+        if (interpolation == WolfCurveInterpolation.STEP) {
+            components[0] = left.value.x
+            components[1] = left.value.y
+            components[2] = left.value.z
+            return
+        }
+
+        val local = (t - left.position) / (right.position - left.position)
+        val resolved = when (interpolation) {
+            WolfCurveInterpolation.STEP -> 0.0
+            WolfCurveInterpolation.LINEAR -> local
+            WolfCurveInterpolation.SMOOTHSTEP -> WolfMotionCodeLibrary.smoothStep(local)
+        }
+        components[0] = WolfMotionCodeLibrary.lerp(left.value.x, right.value.x, resolved)
+        components[1] = WolfMotionCodeLibrary.lerp(left.value.y, right.value.y, resolved)
+        components[2] = WolfMotionCodeLibrary.lerp(left.value.z, right.value.z, resolved)
+    }
 }
 
 /** Quaternion uses x/y/z vector components and w scalar component. */
