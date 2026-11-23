@@ -761,8 +761,8 @@ class MainActivity : Activity() {
                                 File(approvedPath).isFile
                         }.getOrDefault(false)
                 } ?: false
-                // The project duration is the film timeline. Narration is an independent
-                // audio layer and must never shorten the requested video duration.
+                // The approved narration's measured duration is authoritative for the film timeline.
+                // The production engine must cover the full recording without truncating it.
                 val effectiveDuration = project.durationSeconds.coerceIn(5, 1800)
                 val shotAssignments = WolfSceneAssetStore.shotAssignments(this, project.id)
                     .mapNotNull { (slot, value) ->
