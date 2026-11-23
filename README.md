@@ -47,3 +47,5 @@ Project records, narration recordings, rendering, and exported media are stored 
 Rendered videos are exported to the device's Movies/WOLF CODE S media collection when the platform media provider is available.
 
 - `asset-intake/` and `tools/asset-intake/`: executable, fail-closed batch intake. Two CC0 environment HDRIs are acquired as candidates in WOLF-ASSET-BATCH-001; neither is reviewed/approved for production or included in the APK. Batch 000-baseline remains empty. See `asset-intake/README.md`.
+
+- `WolfMotionCodeLibrary.kt` and `WolfSceneContract.kt`: Stage 13 engine-neutral deterministic math/curve/quaternion/transform primitives, rational frame PTS, versioned scene request/result contracts, strict request/output/resource validation, and JVM regression tests. The library is not yet wired into the production render path and does not replace StoryDirectorEngine or OfflineMotionEngine. See `docs/WOLF_STAGE_13_MOTION_CODE_LIBRARY_SCENE_CONTRACT.md`.
