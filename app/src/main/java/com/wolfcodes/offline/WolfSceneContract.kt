@@ -144,25 +144,30 @@ data class WolfSceneCameraMotionTrack(
     val nearClip: Double,
     val farClip: Double
 ) {
-    fun isWellFormed(): Boolean {
-        if (!nearClip.isFinite() || !farClip.isFinite() || nearClip <= 0.0 || farClip <= nearClip) {
-            return false
-        }
+    fun isWellFormed(frameCount: Int): Boolean {
+        if (frameCount !in 1..WolfSceneContractLimits.MAX_FRAME_COUNT ||
+            !nearClip.isFinite() || !farClip.isFinite() || nearClip <= 0.0 || farClip <= nearClip
+        ) return false
         val positions = position.keyframes.map { it.position }
         if (target.keyframes.map { it.position } != positions ||
             up.keyframes.map { it.position } != positions ||
             verticalFieldOfViewDegrees.keyframes.map { it.position } != positions
         ) return false
-        return positions.all { progress ->
-            WolfSceneCameraCommand(
-                position.sample(progress),
-                target.sample(progress),
-                up.sample(progress),
-                verticalFieldOfViewDegrees.sample(progress),
-                nearClip,
-                farClip
-            ).isValid()
-        }
+        return runCatching {
+            for (frame in 0 until frameCount) {
+                val progress = if (frameCount == 1) 0.0 else frame.toDouble() / (frameCount - 1).toDouble()
+                val valid = WolfSceneCameraCommand(
+                    position.sample(progress),
+                    target.sample(progress),
+                    up.sample(progress),
+                    verticalFieldOfViewDegrees.sample(progress),
+                    nearClip,
+                    farClip
+                ).isValid()
+                if (!valid) return false
+            }
+            true
+        }.getOrDefault(false)
     }
 }
 
@@ -355,15 +360,27 @@ object WolfSceneContractValidator {
         if (request.contractVersion != WolfSceneContract.VERSION) errors += "unsupported contractVersion"
         if (!request.sceneId.isSceneIdentifier()) errors += "sceneId is invalid"
         if (!request.shotId.isSceneIdentifier()) errors += "shotId is invalid"
-        if (!request.timeline.isValid()) errors += "timeline is invalid or its PTS exceeds Long range"
+        val timelineValid = request.timeline.isValid()
+        if (!timelineValid) errors += "timeline is invalid or its PTS exceeds Long range"
         if (!request.canvas.isValid()) errors += "canvas dimensions or pixel aspect ratio exceed contract limits"
         if (!request.coordinateSystem.isValid()) errors += "coordinateSystem is invalid"
+        if (request.layers.size > WolfSceneContractLimits.MAX_LAYER_COUNT) {
+            errors += "layer count exceeds contract limits"
+        }
+        if (request.assets.size > WolfSceneContractLimits.MAX_ASSET_COUNT) {
+            errors += "asset count exceeds contract limits"
+        }
+        // Return before copying, mapping, sorting, or grouping attacker-controlled oversized collections.
+        if (errors.any { it.contains("count exceeds") }) {
+            return WolfSceneContractValidation(errors.distinct())
+        }
         if (request.camera != null && !request.camera.isValid()) errors += "camera command is invalid"
-        if (request.cameraMotion != null && !request.cameraMotion.isWellFormed()) {
-            errors += "camera motion track is invalid"
+        if (request.cameraMotion != null &&
+            (!timelineValid || !request.cameraMotion.isWellFormed(request.timeline.frameCount))
+        ) {
+            errors += "camera motion track is invalid for the requested frame timeline"
         }
         if (request.layers.isEmpty()) errors += "at least one scene layer is required"
-        if (request.layers.size > WolfSceneContractLimits.MAX_LAYER_COUNT) errors += "layer count exceeds contract limits"
         if (request.layers.none { it.visible }) errors += "at least one visible scene layer is required"
         if (request.layers.any { !it.isWellFormed() }) errors += "one or more layer commands or motion tracks are invalid"
         if (request.layers.map { it.layerId }.distinct().size != request.layers.size) {
@@ -372,9 +389,6 @@ object WolfSceneContractValidator {
         if (request.layers.map { it.zIndex }.distinct().size != request.layers.size) {
             errors += "zIndex values must be unique for deterministic layer ordering"
         }
-        val motionCount = request.layers.count { it.motion != null }
-        if (motionCount > WolfSceneContractLimits.MAX_LAYER_COUNT) errors += "motion track count exceeds contract limits"
-        if (request.assets.size > WolfSceneContractLimits.MAX_ASSET_COUNT) errors += "asset count exceeds contract limits"
         if (request.assets.any { !it.isWellFormed() }) errors += "one or more asset references are invalid"
         if (request.assets.map { it.assetId }.distinct().size != request.assets.size) {
             errors += "assetId values must be unique within a request"

@@ -223,6 +223,23 @@ class WolfSceneContractTest {
     }
 
     @Test
+    fun requestCollectionsAreImmutableAfterDefensiveCopy() {
+        val base = request()
+        try {
+            (base.layers as MutableList).clear()
+            throw AssertionError("Expected immutable layer collection")
+        } catch (_: UnsupportedOperationException) {
+            assertEquals(2, base.layers.size)
+        }
+        try {
+            (base.layers.first().assetIds as MutableList).clear()
+            throw AssertionError("Expected immutable asset collection")
+        } catch (_: UnsupportedOperationException) {
+            assertEquals(listOf("environment-corridor"), base.layers.first().assetIds)
+        }
+    }
+
+    @Test
     fun matchingResultPassesOnlyAfterArtifactBytesAreIndependentlyVerified() {
         val request = request()
         val result = successfulResult(request)
@@ -295,6 +312,18 @@ class WolfSceneContractTest {
         val checked = WolfSceneContractValidator.validateResult(request, result, artifactVerifier(metadata))
         assertFalse(checked.isValid)
         assertTrue(checked.errors.any { it.contains("runtime/adapter identity") })
+    }
+
+    @Test
+    fun resultOutputCollectionIsImmutable() {
+        val base = request()
+        val result = successfulResult(base)
+        try {
+            (result.outputs as MutableList).clear()
+            throw AssertionError("Expected immutable output collection")
+        } catch (_: UnsupportedOperationException) {
+            assertEquals(4, result.outputs.size)
+        }
     }
 
     @Test
