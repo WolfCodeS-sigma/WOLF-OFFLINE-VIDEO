@@ -133,8 +133,8 @@ class WolfSceneContractTest {
             frameRateDenominator = 1L
         )
         assertEquals(
-            repeatedPtsAtLaterAbsoluteFrames.presentationTimeUs(1L),
-            repeatedPtsAtLaterAbsoluteFrames.presentationTimeUs(2L)
+            WolfMotionCodeLibrary.framePresentationTimeUs(1L, 1_500_000L, 1L),
+            WolfMotionCodeLibrary.framePresentationTimeUs(2L, 1_500_000L, 1L)
         )
         assertFalse(repeatedPtsAtLaterAbsoluteFrames.isValid())
 
