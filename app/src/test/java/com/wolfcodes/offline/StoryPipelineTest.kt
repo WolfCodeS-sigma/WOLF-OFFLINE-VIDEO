@@ -91,6 +91,33 @@ class StoryPipelineTest {
     }
 
     @Test
+    fun approvedNarrationStartsAfterIntroAndKeepsItsFullDuration() {
+        val timeline = OfflineProductionEngine.buildAudioTimeline(
+            requestedFilmSeconds = 10,
+            narrationTimingEnabled = true,
+            audioDurationMs = 7_000L,
+            includeIntro = true
+        )
+        assertEquals(10_000_000L, timeline.filmDurationUs)
+        assertEquals(7_000_000L, timeline.narrationLimitUs)
+        assertEquals(3_000_000L, timeline.narrationOffsetUs)
+        assertEquals(3, timeline.introSeconds)
+    }
+
+    @Test
+    fun introExtendsFilmRuntimeInsteadOfCuttingApprovedNarration() {
+        val timeline = OfflineProductionEngine.buildAudioTimeline(
+            requestedFilmSeconds = 5,
+            narrationTimingEnabled = true,
+            audioDurationMs = 45_000L,
+            includeIntro = true
+        )
+        assertEquals(48_000_000L, timeline.filmDurationUs)
+        assertEquals(45_000_000L, timeline.narrationLimitUs)
+        assertEquals(3_000_000L, timeline.narrationOffsetUs)
+    }
+
+    @Test
     fun renderRevisionInvalidatesLegacyStoryboardCheckpointFingerprint() {
         assertEquals("storyboard-planner-v3", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
         assertEquals(2, WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION)

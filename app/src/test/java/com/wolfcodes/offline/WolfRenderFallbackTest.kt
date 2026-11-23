@@ -25,7 +25,7 @@ class WolfRenderFallbackTest {
                 else 0xFF101010.toInt()
             }
         )
-        assertTrue(candidate.heuristicCandidateSeparated)
+        assertTrue(candidate.separated)
         assertFalse(candidate.semanticValidationPassed)
         assertTrue(OfflineProductionEngine.useSafeStillImageFallback(candidate.safeForParallax))
     }
