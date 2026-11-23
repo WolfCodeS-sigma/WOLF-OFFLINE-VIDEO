@@ -502,7 +502,7 @@ object WolfSceneContractValidator {
             }
             if (output.byteCount <= 0L) errors += "output byteCount must be positive"
             if (!Regex("[0-9a-f]{64}").matches(output.sha256)) errors += "output SHA-256 is invalid"
-            if (!output.outputReference.isSceneIdentifier()) {
+            if (!output.outputReference.isSceneArtifactReference()) {
                 errors += "outputReference must be an opaque identifier, not a path or URL"
             }
             if (!seenReferences.add(output.outputReference)) errors += "outputReference values must be unique"
@@ -573,3 +573,6 @@ object WolfSceneContractValidator {
 private fun String.isSceneIdentifier(): Boolean =
     length in 1..WolfSceneContractLimits.MAX_IDENTIFIER_LENGTH &&
         matches(Regex("[A-Za-z0-9][A-Za-z0-9._:-]*"))
+
+private fun String.isSceneArtifactReference(): Boolean =
+    startsWith("artifact:") && substringAfter("artifact:").isSceneIdentifier()

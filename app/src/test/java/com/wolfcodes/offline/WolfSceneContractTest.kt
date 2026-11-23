@@ -338,6 +338,28 @@ class WolfSceneContractTest {
     }
 
     @Test
+    fun resultRejectsFilesystemAndUrlOutputReferences() {
+        val request = request()
+        val valid = successfulResult(request)
+        val unsafeOutputs = valid.outputs.mapIndexed { index, output ->
+            if (index == 0) output.copy(outputReference = "C:private-folder") else output
+        }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, unsafeOutputs,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val metadata = unsafeOutputs.associate { output ->
+            output.outputReference to WolfSceneOutputArtifactMetadata(
+                output.byteCount, output.sha256, output.widthPx, output.heightPx,
+                output.pixelFormat, output.imageEncoding, output.colorSpace, output.alphaMode
+            )
+        }
+        val checked = WolfSceneContractValidator.validateResult(request, result, artifactVerifier(metadata))
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("opaque identifier") })
+    }
+
+    @Test
     fun resultRejectsRuntimeProvenanceMismatch() {
         val request = request()
         val valid = successfulResult(request)
