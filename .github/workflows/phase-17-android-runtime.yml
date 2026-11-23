@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - feature/phase-16-offline-runtime-closure
+      - main
     types:
       - opened
       - synchronize
