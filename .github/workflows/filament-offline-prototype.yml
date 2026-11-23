@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: filament-native-prototype-${{ github.ref }}
+  group: wolf-gradle-regression-global
   queue: max
 
 jobs:
@@ -42,6 +42,7 @@ jobs:
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-provider: basic
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Compilation and dependency check
         run: ./gradlew assembleDebug --stacktrace
@@ -92,6 +93,7 @@ jobs:
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-provider: basic
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Run Android 12 regression and Filament MP4 export tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0

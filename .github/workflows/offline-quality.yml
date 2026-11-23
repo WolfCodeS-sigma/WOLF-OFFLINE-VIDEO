@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: wolf-gradle-regression-global
+  queue: max
+
 jobs:
   offline-quality:
     name: Android lint and JVM unit tests

@@ -10,6 +10,7 @@ on:
       - "build.gradle.kts"
       - "settings.gradle.kts"
       - "gradle/**"
+      - "gradle.properties"
       - "engine-pocs/**"
       - "asset-intake/**"
       - "tools/asset-intake/**"
@@ -24,7 +25,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wolf-stage-13-full-regression-${{ github.ref }}
+  group: wolf-gradle-regression-global
   queue: max
 
 jobs:
@@ -52,6 +53,7 @@ jobs:
         with:
           gradle-version: "8.13"
           cache-provider: basic
+          cache-read-only: false
 
       - name: Build Debug APK and run lint plus all JVM regression tests
         run: gradle --no-daemon :app:assembleDebug lintDebug testDebugUnitTest
@@ -97,6 +99,7 @@ jobs:
         with:
           gradle-version: "8.13"
           cache-provider: basic
+          cache-read-only: false
 
       - name: Run app instrumentation tests on Android 12
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
@@ -149,6 +152,7 @@ jobs:
         with:
           gradle-version: "8.13"
           cache-provider: basic
+          cache-read-only: false
 
       - name: Build isolated Android engine POC variants and resolve SceneView
         run: |
@@ -177,6 +181,7 @@ jobs:
 
   korge-regression:
     name: KorGE Android packaging regression
+    needs: app-android-regression
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -199,6 +204,7 @@ jobs:
         with:
           gradle-version: "8.13"
           cache-provider: basic
+          cache-read-only: false
 
       - name: Build KorGE Android APK and AAB without publishing artifacts
         run: gradle --no-daemon -p engine-pocs/korge assembleDebug packageAndroidDebug

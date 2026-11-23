@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wolf-stage-11-engine-poc-${{ github.ref }}
+  group: wolf-gradle-regression-global
   queue: max
 
 jobs:
@@ -54,6 +54,7 @@ jobs:
         with:
           gradle-version: "8.13"
           cache-provider: basic
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Build isolated Android POC variants and resolve SceneView
         run: |
@@ -81,6 +82,7 @@ jobs:
           script: gradle --no-daemon -p engine-pocs/android :app:connectedGodotDebugAndroidTest :app:connectedFilamentDebugAndroidTest :app:connectedLibgdxDebugAndroidTest :app:connectedLottieDebugAndroidTest
 
   korge-android-poc:
+    needs: android-engine-pocs
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'feature/stage-11-engine-compatibility-poc'
     name: KorGE isolated Android packaging POC
     runs-on: ubuntu-latest
@@ -105,6 +107,7 @@ jobs:
         with:
           gradle-version: "8.13"
           cache-provider: basic
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Build KorGE Android APK and AAB
         run: gradle --no-daemon -p engine-pocs/korge assembleDebug packageAndroidDebug
