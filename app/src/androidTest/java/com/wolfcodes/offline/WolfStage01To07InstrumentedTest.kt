@@ -152,6 +152,78 @@ class WolfStage01To07InstrumentedTest {
     }
 
     @Test(timeout = 600_000L)
+    fun narrationLongerThanFilmDoesNotExtendFinalMp4Duration() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val fixtureDirectory = File(context.cacheDir, "wolf-long-narration-device-test").apply {
+            if (!exists()) mkdirs()
+        }
+        val narrationFixture = File(fixtureDirectory, "long-narration.m4a")
+        var exportedUri: Uri? = null
+
+        try {
+            narrationFixture.delete()
+            WolfSoundFxEngine.renderAac(
+                scenes = listOf("صوت متواصل لاختبار قص التعليق عند نهاية الفيلم"),
+                durationSeconds = 7,
+                output = narrationFixture
+            )
+            assertTrue("The longer AAC narration fixture was not created", narrationFixture.isFile)
+            assertTrue("The longer AAC narration fixture is empty", narrationFixture.length() > 0L)
+
+            val result = OfflineProductionEngine.render(
+                context = context,
+                story = "في ممر مظلم سُمعت خطوات بعيدة ثم انطفأ الضوء.",
+                seconds = 5,
+                imageUris = emptyList(),
+                audioUri = Uri.fromFile(narrationFixture),
+                aspectRatio = "16:9",
+                generateSoundEffects = false,
+                includeWatermark = false,
+                includeIntro = false,
+                audioDurationIsAuthoritative = true,
+                audioDurationMs = 7_000L,
+                enableHorrorTypography = false,
+                projectId = "wolf-stage-long-voice-${System.currentTimeMillis()}"
+            )
+            assertEquals("The requested five-second film duration must remain authoritative", 5, result.durationSeconds)
+            exportedUri = Uri.parse(requireNotNull(result.mediaUri))
+
+            val report = WolfFilmQualityInspector.inspect(
+                context = context,
+                mediaReference = requireNotNull(result.mediaUri),
+                expectedDurationSeconds = 5,
+                requireAudio = true
+            )
+            assertTrue("Long-narration MP4 failed structural QA: ${report.summary}", report.passed)
+            assertTrue("Expected the full five-second video frame sequence, got ${report.videoSamples}", report.videoSamples >= 58L)
+            assertTrue("The final MP4 contains no readable audio samples", report.audioSamples > 0L)
+            assertTrue(
+                "A longer narration must not extend the five-second film: ${report.durationSeconds}",
+                requireNotNull(report.durationSeconds) in 4.8..5.2
+            )
+
+            val timings = readLastSampleTimes(context, requireNotNull(exportedUri))
+            val video = requireNotNull(timings["video/avc"]) { "The final MP4 has no H.264 video samples" }
+            val audio = requireNotNull(timings["audio/mp4a-latm"]) { "The final MP4 has no AAC audio samples" }
+            assertTrue(
+                "Video samples ended outside the five-second timeline: ${video.lastPresentationTimeUs}",
+                video.lastPresentationTimeUs in 4_800_000L..5_100_000L
+            )
+            assertTrue(
+                "Narration samples extended past the five-second film: ${audio.lastPresentationTimeUs}",
+                audio.lastPresentationTimeUs in 4_700_000L..5_100_000L
+            )
+        } finally {
+            exportedUri?.let { uri ->
+                if (uri.scheme == "content") {
+                    runCatching { context.contentResolver.delete(uri, null, null) }
+                }
+            }
+            narrationFixture.delete()
+        }
+    }
+
+    @Test(timeout = 600_000L)
     fun atmosphericFallbackWithoutUserMediaExportsDecodableSilentMp4() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         var exportedUri: Uri? = null
