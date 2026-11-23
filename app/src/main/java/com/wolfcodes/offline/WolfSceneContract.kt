@@ -148,35 +148,48 @@ data class WolfSceneCameraCommand(
     val nearClip: Double,
     val farClip: Double
 ) {
-    fun isValid(): Boolean {
-        if (!verticalFieldOfViewDegrees.isFinite() ||
-            verticalFieldOfViewDegrees <= 1.0 || verticalFieldOfViewDegrees >= 179.0 ||
-            !nearClip.isFinite() || !farClip.isFinite() ||
-            nearClip <= 0.0 || farClip <= nearClip
-        ) return false
+    fun isValid(): Boolean = isValidCameraValues(
+        position.x, position.y, position.z,
+        target.x, target.y, target.z,
+        up.x, up.y, up.z,
+        verticalFieldOfViewDegrees, nearClip, farClip
+    )
+}
 
-        // Validate the camera basis directly. This avoids temporary vectors and
-        // exception-wrapper allocations in the per-frame camera-motion validation path.
-        val directionX = target.x - position.x
-        val directionY = target.y - position.y
-        val directionZ = target.z - position.z
-        if (!directionX.isFinite() || !directionY.isFinite() || !directionZ.isFinite()) return false
+/** Numeric camera-basis check shared by static and animated camera commands. */
+private fun isValidCameraValues(
+    positionX: Double, positionY: Double, positionZ: Double,
+    targetX: Double, targetY: Double, targetZ: Double,
+    upX: Double, upY: Double, upZ: Double,
+    verticalFieldOfViewDegrees: Double,
+    nearClip: Double,
+    farClip: Double
+): Boolean {
+    if (!verticalFieldOfViewDegrees.isFinite() ||
+        verticalFieldOfViewDegrees <= 1.0 || verticalFieldOfViewDegrees >= 179.0 ||
+        !nearClip.isFinite() || !farClip.isFinite() ||
+        nearClip <= 0.0 || farClip <= nearClip
+    ) return false
 
-        val directionLengthSquared =
-            directionX * directionX + directionY * directionY + directionZ * directionZ
-        val upLengthSquared = up.x * up.x + up.y * up.y + up.z * up.z
-        val minimumLengthSquared = WolfVector3.EPSILON * WolfVector3.EPSILON
-        if (!directionLengthSquared.isFinite() || directionLengthSquared <= minimumLengthSquared ||
-            !upLengthSquared.isFinite() || upLengthSquared <= minimumLengthSquared
-        ) return false
+    val directionX = targetX - positionX
+    val directionY = targetY - positionY
+    val directionZ = targetZ - positionZ
+    if (!directionX.isFinite() || !directionY.isFinite() || !directionZ.isFinite()) return false
 
-        val crossX = directionY * up.z - directionZ * up.y
-        val crossY = directionZ * up.x - directionX * up.z
-        val crossZ = directionX * up.y - directionY * up.x
-        if (!crossX.isFinite() || !crossY.isFinite() || !crossZ.isFinite()) return false
-        val crossLengthSquared = crossX * crossX + crossY * crossY + crossZ * crossZ
-        return crossLengthSquared.isFinite() && crossLengthSquared > minimumLengthSquared
-    }
+    val directionLengthSquared =
+        directionX * directionX + directionY * directionY + directionZ * directionZ
+    val upLengthSquared = upX * upX + upY * upY + upZ * upZ
+    val minimumLengthSquared = WolfVector3.EPSILON * WolfVector3.EPSILON
+    if (!directionLengthSquared.isFinite() || directionLengthSquared <= minimumLengthSquared ||
+        !upLengthSquared.isFinite() || upLengthSquared <= minimumLengthSquared
+    ) return false
+
+    val crossX = directionY * upZ - directionZ * upY
+    val crossY = directionZ * upX - directionX * upZ
+    val crossZ = directionX * upY - directionY * upX
+    if (!crossX.isFinite() || !crossY.isFinite() || !crossZ.isFinite()) return false
+    val crossLengthSquared = crossX * crossX + crossY * crossY + crossZ * crossZ
+    return crossLengthSquared.isFinite() && crossLengthSquared > minimumLengthSquared
 }
 
 data class WolfSceneCameraMotionTrack(
@@ -205,17 +218,24 @@ data class WolfSceneCameraMotionTrack(
                 fieldOfViewKeys[index].position != keyPosition
             ) return false
         }
+        // Reuse scratch buffers across frames; camera validation is allocation-free per frame.
+        val positionComponents = DoubleArray(3)
+        val targetComponents = DoubleArray(3)
+        val upComponents = DoubleArray(3)
         return try {
             for (frame in 0 until frameCount) {
                 val progress = if (frameCount == 1) 0.0 else frame.toDouble() / (frameCount - 1).toDouble()
-                val valid = WolfSceneCameraCommand(
-                    position.sample(progress),
-                    target.sample(progress),
-                    up.sample(progress),
+                position.sampleInto(progress, positionComponents)
+                target.sampleInto(progress, targetComponents)
+                up.sampleInto(progress, upComponents)
+                val valid = isValidCameraValues(
+                    positionComponents[0], positionComponents[1], positionComponents[2],
+                    targetComponents[0], targetComponents[1], targetComponents[2],
+                    upComponents[0], upComponents[1], upComponents[2],
                     verticalFieldOfViewDegrees.sample(progress),
                     nearClip,
                     farClip
-                ).isValid()
+                )
                 if (!valid) return false
             }
             true
