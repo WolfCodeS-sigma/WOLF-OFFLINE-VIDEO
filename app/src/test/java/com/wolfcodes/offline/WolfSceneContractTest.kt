@@ -1,0 +1,737 @@
+package com.wolfcodes.offline
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class WolfSceneContractTest {
+    private fun WolfSceneLayerCommand.copyForMotion(motion: WolfSceneMotionTrack) =
+        WolfSceneLayerCommand(
+            layerId = layerId,
+            zIndex = zIndex,
+            blendMode = blendMode,
+            opacityPermille = opacityPermille,
+            visible = visible,
+            assetIds = assetIds,
+            motion = motion
+        )
+
+    private fun request(
+        layers: List<WolfSceneLayerCommand> = listOf(
+            WolfSceneLayerCommand("background", 0, WolfSceneBlendMode.NORMAL, 1000,
+                assetIds = listOf("environment-corridor")),
+            WolfSceneLayerCommand("foreground", 1, WolfSceneBlendMode.NORMAL, 850)
+        )
+    ): WolfSceneRenderRequest = WolfSceneRenderRequest(
+        requestId = "request-001",
+        contractVersion = WolfSceneContract.VERSION,
+        sceneId = "scene-01",
+        shotId = "shot-01",
+        masterSeed = 42L,
+        timeline = WolfSceneTimeline(24L, 2, 24L, 1L),
+        canvas = WolfSceneCanvas(720, 1280),
+        coordinateSystem = WolfSceneCoordinateSystem(
+            WolfSceneHandedness.RIGHT_HANDED,
+            WolfSceneAxis.Y,
+            WolfSceneAxis.Z,
+            false,
+            WolfScenePixelOrigin.TOP_LEFT
+        ),
+        camera = WolfSceneCameraCommand(
+            WolfVector3(0.0, 0.0, 5.0),
+            WolfVector3.ZERO,
+            WolfVector3.UNIT_Y,
+            45.0,
+            0.1,
+            100.0
+        ),
+        layers = layers,
+        assets = listOf(
+            WolfSceneAssetReference("environment-corridor", "1.0.0", "a".repeat(64), "scene-background")
+        ),
+        resourceEnvelope = WolfSceneResourceEnvelope(
+            64L * 1024L * 1024L,
+            128L * 1024L * 1024L,
+            16L * 1024L * 1024L,
+            100_000L,
+            4L,
+            2_000L
+        ),
+        runtimeTarget = WolfSceneRuntimeTarget(
+            "wolf.adapter.godot", "1.0.0", "godot", "4.7.2"
+        )
+    )
+
+    private fun artifactVerifier(
+        metadataByReference: Map<String, WolfSceneOutputArtifactMetadata>
+    ) = WolfSceneOutputArtifactVerifier { reference -> metadataByReference[reference] }
+
+    private fun successfulResult(request: WolfSceneRenderRequest): WolfSceneRenderResult {
+        val outputs = request.layers.filter { it.visible }.flatMap { layer ->
+            (0 until request.timeline.frameCount).map { offset ->
+                val frameIndex = request.timeline.startFrameIndex + offset.toLong()
+                WolfSceneFrameOutput(
+                    layerId = layer.layerId,
+                    frameIndex = frameIndex,
+                    presentationTimeUs = request.timeline.presentationTimeUs(frameIndex),
+                    widthPx = request.canvas.widthPx,
+                    heightPx = request.canvas.heightPx,
+                    pixelFormat = WolfScenePixelFormat.RGBA_8888,
+                    imageEncoding = WolfSceneImageEncoding.PNG,
+                    colorSpace = WolfSceneColorSpace.SRGB,
+                    alphaMode = WolfSceneAlphaMode.STRAIGHT,
+                    byteCount = 100L,
+                    sha256 = "b".repeat(64),
+                    outputReference = "artifact:" + layer.layerId + ":" + frameIndex
+                )
+            }
+        }
+        return WolfSceneRenderResult(
+            requestId = request.requestId,
+            contractVersion = request.contractVersion,
+            status = WolfSceneRenderStatus.SUCCESS,
+            outputs = outputs,
+            resourceUsage = WolfSceneResourceUsage(32L * 1024L * 1024L, 8L * 1024L * 1024L,
+                0L, 20_000L, 2L, 500L),
+            runtimeTarget = request.runtimeTarget
+        )
+    }
+
+    @Test
+    fun validRequestPassesAndDeclaresAbsoluteFrameClock() {
+        val request = request()
+        assertTrue(WolfSceneContractValidator.validateRequest(request).isValid)
+        assertEquals(1_000_000L, request.timeline.presentationTimeUs(24L))
+        assertEquals(1_041_667L, request.timeline.presentationTimeUs(25L))
+    }
+
+    @Test
+    fun timelineRejectsRepeatedRoundedMicrosecondPtsWithoutRejectingShortValidHighRateRanges() {
+        val twoFramesWithDistinctPts = WolfSceneTimeline(
+            startFrameIndex = 0L,
+            frameCount = 2,
+            frameRateNumerator = 1_500_000L,
+            frameRateDenominator = 1L
+        )
+        assertTrue(twoFramesWithDistinctPts.isValid())
+        assertEquals(0L, twoFramesWithDistinctPts.presentationTimeUs(0L))
+        assertEquals(1L, twoFramesWithDistinctPts.presentationTimeUs(1L))
+
+        val repeatedPtsFromStart = WolfSceneTimeline(
+            startFrameIndex = 0L,
+            frameCount = 3,
+            frameRateNumerator = 1_500_000L,
+            frameRateDenominator = 1L
+        )
+        assertFalse(repeatedPtsFromStart.isValid())
+
+        val repeatedPtsAtLaterAbsoluteFrames = WolfSceneTimeline(
+            startFrameIndex = 1L,
+            frameCount = 2,
+            frameRateNumerator = 1_500_000L,
+            frameRateDenominator = 1L
+        )
+        assertEquals(
+            WolfMotionCodeLibrary.framePresentationTimeUs(1L, 1_500_000L, 1L),
+            WolfMotionCodeLibrary.framePresentationTimeUs(2L, 1_500_000L, 1L)
+        )
+        assertFalse(repeatedPtsAtLaterAbsoluteFrames.isValid())
+
+        val distinctPtsAtLaterAbsoluteFrames = WolfSceneTimeline(
+            startFrameIndex = 2L,
+            frameCount = 2,
+            frameRateNumerator = 1_500_000L,
+            frameRateDenominator = 1L
+        )
+        assertTrue(distinctPtsAtLaterAbsoluteFrames.isValid())
+
+        val frameIntervalAboveOneMicrosecond = WolfSceneTimeline(
+            startFrameIndex = 0L,
+            frameCount = 5,
+            frameRateNumerator = 600_000L,
+            frameRateDenominator = 1L
+        )
+        assertTrue(frameIntervalAboveOneMicrosecond.isValid())
+
+        val singleFrameAtExtremeRate = WolfSceneTimeline(
+            startFrameIndex = 1L,
+            frameCount = 1,
+            frameRateNumerator = Long.MAX_VALUE,
+            frameRateDenominator = 1L
+        )
+        assertTrue(singleFrameAtExtremeRate.isValid())
+
+        val baseRequest = request()
+        val invalidRequest = WolfSceneRenderRequest(
+            requestId = baseRequest.requestId,
+            contractVersion = baseRequest.contractVersion,
+            sceneId = baseRequest.sceneId,
+            shotId = baseRequest.shotId,
+            masterSeed = baseRequest.masterSeed,
+            timeline = repeatedPtsAtLaterAbsoluteFrames,
+            canvas = baseRequest.canvas,
+            coordinateSystem = baseRequest.coordinateSystem,
+            camera = baseRequest.camera,
+            layers = baseRequest.layers,
+            assets = baseRequest.assets,
+            resourceEnvelope = baseRequest.resourceEnvelope,
+            runtimeTarget = baseRequest.runtimeTarget,
+            cameraMotion = baseRequest.cameraMotion
+        )
+        val checkedRequest = WolfSceneContractValidator.validateRequest(invalidRequest)
+        assertFalse(checkedRequest.isValid)
+        assertTrue(checkedRequest.errors.any { it.contains("timeline") })
+    }
+
+    @Test
+    fun requestRejectsMissingCameraSource() {
+        val base = request()
+        val withoutCamera = WolfSceneRenderRequest(
+            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+            base.timeline, base.canvas, base.coordinateSystem, null,
+            base.layers, base.assets, base.resourceEnvelope, base.runtimeTarget, null
+        )
+        val validation = WolfSceneContractValidator.validateRequest(withoutCamera)
+        assertFalse(validation.isValid)
+        assertTrue(validation.errors.any { it.contains("exactly one camera source") })
+    }
+
+    @Test
+    fun requestRejectsUnsupportedVersionAndDuplicateLayerIds() {
+        val invalid = WolfSceneRenderRequest(
+            "request-001", "9.0.0", "scene-01", "shot-01", 42L,
+            request().timeline, request().canvas, request().coordinateSystem, request().camera,
+            listOf(
+                WolfSceneLayerCommand("same", 0, WolfSceneBlendMode.NORMAL, 1000),
+                WolfSceneLayerCommand("same", 1, WolfSceneBlendMode.NORMAL, 1000)
+            ),
+            emptyList(), request().resourceEnvelope, request().runtimeTarget
+        )
+        val result = WolfSceneContractValidator.validateRequest(invalid)
+        assertFalse(result.isValid)
+        assertTrue(result.errors.any { it.contains("contractVersion") })
+        assertTrue(result.errors.any { it.contains("unique") })
+    }
+
+    @Test
+    fun requestRejectsMissingLayerAssetAndInvalidResourceLimits() {
+        val base = request()
+        val invalid = WolfSceneRenderRequest(
+            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+            base.timeline, base.canvas, base.coordinateSystem, base.camera,
+            listOf(WolfSceneLayerCommand("background", 0, WolfSceneBlendMode.NORMAL, 1000,
+                assetIds = listOf("missing"))),
+            base.assets,
+            base.resourceEnvelope.copy(maxExecutionMillis = 0L),
+            base.runtimeTarget
+        )
+        val result = WolfSceneContractValidator.validateRequest(invalid)
+        assertFalse(result.isValid)
+        assertTrue(result.errors.any { it.contains("asset absent") })
+        assertTrue(result.errors.any { it.contains("resource envelope") })
+    }
+
+    @Test
+    fun requestRejectsInvalidCameraAndTimelinePtsOverflow() {
+        val base = request()
+        val invalid = WolfSceneRenderRequest(
+            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+            base.timeline.copy(startFrameIndex = Long.MAX_VALUE / 1_000_000L, frameCount = 2, frameRateNumerator = 1L, frameRateDenominator = 1L),
+            base.canvas, base.coordinateSystem,
+            base.camera!!.copy(target = base.camera.position, verticalFieldOfViewDegrees = 180.0),
+            base.layers, base.assets, base.resourceEnvelope, base.runtimeTarget
+        )
+        val result = WolfSceneContractValidator.validateRequest(invalid)
+        assertFalse(result.isValid)
+        assertTrue(result.errors.any { it.contains("camera") })
+        assertTrue(result.errors.any { it.contains("timeline") })
+    }
+
+    @Test
+    fun layerAndCameraMotionTracksArePartOfTheRequestContract() {
+        val scalar = WolfScalarCurve(listOf(WolfScalarKeyframe(0.0, 0.0), WolfScalarKeyframe(1.0, 1.0)))
+        val vector = WolfVector3Curve(listOf(
+            WolfVector3Keyframe(0.0, WolfVector3.ZERO),
+            WolfVector3Keyframe(1.0, WolfVector3(1.0, 2.0, 3.0))
+        ))
+        val rotation = WolfQuaternionCurve(listOf(
+            WolfQuaternionKeyframe(0.0, WolfQuaternion.IDENTITY),
+            WolfQuaternionKeyframe(1.0, WolfQuaternion.IDENTITY)
+        ))
+        val unitScale = WolfVector3Curve(listOf(
+            WolfVector3Keyframe(0.0, WolfVector3(1.0, 1.0, 1.0)),
+            WolfVector3Keyframe(1.0, WolfVector3(1.2, 1.2, 1.2))
+        ))
+        val motion = WolfSceneMotionTrack("background", vector, rotation, unitScale, scalar)
+        val cameraMotion = WolfSceneCameraMotionTrack(
+            position = WolfVector3Curve(listOf(
+                WolfVector3Keyframe(0.0, WolfVector3(0.0, 0.0, 5.0)),
+                WolfVector3Keyframe(1.0, WolfVector3(0.0, 0.0, 4.0))
+            )),
+            target = WolfVector3Curve(listOf(
+                WolfVector3Keyframe(0.0, WolfVector3.ZERO),
+                WolfVector3Keyframe(1.0, WolfVector3.ZERO)
+            )),
+            up = WolfVector3Curve(listOf(
+                WolfVector3Keyframe(0.0, WolfVector3.UNIT_Y),
+                WolfVector3Keyframe(1.0, WolfVector3.UNIT_Y)
+            )),
+            verticalFieldOfViewDegrees = WolfScalarCurve(listOf(
+                WolfScalarKeyframe(0.0, 45.0), WolfScalarKeyframe(1.0, 50.0)
+            )),
+            nearClip = 0.1,
+            farClip = 100.0
+        )
+        val base = request()
+        val movingLayers = listOf(
+            WolfSceneLayerCommand("background", 0, WolfSceneBlendMode.NORMAL, 1000,
+                assetIds = listOf("environment-corridor"), motion = motion),
+            base.layers[1]
+        )
+        val moving = WolfSceneRenderRequest(
+            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+            base.timeline, base.canvas, base.coordinateSystem, null,
+            movingLayers, base.assets, base.resourceEnvelope, base.runtimeTarget, cameraMotion
+        )
+        assertTrue(WolfSceneContractValidator.validateRequest(moving).isValid)
+
+        val conflictingCameraSources = WolfSceneRenderRequest(
+            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+            base.timeline, base.canvas, base.coordinateSystem, base.camera,
+            movingLayers, base.assets, base.resourceEnvelope, base.runtimeTarget, cameraMotion
+        )
+        assertFalse(WolfSceneContractValidator.validateRequest(conflictingCameraSources).isValid)
+    }
+
+    @Test
+    fun animatedOpacityMultipliesTheLayerBaseOpacity() {
+        val track = WolfSceneMotionTrack(
+            targetLayerId = "foreground",
+            opacity = WolfScalarCurve(listOf(
+                WolfScalarKeyframe(0.0, 0.2),
+                WolfScalarKeyframe(1.0, 0.8)
+            ))
+        )
+        assertEquals(250, track.effectiveOpacityPermille(500, 0.5))
+        assertEquals(400, track.effectiveOpacityPermille(500, 2.0))
+    }
+
+    @Test
+    fun animatedScaleAllowsMirroringButRejectsSignChangesAndZeroCrossings() {
+        val base = request()
+        val mirrored = WolfSceneMotionTrack(
+            targetLayerId = "background",
+            scale = WolfVector3Curve(listOf(
+                WolfVector3Keyframe(0.0, WolfVector3(-1.0, 1.0, -1.0)),
+                WolfVector3Keyframe(1.0, WolfVector3(-2.0, 2.0, -3.0))
+            ))
+        )
+        val mirroredRequest = WolfSceneRenderRequest(
+            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+            base.timeline, base.canvas, base.coordinateSystem, base.camera,
+            listOf(base.layers.first().copyForMotion(mirrored), base.layers[1]),
+            base.assets, base.resourceEnvelope, base.runtimeTarget
+        )
+        assertTrue(WolfSceneContractValidator.validateRequest(mirroredRequest).isValid)
+
+        val signChanging = WolfSceneMotionTrack(
+            targetLayerId = "background",
+            scale = WolfVector3Curve(listOf(
+                WolfVector3Keyframe(0.0, WolfVector3(-1.0, 1.0, 1.0)),
+                WolfVector3Keyframe(1.0, WolfVector3(1.0, 2.0, 2.0))
+            ))
+        )
+        assertFalse(signChanging.isWellFormed())
+    }
+
+    @Test
+    fun sceneConstructorsRejectOversizedCollectionsBeforeCopying() {
+        fun <T> oversizedList(reportedSize: Int): List<T> = object : AbstractList<T>() {
+            override val size: Int = reportedSize
+            override fun get(index: Int): T =
+                throw AssertionError("An oversized collection must be rejected before iteration")
+        }
+        fun assertRejected(block: () -> Unit) {
+            try {
+                block()
+                throw AssertionError("Expected oversized collection rejection")
+            } catch (_: IllegalArgumentException) {
+                // Expected size guard before defensive copy.
+            }
+        }
+
+        val base = request()
+        assertRejected {
+            WolfSceneLayerCommand(
+                "bounded", 0, WolfSceneBlendMode.NORMAL, 1000,
+                assetIds = oversizedList(WolfSceneContractLimits.MAX_ASSET_COUNT + 1)
+            )
+        }
+        assertRejected {
+            WolfSceneRenderRequest(
+                base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+                base.timeline, base.canvas, base.coordinateSystem, base.camera,
+                oversizedList(WolfSceneContractLimits.MAX_LAYER_COUNT + 1),
+                emptyList(), base.resourceEnvelope, base.runtimeTarget
+            )
+        }
+        assertRejected {
+            WolfSceneRenderRequest(
+                base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+                base.timeline, base.canvas, base.coordinateSystem, base.camera,
+                base.layers, oversizedList(WolfSceneContractLimits.MAX_ASSET_COUNT + 1),
+                base.resourceEnvelope, base.runtimeTarget
+            )
+        }
+        assertRejected {
+            WolfSceneRenderResult(
+                base.requestId, base.contractVersion, WolfSceneRenderStatus.SUCCESS,
+                oversizedList(WolfSceneContractLimits.MAX_OUTPUT_COUNT.toInt() + 1)
+            )
+        }
+    }
+
+    @Test
+    fun requestRejectsFrameOutputExplosionBeforeRendererDispatch() {
+        val base = request()
+        val layers = (0 until WolfSceneContractLimits.MAX_LAYER_COUNT).map {
+            WolfSceneLayerCommand("bounded-layer-" + it, it, WolfSceneBlendMode.NORMAL, 1000)
+        }
+        val oversized = WolfSceneRenderRequest(
+            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+            base.timeline.copy(frameCount = WolfSceneContractLimits.MAX_FRAME_COUNT),
+            base.canvas, base.coordinateSystem, base.camera,
+            layers, emptyList(), base.resourceEnvelope, base.runtimeTarget
+        )
+        val checked = WolfSceneContractValidator.validateRequest(oversized)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("frame output count") })
+    }
+
+    @Test
+    fun cameraMotionIsCheckedAtEveryRequestedFrameNotOnlyAtItsKeyframes() {
+        val base = request()
+        val cameraMotion = WolfSceneCameraMotionTrack(
+            position = WolfVector3Curve(listOf(
+                WolfVector3Keyframe(0.0, WolfVector3(0.0, 0.0, 1.0)),
+                WolfVector3Keyframe(1.0, WolfVector3(0.0, 0.0, -1.0))
+            )),
+            target = WolfVector3Curve(listOf(
+                WolfVector3Keyframe(0.0, WolfVector3.ZERO),
+                WolfVector3Keyframe(1.0, WolfVector3.ZERO)
+            )),
+            up = WolfVector3Curve(listOf(
+                WolfVector3Keyframe(0.0, WolfVector3.UNIT_Y),
+                WolfVector3Keyframe(1.0, WolfVector3.UNIT_Y)
+            )),
+            verticalFieldOfViewDegrees = WolfScalarCurve(listOf(
+                WolfScalarKeyframe(0.0, 45.0), WolfScalarKeyframe(1.0, 45.0)
+            )),
+            nearClip = 0.1,
+            farClip = 100.0
+        )
+        val request = WolfSceneRenderRequest(
+            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+            base.timeline.copy(frameCount = 3), base.canvas, base.coordinateSystem,
+            null, base.layers, base.assets, base.resourceEnvelope, base.runtimeTarget, cameraMotion
+        )
+        val checked = WolfSceneContractValidator.validateRequest(request)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("camera motion track") })
+    }
+
+    @Test
+    fun requestRejectsUnsupportedCanvasAndTooManyLayers() {
+        val base = request()
+        val invalidCanvas = WolfSceneRenderRequest(
+            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+            base.timeline, WolfSceneCanvas(8192, 8192), base.coordinateSystem, base.camera,
+            base.layers, base.assets, base.resourceEnvelope, base.runtimeTarget
+        )
+        assertFalse(WolfSceneContractValidator.validateRequest(invalidCanvas).isValid)
+
+        val manyLayers = (0..WolfSceneContractLimits.MAX_LAYER_COUNT).map {
+            WolfSceneLayerCommand("layer-" + it, it, WolfSceneBlendMode.NORMAL, 1000)
+        }
+        val oversizedRejection = runCatching {
+            WolfSceneRenderRequest(
+                base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+                base.timeline, base.canvas, base.coordinateSystem, base.camera,
+                manyLayers, emptyList(), base.resourceEnvelope, base.runtimeTarget
+            )
+        }.exceptionOrNull()
+        assertTrue(oversizedRejection is IllegalArgumentException)
+        assertTrue(oversizedRejection?.message?.contains("Scene layers") == true)
+    }
+
+    @Test
+    fun requestCollectionsAreImmutableAfterDefensiveCopy() {
+        val base = request()
+        try {
+            (base.layers as MutableList).clear()
+            throw AssertionError("Expected immutable layer collection")
+        } catch (_: UnsupportedOperationException) {
+            assertEquals(2, base.layers.size)
+        }
+        try {
+            (base.layers.first().assetIds as MutableList).clear()
+            throw AssertionError("Expected immutable asset collection")
+        } catch (_: UnsupportedOperationException) {
+            assertEquals(listOf("environment-corridor"), base.layers.first().assetIds)
+        }
+    }
+
+    @Test
+    fun matchingResultPassesOnlyAfterArtifactBytesAreIndependentlyVerified() {
+        val request = request()
+        val result = successfulResult(request)
+        val verifier = artifactVerifier(result.outputs.associate { output ->
+            output.outputReference to WolfSceneOutputArtifactMetadata(
+                output.byteCount, output.sha256, output.widthPx, output.heightPx,
+                output.pixelFormat, output.imageEncoding, output.colorSpace, output.alphaMode
+            )
+        })
+        assertTrue(WolfSceneContractValidator.validateResult(request, result, verifier).isValid)
+    }
+
+    @Test
+    fun resultRejectsOversizedArtifactReferenceWithoutPassingItToVerifier() {
+        val request = request()
+        val valid = successfulResult(request)
+        val oversizedReference = "artifact:" + "x".repeat(WolfSceneContractLimits.MAX_IDENTIFIER_LENGTH + 1)
+        val outputs = valid.outputs.mapIndexed { index, output ->
+            if (index == 0) output.copy(outputReference = oversizedReference) else output
+        }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, outputs,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val inspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            null
+        }
+
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("opaque artifact identifier") })
+        assertTrue(inspected.isEmpty())
+    }
+
+    @Test
+    fun resultRejectsWrongPtsMissingFramesAndBadDigest() {
+        val request = request()
+        val valid = successfulResult(request)
+        val malformed = valid.outputs.toMutableList().also { outputs ->
+            outputs.removeAt(0)
+            outputs[0] = outputs[0].copy(presentationTimeUs = 123L, sha256 = "not-a-digest")
+        }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, malformed,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val inspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            null
+        }
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("presentationTimeUs") })
+        assertTrue(checked.errors.any { it.contains("SHA-256") })
+        assertTrue(checked.errors.any { it.contains("complete") })
+        assertTrue(inspected.isEmpty())
+    }
+
+    @Test
+    fun resultRejectsMetadataHashMismatchAfterStructuralValidation() {
+        val request = request()
+        val valid = successfulResult(request)
+        val altered = valid.outputs.map { it.copy(byteCount = 20_000_000L) }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, altered,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val inspected = mutableListOf<String>()
+        val metadata = altered.associate { output ->
+            output.outputReference to WolfSceneOutputArtifactMetadata(
+                output.byteCount, "c".repeat(64), output.widthPx, output.heightPx,
+                output.pixelFormat, output.imageEncoding, output.colorSpace, output.alphaMode
+            )
+        }
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            metadata[reference]
+        }
+
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("SHA-256 does not match") })
+        assertEquals(altered.size, inspected.size)
+    }
+
+    @Test
+    fun resultRejectsInvalidByteCountAndDigestBeforeReadingAnyArtifact() {
+        val request = request()
+        val valid = successfulResult(request)
+        val invalidReference = valid.outputs.first().outputReference
+        val malformed = valid.outputs.mapIndexed { index, output ->
+            if (index == 0) output.copy(byteCount = 0L, sha256 = "invalid") else output
+        }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, malformed,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val inspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            null
+        }
+
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("byteCount must be positive") })
+        assertTrue(checked.errors.any { it.contains("SHA-256 is invalid") })
+        assertTrue(inspected.isEmpty())
+        assertFalse(inspected.contains(invalidReference))
+    }
+
+    @Test
+    fun resultRejectsDuplicateArtifactReferencesBeforeReadingAnyArtifact() {
+        val request = request()
+        val valid = successfulResult(request)
+        val duplicatedReference = valid.outputs[0].outputReference
+        val duplicated = valid.outputs.toMutableList().also { outputs ->
+            outputs[1] = outputs[1].copy(outputReference = duplicatedReference)
+        }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, duplicated,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val inspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            null
+        }
+
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("outputReference values must be unique") })
+        assertTrue(inspected.isEmpty())
+    }
+
+    @Test
+    fun resultRejectsOutputBytesOverLimitBeforeReadingAnyArtifact() {
+        val request = request()
+        val valid = successfulResult(request)
+        val oversized = valid.outputs.map { it.copy(byteCount = 40_000_000L) }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, oversized,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val inspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            null
+        }
+
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("temporary storage") })
+        assertTrue(inspected.isEmpty())
+    }
+
+    @Test
+    fun resultRejectsFilesystemAndUrlOutputReferences() {
+        val request = request()
+        val valid = successfulResult(request)
+        val unsafeOutputs = valid.outputs.mapIndexed { index, output ->
+            if (index == 0) output.copy(outputReference = "C:private-folder") else output
+        }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, unsafeOutputs,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val metadata = unsafeOutputs.associate { output ->
+            output.outputReference to WolfSceneOutputArtifactMetadata(
+                output.byteCount, output.sha256, output.widthPx, output.heightPx,
+                output.pixelFormat, output.imageEncoding, output.colorSpace, output.alphaMode
+            )
+        }
+        val referencesInspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            referencesInspected += reference
+            metadata[reference]
+        }
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("opaque artifact identifier") })
+        assertFalse(referencesInspected.contains("C:private-folder"))
+    }
+
+    @Test
+    fun resultRejectsRuntimeProvenanceMismatch() {
+        val request = request()
+        val valid = successfulResult(request)
+        val wrongRuntime = WolfSceneRuntimeTarget("wolf.adapter.filament", "1.0.0", "filament", "1.75.0")
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, valid.outputs,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, wrongRuntime
+        )
+        val metadata = valid.outputs.associate { output ->
+            output.outputReference to WolfSceneOutputArtifactMetadata(
+                output.byteCount, output.sha256, output.widthPx, output.heightPx,
+                output.pixelFormat, output.imageEncoding, output.colorSpace, output.alphaMode
+            )
+        }
+        val checked = WolfSceneContractValidator.validateResult(request, result, artifactVerifier(metadata))
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("runtime/adapter identity") })
+    }
+
+    @Test
+    fun resultOutputCollectionIsImmutable() {
+        val base = request()
+        val result = successfulResult(base)
+        try {
+            (result.outputs as MutableList).clear()
+            throw AssertionError("Expected immutable output collection")
+        } catch (_: UnsupportedOperationException) {
+            assertEquals(4, result.outputs.size)
+        }
+    }
+
+    @Test
+    fun failedRendererMustNotReturnPartialFrames() {
+        val request = request()
+        val invalid = WolfSceneRenderResult(
+            request.requestId,
+            request.contractVersion,
+            WolfSceneRenderStatus.FAILED,
+            outputs = successfulResult(request).outputs,
+            failureCode = WolfSceneFailureCode.RENDER_FAILED
+        )
+        val result = WolfSceneContractValidator.validateResult(
+            request, invalid, artifactVerifier(emptyMap())
+        )
+        assertFalse(result.isValid)
+        assertTrue(result.errors.any { it.contains("partial outputs") })
+    }
+
+    @Test
+    fun requestCollectionsAreDefensivelyCopied() {
+        val base = request()
+        val mutableLayers = base.layers.toMutableList()
+        val mutableAssets = base.assets.toMutableList()
+        val copy = WolfSceneRenderRequest(
+            base.requestId, base.contractVersion, base.sceneId, base.shotId, base.masterSeed,
+            base.timeline, base.canvas, base.coordinateSystem, base.camera,
+            mutableLayers, mutableAssets, base.resourceEnvelope, base.runtimeTarget
+        )
+        mutableLayers.clear()
+        mutableAssets.clear()
+        assertEquals(2, copy.layers.size)
+        assertEquals(1, copy.assets.size)
+    }
+}

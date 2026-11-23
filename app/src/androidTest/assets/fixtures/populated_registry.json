@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 2,
+  "assets": [
+    {
+      "assetId": "wolf_fixture_primary",
+      "name": "Android integration primary environment fixture",
+      "version": "1.0.0",
+      "category": "ENVIRONMENT",
+      "tags": [
+        "realistic",
+        "environment",
+        "integration-fixture"
+      ],
+      "lifecycle": "APPROVED",
+      "license": {
+        "creatorOrRightsHolder": "WOLF Android integration test fixture",
+        "sourceName": "Local instrumentation fixture",
+        "sourceLocation": "offline:android-test-fixture",
+        "licenseId": "WOLF-TEST-LICENSE-001",
+        "licenseName": "Test-only fixture license",
+        "licenseVersion": "1.0",
+        "evidenceReference": "test-only:license-evidence",
+        "verified": true,
+        "commercialUse": true,
+        "modificationAllowed": true,
+        "redistributionAllowed": true,
+        "appBundlingAllowed": true,
+        "attributionRequired": false,
+        "attributionText": "",
+        "restrictions": "Test-only; not a production asset",
+        "acquiredAtEpochMillis": 1700000000000,
+        "acquisitionMethod": "Generated as a deterministic instrumentation fixture",
+        "provenanceRecordReference": "test-only:provenance"
+      },
+      "files": [
+        {
+          "relativePath": "fixtures/primary.bin",
+          "format": "application/octet-stream",
+          "byteSize": 41,
+          "sha256": "16dfdd1fe6fdb3a4fc90d93491c4bb228c8d1cff4d38a4ff82c7f58eb3994ad2"
+        }
+      ],
+      "dependencies": {
+        "wolf_fixture_dependency": "1.0.0"
+      },
+      "technicalProfile": {
+        "coordinateSystem": "Android Canvas 2D",
+        "units": "pixels",
+        "importSettings": "Read-only instrumentation fixture",
+        "rendererRequirements": "WOLF_ANDROID_CANVAS",
+        "geometryProfile": "Static fixture data",
+        "materialProfile": "Not applicable to registry integration fixture"
+      },
+      "resourceMeasurements": {},
+      "compatibleRuntimes": {
+        "WOLF_ANDROID_CANVAS": "stage08-fixture-1"
+      },
+      "approvedScopes": [
+        "environment_background"
+      ],
+      "budgetStatus": "PENDING",
+      "review": {
+        "reviewer": "WOLF Android integration test",
+        "reviewedAtEpochMillis": 1700000000000,
+        "decisionReason": "Fixture validates registry integration only",
+        "reviewEvidenceReference": "test-only:review-evidence",
+        "rightsPassed": true,
+        "visualPassed": true,
+        "technicalPassed": true,
+        "realismScore": 5,
+        "budgetPendingAccepted": true,
+        "visualStyle": "CINEMATIC_REALISTIC",
+        "approvedStyleScopes": []
+      }
+    },
+    {
+      "assetId": "wolf_fixture_dependency",
+      "name": "Android integration dependency environment fixture",
+      "version": "1.0.0",
+      "category": "ENVIRONMENT",
+      "tags": [
+        "realistic",
+        "environment",
+        "integration-fixture"
+      ],
+      "lifecycle": "APPROVED",
+      "license": {
+        "creatorOrRightsHolder": "WOLF Android integration test fixture",
+        "sourceName": "Local instrumentation fixture",
+        "sourceLocation": "offline:android-test-fixture",
+        "licenseId": "WOLF-TEST-LICENSE-001",
+        "licenseName": "Test-only fixture license",
+        "licenseVersion": "1.0",
+        "evidenceReference": "test-only:license-evidence",
+        "verified": true,
+        "commercialUse": true,
+        "modificationAllowed": true,
+        "redistributionAllowed": true,
+        "appBundlingAllowed": true,
+        "attributionRequired": false,
+        "attributionText": "",
+        "restrictions": "Test-only; not a production asset",
+        "acquiredAtEpochMillis": 1700000000000,
+        "acquisitionMethod": "Generated as a deterministic instrumentation fixture",
+        "provenanceRecordReference": "test-only:provenance"
+      },
+      "files": [
+        {
+          "relativePath": "fixtures/dependency.bin",
+          "format": "application/octet-stream",
+          "byteSize": 44,
+          "sha256": "cae08d4beb1c90dccddf768c3d01e8dc963fcaa9c0f42eacd259f1d29dfb1c61"
+        }
+      ],
+      "dependencies": {},
+      "technicalProfile": {
+        "coordinateSystem": "Android Canvas 2D",
+        "units": "pixels",
+        "importSettings": "Read-only instrumentation fixture",
+        "rendererRequirements": "WOLF_ANDROID_CANVAS",
+        "geometryProfile": "Static fixture data",
+        "materialProfile": "Not applicable to registry integration fixture"
+      },
+      "resourceMeasurements": {},
+      "compatibleRuntimes": {
+        "WOLF_ANDROID_CANVAS": "stage08-fixture-1"
+      },
+      "approvedScopes": [
+        "environment_background"
+      ],
+      "budgetStatus": "PENDING",
+      "review": {
+        "reviewer": "WOLF Android integration test",
+        "reviewedAtEpochMillis": 1700000000000,
+        "decisionReason": "Fixture validates registry integration only",
+        "reviewEvidenceReference": "test-only:review-evidence",
+        "rightsPassed": true,
+        "visualPassed": true,
+        "technicalPassed": true,
+        "realismScore": 5,
+        "budgetPendingAccepted": true,
+        "visualStyle": "CINEMATIC_REALISTIC",
+        "approvedStyleScopes": []
+      }
+    }
+  ]
+}

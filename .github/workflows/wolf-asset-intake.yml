@@ -1,0 +1,95 @@
+name: WOLF cinematic asset intake validation
+
+on:
+  pull_request:
+    branches:
+      - docs/stage-07-cinematic-asset-inventory
+    paths:
+      - "asset-intake/**"
+      - "tools/asset-intake/**"
+      - ".github/workflows/wolf-asset-intake.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wolf-asset-intake-${{ github.ref }}
+  queue: max
+
+jobs:
+  validate-intake-batches:
+    name: Validate intake manifests, provenance, and file integrity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run fail-closed intake validator tests
+        run: |
+          python3 --version
+          python3 -m unittest discover -s tools/asset-intake/tests -v
+
+      - name: Validate initial batch and write audit report
+        run: |
+          python3 tools/asset-intake/wolf_asset_intake.py --manifest asset-intake/batches/000-baseline/manifest.json --repo-root . --report "$RUNNER_TEMP/wolf-asset-intake-report.json"
+
+      - name: Confirm source leads are not production registry assets
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          leads = json.loads(Path('asset-intake/leads/source-leads.json').read_text())
+          registry = json.loads(Path('app/src/main/assets/wolf_asset_registry.json').read_text())
+          catalog = json.loads(Path('asset-intake/acquisition-catalog.json').read_text())
+          catalog_by_url = {x['sourceUrl']: x for x in catalog['assets']}
+          allowed = {'DISCOVERED_NOT_ACQUIRED', 'ACQUIRED_CANDIDATE'}
+          assert all(x['status'] in allowed for x in leads['leads'])
+          for lead in leads['leads']:
+              if lead['status'] == 'ACQUIRED_CANDIDATE':
+                  assert lead.get('acquisition', {}).get('batchId') == catalog['batchId']
+                  item = catalog_by_url.get(lead['sourceUrl'])
+                  assert item is not None and item['status'] == 'ACQUIRED_CANDIDATE'
+                  assert item['assetId'] == lead['sourceAssetId']
+              else:
+                  assert lead['sourceUrl'] not in catalog_by_url
+          assert registry['assets'] == [], 'Acquired candidates must never be promoted automatically'
+          acquired = sum(x['status'] == 'ACQUIRED_CANDIDATE' for x in leads['leads'])
+          print(f"Verified {acquired} acquired candidate(s); production registry remains empty")
+          PY
+
+  acquire-curated-cc0-assets:
+    name: Acquire and checksum real Poly Haven HDRI batch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out intake branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Acquire exact 2K Radiance HDR files and provenance
+        run: |
+          python3 tools/asset-intake/acquire_polyhaven_batch.py \
+            --output-root asset-intake/batches/WOLF-ASSET-BATCH-001
+
+      - name: Cross-check acquisition manifest, source leads, and catalog
+        run: |
+          python3 tools/asset-intake/validate_acquisition_links.py \
+            --manifest asset-intake/batches/WOLF-ASSET-BATCH-001/manifest.json \
+            --lead-register asset-intake/leads/source-leads.json \
+            --catalog asset-intake/acquisition-catalog.json
+
+      - name: Validate acquired files, source rights, size, and SHA-256
+        run: |
+          python3 -m unittest discover -s tools/asset-intake/tests -v
+          python3 tools/asset-intake/wolf_asset_intake.py \
+            --manifest asset-intake/batches/WOLF-ASSET-BATCH-001/manifest.json \
+            --repo-root .
+
+      - name: Upload acquired candidate files and provenance for review
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wolf-cinematic-asset-batch-001
+          path: asset-intake/batches/WOLF-ASSET-BATCH-001/
+          if-no-files-found: error
+          retention-days: 90

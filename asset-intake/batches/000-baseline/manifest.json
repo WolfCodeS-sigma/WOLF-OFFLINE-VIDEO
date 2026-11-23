@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "batchId": "WOLF-ASSET-BATCH-000",
+  "batchStatus": "OPEN",
+  "createdAt": "2026-11-22",
+  "policyId": "WOLF-ASSET-POLICY-001",
+  "purpose": "Initial executable intake pipeline baseline; no asset is claimed as acquired or approved.",
+  "assets": []
+}
