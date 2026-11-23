@@ -62,21 +62,23 @@ object OfflineProductionEngine {
         val narrationLimitUs: Long
     )
 
-    /** Keep the requested film clock independent from the optional narration clock. */
+    /** When approved narration is authoritative, its measured duration is the film clock. */
     internal fun buildAudioTimeline(
         requestedFilmSeconds: Int,
         narrationTimingEnabled: Boolean,
         audioDurationMs: Long?
     ): AudioTimeline {
-        val filmDurationUs = requestedFilmSeconds.coerceIn(1, 1800).toLong() * 1_000_000L
-        val narrationLimitUs = if (
+        val requestedFilmDurationUs = requestedFilmSeconds.coerceIn(1, 1800).toLong() * 1_000_000L
+        val authoritativeNarrationDurationUs = if (
             narrationTimingEnabled && audioDurationMs != null && audioDurationMs in 1_000L..1_800_000L
         ) {
-            // Narration may end before the film, but it must never extend the requested film timeline.
-            minOf(audioDurationMs * 1_000L, filmDurationUs)
+            Math.multiplyExact(audioDurationMs, 1_000L)
         } else {
-            filmDurationUs
+            null
         }
+        val filmDurationUs = authoritativeNarrationDurationUs ?: requestedFilmDurationUs
+        // Keep the complete approved narration; scene planning and video frames must grow to cover it.
+        val narrationLimitUs = authoritativeNarrationDurationUs ?: filmDurationUs
         return AudioTimeline(filmDurationUs, narrationLimitUs)
     }
 
@@ -122,13 +124,24 @@ object OfflineProductionEngine {
         val fps = 12
         val requestedTotal = seconds.coerceIn(1, 1800)
         val useNarrationTiming = audioDurationIsAuthoritative && audioUri != null &&
-            audioDurationMs != null && audioDurationMs in 1000L..1_800_000L
-        val introSeconds = introDurationSeconds(requestedTotal, includeIntro)
+            audioDurationMs != null && audioDurationMs in 1_000L..1_800_000L
+        val audioTimeline = buildAudioTimeline(
+            requestedFilmSeconds = requestedTotal,
+            narrationTimingEnabled = useNarrationTiming,
+            audioDurationMs = audioDurationMs
+        )
+        val filmDurationUs = audioTimeline.filmDurationUs
+        val narrationLimitUs = audioTimeline.narrationLimitUs
+        // The approved voice recording defines the true film runtime when narration timing is enabled.
+        // Round up only for second-based planning; frame allocation below uses the exact audio duration.
+        val totalVideoSeconds = ((filmDurationUs + 999_999L) / 1_000_000L)
+            .toInt().coerceIn(1, 1800)
+        val totalVideoFrames = ((filmDurationUs * fps + 999_999L) / 1_000_000L)
+            .toInt().coerceAtLeast(1)
+        val introSeconds = introDurationSeconds(totalVideoSeconds, includeIntro)
         val introFrames = introSeconds * fps
-        // Intro and story share one fixed film timeline. Neither scene count nor
-        // narration duration is allowed to extend or truncate the requested runtime.
-        val totalVideoSeconds = requestedTotal
         val bodySeconds = (totalVideoSeconds - introSeconds).coerceAtLeast(1)
+        val bodyFrames = (totalVideoFrames - introFrames).coerceAtLeast(1)
         // The storyboard director is the single source of scene boundaries and shot intent.
         // Its exact-duration mode keeps every planned scene inside the film body timeline.
         val filmPlan = StoryDirectorEngine.analyze(
@@ -142,8 +155,7 @@ object OfflineProductionEngine {
         )
         val scenePlans = filmPlan.scenes
         val scenes = scenePlans.map { it.sourceText }
-        val total = bodySeconds
-        val totalFrames = total * fps
+        val totalFrames = bodyFrames
         val minimumFrames = 1
         val framesPerScene = OfflineMotionEngine.allocateFrames(scenes, totalFrames, minimumFrames)
         val shotFrameBudgets = scenePlans.mapIndexed { index, scenePlan ->
@@ -164,14 +176,6 @@ object OfflineProductionEngine {
                 maxChapterSeconds = safeChapterDuration
             )
         } else emptyList()
-        // Narration may end early; the video and generated effects retain the full film timeline.
-        val audioTimeline = buildAudioTimeline(
-            requestedFilmSeconds = totalVideoSeconds,
-            narrationTimingEnabled = useNarrationTiming,
-            audioDurationMs = audioDurationMs
-        )
-        val filmDurationUs = audioTimeline.filmDurationUs
-        val narrationLimitUs = audioTimeline.narrationLimitUs
         val name = "wolf_offline_${System.currentTimeMillis()}.mp4"
         val tempDir = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
         // Remove only expired files created by this pipeline before checking free storage.
