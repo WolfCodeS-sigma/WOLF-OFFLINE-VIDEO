@@ -1,33 +1,31 @@
-# WOLF Procedural Scene Production — Phase 2
+# WOLF Procedural Scene Production — Phase 2 baseline
 
-## Goal
+## Current role
 
-Make the local procedural renderer the first-party visual production path whenever a project has no supplied reference images. The scene must remain producible without image downloads, cloud rendering, external models, or network access.
+When no user image is selected, the application uses a deterministic, fully local environment-only renderer. StoryDirector still owns scene segmentation, shot timing, shot frame budgets, camera/composition intent, and lighting intent.
 
-## Integrated frame pipeline
+The procedural planner classifies the scene caption into a coarse environment label (forest, corridor, window, door, cemetery, room, or haunted house). The current artwork implementation is intentionally atmospheric rather than a full object renderer.
 
-For every image-free shot, `WolfProceduralSceneProductionEngine` now:
+## Active frame path
 
-1. Validates and plans the scene from its story caption and stable scene index.
-2. Classifies a local horror environment (forest, corridor, window, door, cemetery, room, or haunted house) using deterministic Arabic/English text cues.
-3. Creates one of three deterministic framings (wide, medium, close) with separate zoom and focal-point settings.
-4. Routes the classified environment explicitly to `WolfSceneArtEngine`, while retaining the complete story caption for scene-presence cues.
-5. Adds the existing depth-aware deterministic motion layers through `WolfProceduralMotionEngine`.
-6. Returns to the shared production pipeline for horror typography, optional WOLF CODE S watermark, video encoding, optional local sound effects, audio muxing, timestamp normalization, output saving, and film QA.
+1. StoryDirector creates the scene and three-shot plan.
+2. `WolfProceduralSceneProductionEngine` validates the caption and scene index, classifies the environment, and derives environmental feature cues.
+3. `WolfSceneArtEngine` paints a dark atmospheric background, drifting haze, and vignette.
+4. `WolfProceduralMotionEngine` adds environmental effects such as fog, particles, wind-driven branches, rain, environmental pulses, and restrained signal distortion.
+5. The shared production pipeline adds typography/watermark, encodes the video, mixes audio, and performs output inspection.
 
-User-supplied images remain optional. When a usable image exists, the existing image/depth path remains active and receives the same procedural motion overlays. This change does not remove or rewrite that path.
+## Explicit visual limits
 
-## Independence and boundaries
+- The environment label is a planning cue; it does not mean a photorealistic room, corridor, house, door, or cemetery model was generated.
+- The current base artwork is atmospheric and does not draw people, ghosts, creatures, furniture, buildings, doors, or props as geometric placeholders.
+- Environmental branches and weather are not evidence of subject-level character/object generation.
+- The three shot compositions provide deterministic framing changes for image-free environments; they are not three independent photorealistic source images.
+- If an important subject cannot be represented by the active renderer, the application must not claim that it was generated.
 
-- The image-free visual path requires no external image, model, API, account, or network connection.
-- All procedural plans and shot compositions are deterministic for the same inputs, supporting chapter retry and reproducible output.
-- The environment is passed as an explicit render key; this avoids ambiguous keyword reclassification (for example, confusing a haunted house with a room).
-- The scene canvas is restored safely after each independent motion-depth pass, including when a draw operation throws.
-- The artwork is locally drawn procedural illustration, not photorealistic AI image generation.
-- Text classification is heuristic, not semantic AI understanding. Unrecognized scenes use the haunted-house environment.
-- The current three-shot system creates distinct compositions from one procedural scene; it does not claim to create three independent photorealistic source images.
-- The existing optional narration and local sound-effects stages remain separate from visual scene creation.
+## User-image path
 
-## Verification scope
+A selected user image remains the source for its shot. Because the current border/color segmenter is not semantic AI, depth layers are disabled until semantic validation exists. The original image is rendered as a still. An image decode or actual rendering failure stops export rather than silently switching to an unrelated procedural scene.
 
-JVM tests cover bilingual environment classification, deterministic scene plans, three distinct bounded shot compositions, invalid shot clamping, and invalid plan inputs. Android lint and JVM unit tests are the intended CI checks. No APK, emulator, instrumentation, or device test is included in this phase.
+## Verification boundary
+
+JVM tests cover planning, environment cue classification, shot composition bounds, backend dispatch, and deterministic motion helpers. CI lint/unit-test success is not a physical-device visual test.

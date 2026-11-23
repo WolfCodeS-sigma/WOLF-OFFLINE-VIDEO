@@ -1,22 +1,15 @@
-# Phase 9 — WOLF Cinematic Motion Engine
+# Phase 9 — Historical cinematic subject-motion prototype
 
-## Scope
-Adds a deterministic, offline character-and-prop animation pass for uploaded-image shots. The pass runs after the existing scene backend and before horror typography and the watermark.
+> **Status in the unified core:** archived; the old character/prop overlay engine is not part of the production render path.
 
-## Motion channels
-- A lightweight figure/ghost rig with body sway/bob and independently swinging arms.
-- Door-panel hinge rotation, curtain sway, and wind-driven branch movement.
-- A restrained moving ground shadow.
-- Caption cues select only the relevant overlays; ordinary captions do not receive invented props.
+The former Phase 9 proposal described figure/ghost rigs, swinging arms, door hinges, curtains, branches, and moving shadows. The subject/prop overlay engine and its test were removed from the unified tree so that no generated geometric person or ghost can be painted over a selected user image.
 
-## Safety and continuity
-- All motion is derived from normalized frame progress plus scene/shot identity; no wall clock, network, model weights, or added dependencies.
-- Motion values are bounded and clamped. Canvas save/restore is paired with finally blocks.
-- The pass is additive and isolated. It runs only while the selected scene backend remains UPLOADED_IMAGE. The existing procedural renderer remains responsible for procedural scenes and all established fallback behavior.
-- A motion-pass failure returns false without throwing into the encoder; the already-rendered base frame remains available.
+## Current production motion
 
-## Verification
-JVM tests cover deterministic poses, bounded channels, progress clamping, cue selection, and no-op captions. CI runs Android lint and JVM unit tests only. No APK, emulator, or physical-device visual test is part of this phase.
+The active `WolfProceduralMotionEngine` is the Stage environment-only implementation. It adds atmospheric fog, particles, wind-driven branches, rain, environmental pulses, and restrained signal distortion to shots without user images. It does not synthesize people, ghosts, or creatures.
 
-## Known limits
-Figures and props are stylized procedural overlays, not AI-generated actors or semantic object segmentation. Their screen placement is heuristic and cannot infer exact hidden geometry or occlusion from arbitrary photos.
+For user-selected images, the current segmentation implementation has no semantic validator. The selected image therefore remains a still without camera movement, parallax, or procedural overlays.
+
+## Re-entry requirements
+
+A future subject-motion engine must use approved assets or validated semantic masks, prove occlusion and image-boundary safety, remain deterministic across chapter recovery, and pass visual regression tests before being connected to production. The former prototype is not evidence that these requirements are met.

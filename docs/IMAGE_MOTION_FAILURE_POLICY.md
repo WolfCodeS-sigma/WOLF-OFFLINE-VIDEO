@@ -1,32 +1,30 @@
-# WOLF IMAGE MOTION — Failure-Tolerant Production Policy
+# WOLF IMAGE MOTION — Unified failure policy
 
-## Accepted production rule
+## Accepted production rules
 
-A failure to isolate one image element must never freeze the horror scene or abort the film export.
+### No image was selected
+Use the environment-only procedural renderer. It may add atmospheric backgrounds, haze, particles, branches, rain, environmental pulses, and restrained signal distortion. It must not invent a person, ghost, creature, face, door, building, furniture, or prop from primitive geometry.
 
-The renderer follows a graceful-degradation rule:
+### A user image was selected
+Keep that image as the source for the shot. If semantic segmentation is unavailable or fails validation, render the original aspect-matched image as a still. Do not apply camera zoom, pan, parallax, or procedural subject overlays.
 
-1. Attempt to isolate image elements into independently composited depth layers.
-2. If segmentation succeeds with usable layers, composite those layers with their own depth-aware motion.
-3. If segmentation reports that the result is not sufficiently separated, render the untouched original image instead of using empty or misleading masks.
-4. If segmentation throws an exception, keep the original decoded bitmap alive, record a local diagnostic warning, and render that original image.
-5. In either fallback case, continue the rest of the scene pipeline: procedural environmental motion, atmospheric effects, typography cues, watermark when enabled, and all remaining shots/scenes.
-6. A segmentation-only failure must not be escalated into a film-export failure. Genuine independent failures such as codec, storage, or resource-safety failures retain their existing error handling.
+### The selected image cannot be decoded or drawn
+Stop export with a clear error. Do not replace the image with a different procedural scene. This protects the user's chosen content from silent substitution.
 
-## Horror-direction principle
+## Semantic depth gate
 
-The scene must remain active even when a particular subject cannot be isolated. Horror motion can be carried by any available element: a moving chair, opening door, shifting curtain, swaying tree, moving shadow, flickering light, drifting fog, rain, particles, or camera/depth movement.
+The current segmenter is a bounded border/color heuristic, not a semantic model. Confidence or a separated foreground mask alone is insufficient. `semanticValidationPassed` remains false until an actual semantic validator is integrated and tested; `safeForParallax` requires both separation and semantic validation.
 
-Do not claim that a failed-to-isolate ghost or object has been independently animated. Preserve it in the original image and continue animating the elements and effects that are actually available. The intended visual result is a living horror scene, not a frozen frame and not a falsely reported object animation.
+## Recovery and continuity
 
-## Current implementation boundary
-
-The current offline segmenter estimates up to three depth planes and can separate disconnected foreground components heuristically. This policy makes its failure non-fatal; it does not claim that every object is already detected and independently rigged. More granular object recognition, per-object masks, and independent motion remain a separate implementation task and must be completed and verified before claiming full object-level animation.
+- The no-image procedural route may continue with available environmental effects when a subject cannot be generated; it must not claim the subject was rendered.
+- A selected image that is preserved as a still remains selected for every frame of its shot.
+- A real selected-image render failure is an export failure, not an image-to-procedural fallback.
+- Canvas save/restore and bitmap lifecycle protections remain mandatory.
 
 ## Regression expectations
 
-- A thrown segmentation exception returns a fallback signal rather than propagating into film export.
-- The caller keeps the original bitmap available for rendering.
-- A non-separated result uses the original image.
-- Procedural motion and scene rendering continue after either segmentation fallback.
-- Successful segmentation continues to use the separated depth layers.
+- Heuristic color segmentation cannot enable depth-aware motion.
+- An image with no semantic depth layers remains an original still.
+- A failed selected-image render never invokes the procedural renderer.
+- An absent user image selects the environment-only procedural backend.

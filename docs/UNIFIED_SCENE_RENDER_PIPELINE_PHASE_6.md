@@ -1,32 +1,28 @@
-# Phase 6 — Unified Scene Render Pipeline and Procedural Fallback
+# Phase 6 — Unified Scene Render Pipeline
 
-## Unified entry point
-- `WolfSceneRenderPipeline` is the single routing interface used by `OfflineProductionEngine` for every shot.
-- The encoder no longer contains separate image/procedural rendering decisions.
-- The pipeline prepares a shot once, selects a backend, and reuses that decision for every frame in the shot.
+## Production ownership
+
+`OfflineProductionEngine` uses `WolfSceneRenderPipeline` as the single backend dispatch boundary for each shot. StoryDirector remains the owner of shot timing and visual intent. The pipeline does not rewrite the story plan.
 
 ## Backend selection
-- A missing image, invalid/recycled image, decode failure, segmentation exception, or unusable depth-layer result selects `PROCEDURAL`.
-- A successfully analyzed image with usable depth layers selects `UPLOADED_IMAGE`.
-- The procedural scene plan is created lazily for valid uploaded-image shots. It is created immediately only when the image is absent or its analysis is unusable.
-- A partial but usable depth-layer result remains eligible for the uploaded-image renderer.
 
-## Runtime fallback
-- If the uploaded-image renderer returns `SAFE_FRAME` or throws while rendering, the same frame is redrawn through `WolfProceduralSceneProductionEngine`.
-- The shot switches permanently to the procedural backend after that failure, so later frames do not repeatedly invoke the failing image renderer.
-- The procedural renderer clears and redraws the frame, so a partially drawn image frame is not left under the fallback scene.
-- Fallback reporting is best-effort: exceptions from the optional diagnostics callback are contained and cannot interrupt image-to-procedural routing.
-- Runtime fallback events are recorded through `WolfDiagnostics` when diagnostics storage is available.
-- The caller retains ownership of the decoded source bitmap. The prepared shot releases only its generated segmentation layers; the encoder releases the source bitmap in its existing `finally` lifecycle.
+- No user image selected: choose the environment-only procedural backend.
+- Valid user image selected: keep the uploaded-image backend even when depth analysis is unavailable.
+- The current heuristic segmenter is not semantic AI. It is not allowed to enable parallax; `semanticValidationPassed` defaults to false and `safeForParallax` remains false.
+- A selected image that cannot be decoded is an explicit export error, not permission to substitute another scene.
 
-## No-image and recovery verification
-- JVM test `missingUploadedImageSelectsAndRendersThroughProceduralBackend` invokes the production preparation API with a null image, then exercises the same backend-dispatch state machine used by the Canvas render entry point. It asserts the procedural callback runs once and the uploaded-image callback is never invoked.
-- JVM test `safeImageFrameSwitchesToProceduralAndStaysThereForTheRestOfTheShot` verifies that a safe-frame result switches the shot to the procedural backend and that subsequent frames bypass the uploaded-image renderer.
-- JVM test `missingImageStillSelectsProceduralBackendWhenDiagnosticsCallbackFails` verifies that an unavailable diagnostics callback cannot interrupt the no-image route.
-- Additional tests verify failed/unusable analysis routing and acceptance of usable partial depth layers.
-- CI runs Android lint and JVM unit tests. The dispatch tests do not execute Android Canvas rasterization, encode a full MP4, or replace device testing.
+## Runtime failure policy
 
-## Continuity boundary
-- The no-image and failed-analysis route no longer depends on the uploaded-image renderer.
-- If the procedural renderer itself or the underlying video encoder fails, this routing layer cannot guarantee uninterrupted export; those are separate failure domains handled by the existing export recovery path.
-- This phase adds no network access, external models, paid services, or dependencies.
+- A decoded user image without validated depth layers is drawn as the original aspect-matched still, with no camera zoom, pan, parallax, or procedural subject overlay.
+- A safe-frame result or actual failure to draw the selected image aborts export with a clear error. The shot does not switch to a generated scene.
+- The no-image procedural route draws only the environment atmosphere and environmental motion. It does not generate people, ghosts, creatures, buildings, doors, furniture, or props from primitive geometry.
+- Fallback diagnostics are best-effort and must not change the selected visual source.
+- The caller retains ownership of the decoded source bitmap; prepared segmentation layers are released by the shot lifecycle.
+
+## Regression coverage
+
+JVM tests cover no-image procedural dispatch, retention of a decoded user image when depth analysis is unavailable, and export failure instead of procedural substitution after a selected-image render failure. Image depth tests assert that the heuristic segmenter does not claim semantic readiness.
+
+## Verification boundary
+
+The workflow checks the offline contract, Android lint, and JVM unit tests. It does not prove successful export or visual quality on a physical Android device.
