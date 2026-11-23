@@ -1,5 +1,6 @@
 package com.wolfcodes.offline
 
+import java.math.BigInteger
 import kotlin.math.roundToInt
 
 /**
@@ -98,9 +99,31 @@ data class WolfSceneTimeline(
         val endExclusive = runCatching { Math.addExact(startFrameIndex, frameCount.toLong()) }.getOrNull()
             ?: return false
         return runCatching {
-            WolfMotionCodeLibrary.framePresentationTimeUs(startFrameIndex, frameRateNumerator, frameRateDenominator)
-            WolfMotionCodeLibrary.framePresentationTimeUs(endExclusive - 1L, frameRateNumerator, frameRateDenominator)
-        }.isSuccess
+            val firstPresentationTimeUs = WolfMotionCodeLibrary.framePresentationTimeUs(
+                startFrameIndex,
+                frameRateNumerator,
+                frameRateDenominator
+            )
+            val lastPresentationTimeUs = WolfMotionCodeLibrary.framePresentationTimeUs(
+                endExclusive - 1L,
+                frameRateNumerator,
+                frameRateDenominator
+            )
+
+            // PTS values are rounded to whole microseconds. When an exact frame
+            // interval is at least one microsecond, this monotonic rounded sequence
+            // is strictly increasing. Below one microsecond, each adjacent rounded
+            // step can only be zero or one; checking the total span against the
+            // number of frame edges therefore proves every step is distinct.
+            val intervalNumerator = BigInteger.valueOf(frameRateDenominator)
+                .multiply(BigInteger.valueOf(1_000_000L))
+            val frameIntervalAtLeastOneMicrosecond =
+                BigInteger.valueOf(frameRateNumerator) <= intervalNumerator
+
+            frameIntervalAtLeastOneMicrosecond ||
+                Math.subtractExact(lastPresentationTimeUs, firstPresentationTimeUs) ==
+                frameCount.toLong() - 1L
+        }.getOrDefault(false)
     }
 
     val endFrameExclusive: Long

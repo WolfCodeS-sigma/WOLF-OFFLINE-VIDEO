@@ -107,6 +107,68 @@ class WolfSceneContractTest {
     }
 
     @Test
+    fun timelineRejectsRepeatedRoundedMicrosecondPtsWithoutRejectingShortValidHighRateRanges() {
+        val twoFramesWithDistinctPts = WolfSceneTimeline(
+            startFrameIndex = 0L,
+            frameCount = 2,
+            frameRateNumerator = 1_500_000L,
+            frameRateDenominator = 1L
+        )
+        assertTrue(twoFramesWithDistinctPts.isValid())
+        assertEquals(0L, twoFramesWithDistinctPts.presentationTimeUs(0L))
+        assertEquals(1L, twoFramesWithDistinctPts.presentationTimeUs(1L))
+
+        val repeatedPtsFromStart = WolfSceneTimeline(
+            startFrameIndex = 0L,
+            frameCount = 3,
+            frameRateNumerator = 1_500_000L,
+            frameRateDenominator = 1L
+        )
+        assertFalse(repeatedPtsFromStart.isValid())
+
+        val repeatedPtsAtLaterAbsoluteFrames = WolfSceneTimeline(
+            startFrameIndex = 1L,
+            frameCount = 2,
+            frameRateNumerator = 1_500_000L,
+            frameRateDenominator = 1L
+        )
+        assertEquals(
+            repeatedPtsAtLaterAbsoluteFrames.presentationTimeUs(1L),
+            repeatedPtsAtLaterAbsoluteFrames.presentationTimeUs(2L)
+        )
+        assertFalse(repeatedPtsAtLaterAbsoluteFrames.isValid())
+
+        val distinctPtsAtLaterAbsoluteFrames = WolfSceneTimeline(
+            startFrameIndex = 2L,
+            frameCount = 2,
+            frameRateNumerator = 1_500_000L,
+            frameRateDenominator = 1L
+        )
+        assertTrue(distinctPtsAtLaterAbsoluteFrames.isValid())
+
+        val frameIntervalAboveOneMicrosecond = WolfSceneTimeline(
+            startFrameIndex = 0L,
+            frameCount = 5,
+            frameRateNumerator = 600_000L,
+            frameRateDenominator = 1L
+        )
+        assertTrue(frameIntervalAboveOneMicrosecond.isValid())
+
+        val singleFrameAtExtremeRate = WolfSceneTimeline(
+            startFrameIndex = 1L,
+            frameCount = 1,
+            frameRateNumerator = Long.MAX_VALUE,
+            frameRateDenominator = 1L
+        )
+        assertTrue(singleFrameAtExtremeRate.isValid())
+
+        val invalidRequest = request().copy(timeline = repeatedPtsAtLaterAbsoluteFrames)
+        val checkedRequest = WolfSceneContractValidator.validateRequest(invalidRequest)
+        assertFalse(checkedRequest.isValid)
+        assertTrue(checkedRequest.errors.any { it.contains("timeline") })
+    }
+
+    @Test
     fun requestRejectsMissingCameraSource() {
         val base = request()
         val withoutCamera = WolfSceneRenderRequest(
