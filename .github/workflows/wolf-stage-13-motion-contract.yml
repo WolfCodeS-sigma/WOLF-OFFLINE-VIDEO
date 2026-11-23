@@ -116,6 +116,7 @@ jobs:
 
   stage-11-engine-regression:
     name: Stage 11 isolated Godot, Filament, libGDX and Lottie regressions
+    needs: [app-android-regression, korge-regression, asset-intake-regression]
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:
@@ -172,7 +173,7 @@ jobs:
           emulator-options: -no-window -gpu software -no-snapshot -noaudio -no-boot-anim -no-metrics
           disable-linux-hw-accel: false
           disable-animations: true
-          script: gradle --no-daemon -p engine-pocs/android :app:connectedGodotDebugAndroidTest :app:connectedFilamentDebugAndroidTest :app:connectedLibgdxDebugAndroidTest :app:connectedLottieDebugAndroidTest
+          script: gradle --no-daemon --max-workers=2 -p engine-pocs/android :app:connectedGodotDebugAndroidTest :app:connectedFilamentDebugAndroidTest :app:connectedLibgdxDebugAndroidTest :app:connectedLottieDebugAndroidTest
 
   korge-regression:
     name: KorGE Android packaging regression
