@@ -191,9 +191,9 @@ data class WolfSceneMotionTrack(
         if (translation == null && rotation == null && scale == null && opacity == null) return false
         if (opacity != null && opacity.keyframes.any { it.value !in 0.0..1.0 }) return false
         if (scale != null && scale.keyframes.any {
-                kotlin.math.abs(it.value.x) <= WolfVector3.EPSILON ||
-                    kotlin.math.abs(it.value.y) <= WolfVector3.EPSILON ||
-                    kotlin.math.abs(it.value.z) <= WolfVector3.EPSILON
+    it.value.x <= WolfVector3.EPSILON ||
+                    it.value.y <= WolfVector3.EPSILON ||
+                    it.value.z <= WolfVector3.EPSILON
             }
         ) return false
         return true
@@ -273,8 +273,6 @@ class WolfSceneRenderRequest(
     val layers: List<WolfSceneLayerCommand> = WolfMotionCodeLibrary.immutableCopy(layers)
     val assets: List<WolfSceneAssetReference> = WolfMotionCodeLibrary.immutableCopy(assets)
 }
-
-enum class WolfSceneImageEncoding { RAW, PNG, WEBP, JPEG }
 
 data class WolfSceneFrameOutput(
     val layerId: String,
@@ -411,7 +409,11 @@ object WolfSceneContractValidator {
     ): WolfSceneContractValidation {
         val errors = mutableListOf<String>()
         val requestValidation = validateRequest(request)
-        if (!requestValidation.isValid) errors += "result cannot be validated against an invalid request"
+        if (!requestValidation.isValid) {
+            errors += "result cannot be validated against an invalid request"
+            errors += requestValidation.errors
+            return WolfSceneContractValidation(errors.distinct())
+        }
         if (result.requestId != request.requestId) errors += "result requestId does not match"
         if (result.contractVersion != request.contractVersion) errors += "result contractVersion does not match"
         if (result.runtimeTarget != request.runtimeTarget) errors += "result runtime/adapter identity does not match the request"
@@ -489,9 +491,6 @@ object WolfSceneContractValidator {
             if (!seenReferences.add(output.outputReference)) errors += "outputReference values must be unique"
             if (output.imageEncoding == WolfSceneImageEncoding.JPEG && output.alphaMode != WolfSceneAlphaMode.OPAQUE) {
                 errors += "JPEG output must use OPAQUE alpha mode"
-            }
-            if (output.imageEncoding == WolfSceneImageEncoding.RAW && output.pixelFormat !in WolfScenePixelFormat.values()) {
-                errors += "RAW output pixel format is invalid"
             }
 
             val metadata = runCatching {

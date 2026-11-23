@@ -163,7 +163,11 @@ class WolfSceneContractTest {
             WolfQuaternionKeyframe(0.0, WolfQuaternion.IDENTITY),
             WolfQuaternionKeyframe(1.0, WolfQuaternion.IDENTITY)
         ))
-        val motion = WolfSceneMotionTrack("background", vector, rotation, vector, scalar)
+        val unitScale = WolfVector3Curve(listOf(
+            WolfVector3Keyframe(0.0, WolfVector3(1.0, 1.0, 1.0)),
+            WolfVector3Keyframe(1.0, WolfVector3(1.2, 1.2, 1.2))
+        ))
+        val motion = WolfSceneMotionTrack("background", vector, rotation, unitScale, scalar)
         val cameraMotion = WolfSceneCameraMotionTrack(
             position = WolfVector3Curve(listOf(
                 WolfVector3Keyframe(0.0, WolfVector3(0.0, 0.0, 5.0)),
@@ -256,7 +260,7 @@ class WolfSceneContractTest {
     fun resultRejectsMetadataHashMismatchAndOutputBytesOverLimit() {
         val request = request()
         val valid = successfulResult(request)
-        val altered = valid.outputs.map { it.copy(byteCount = 10_000_000L) }
+        val altered = valid.outputs.map { it.copy(byteCount = 40_000_000L) }
         val result = WolfSceneRenderResult(
             valid.requestId, valid.contractVersion, valid.status, altered,
             valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
