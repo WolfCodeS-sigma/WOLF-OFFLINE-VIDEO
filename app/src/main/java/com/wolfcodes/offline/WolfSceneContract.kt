@@ -1,5 +1,7 @@
 package com.wolfcodes.offline
 
+import kotlin.math.roundToInt
+
 /**
  * Versioned, engine-neutral boundary between WOLF Kotlin Core and one renderer adapter.
  *
@@ -7,7 +9,7 @@ package com.wolfcodes.offline
  * approve assets, or let a renderer rewrite the story/shot plan.
  */
 object WolfSceneContract {
-    const val VERSION = "1.1.0"
+    const val VERSION = "1.2.0"
 }
 
 enum class WolfSceneAxis { X, Y, Z }
@@ -184,6 +186,12 @@ data class WolfSceneAssetReference(
             usage.isSceneIdentifier()
 }
 
+/**
+ * Layer-motion semantics:
+ * - opacity is a normalized multiplier applied to the layer's base opacityPermille.
+ * - negative scale is supported for mirroring; each animated axis must keep its sign
+ *   so interpolation never crosses a singular zero scale.
+ */
 data class WolfSceneMotionTrack(
     val targetLayerId: String,
     val translation: WolfVector3Curve? = null,
@@ -191,15 +199,39 @@ data class WolfSceneMotionTrack(
     val scale: WolfVector3Curve? = null,
     val opacity: WolfScalarCurve? = null
 ) {
+    fun effectiveOpacityPermille(baseOpacityPermille: Int, progress: Double): Int {
+        require(baseOpacityPermille in 0..1000) { "Base opacity must be in 0..1000 permille" }
+        val multiplier = opacity?.sample(progress) ?: 1.0
+        require(multiplier in 0.0..1.0) { "Animated opacity multiplier must be in 0..1" }
+        return (baseOpacityPermille * multiplier).roundToInt()
+    }
+
+    private fun hasStableNonZeroScaleAxis(axis: Int): Boolean {
+        val curve = scale ?: return true
+        var expectedSign = 0
+        for (keyframe in curve.keyframes) {
+            val value = when (axis) {
+                0 -> keyframe.value.x
+                1 -> keyframe.value.y
+                else -> keyframe.value.z
+            }
+            if (kotlin.math.abs(value) <= WolfVector3.EPSILON) return false
+            val sign = if (value < 0.0) -1 else 1
+            if (expectedSign != 0 && sign != expectedSign) return false
+            expectedSign = sign
+        }
+        return true
+    }
+
     fun isWellFormed(): Boolean {
         if (!targetLayerId.isSceneIdentifier()) return false
         if (translation == null && rotation == null && scale == null && opacity == null) return false
         if (opacity != null && opacity.keyframes.any { it.value !in 0.0..1.0 }) return false
-        if (scale != null && scale.keyframes.any {
-    it.value.x <= WolfVector3.EPSILON ||
-                    it.value.y <= WolfVector3.EPSILON ||
-                    it.value.z <= WolfVector3.EPSILON
-            }
+        if (scale != null && !(
+            hasStableNonZeroScaleAxis(0) &&
+                hasStableNonZeroScaleAxis(1) &&
+                hasStableNonZeroScaleAxis(2)
+            )
         ) return false
         return true
     }
@@ -214,7 +246,9 @@ class WolfSceneLayerCommand(
     assetIds: List<String> = emptyList(),
     val motion: WolfSceneMotionTrack? = null
 ) {
-    val assetIds: List<String> = WolfMotionCodeLibrary.immutableCopy(assetIds)
+    val assetIds: List<String> = WolfMotionCodeLibrary.immutableCopy(
+        assetIds, WolfSceneContractLimits.MAX_ASSET_COUNT, "Layer asset identifiers"
+    )
 
     fun isWellFormed(): Boolean =
         layerId.isSceneIdentifier() &&
@@ -275,8 +309,12 @@ class WolfSceneRenderRequest(
     val runtimeTarget: WolfSceneRuntimeTarget,
     val cameraMotion: WolfSceneCameraMotionTrack? = null
 ) {
-    val layers: List<WolfSceneLayerCommand> = WolfMotionCodeLibrary.immutableCopy(layers)
-    val assets: List<WolfSceneAssetReference> = WolfMotionCodeLibrary.immutableCopy(assets)
+    val layers: List<WolfSceneLayerCommand> = WolfMotionCodeLibrary.immutableCopy(
+        layers, WolfSceneContractLimits.MAX_LAYER_COUNT, "Scene layers"
+    )
+    val assets: List<WolfSceneAssetReference> = WolfMotionCodeLibrary.immutableCopy(
+        assets, WolfSceneContractLimits.MAX_ASSET_COUNT, "Scene assets"
+    )
 }
 
 data class WolfSceneFrameOutput(
@@ -345,7 +383,9 @@ class WolfSceneRenderResult(
     val failureMessage: String? = null,
     val runtimeTarget: WolfSceneRuntimeTarget? = null
 ) {
-    val outputs: List<WolfSceneFrameOutput> = WolfMotionCodeLibrary.immutableCopy(outputs)
+    val outputs: List<WolfSceneFrameOutput> = WolfMotionCodeLibrary.immutableCopy(
+        outputs, WolfSceneContractLimits.MAX_OUTPUT_COUNT.toInt(), "Scene frame outputs"
+    )
 }
 
 class WolfSceneContractValidation(errors: List<String>) {
@@ -364,6 +404,9 @@ object WolfSceneContractValidator {
         if (!timelineValid) errors += "timeline is invalid or its PTS exceeds Long range"
         if (!request.canvas.isValid()) errors += "canvas dimensions or pixel aspect ratio exceed contract limits"
         if (!request.coordinateSystem.isValid()) errors += "coordinateSystem is invalid"
+        if ((request.camera == null) == (request.cameraMotion == null)) {
+            errors += "request must define exactly one camera source: static camera or camera motion track"
+        }
         if (request.layers.size > WolfSceneContractLimits.MAX_LAYER_COUNT) {
             errors += "layer count exceeds contract limits"
         }

@@ -13,7 +13,7 @@ import kotlin.math.sqrt
  * or depend on Android or any external engine.
  */
 object WolfMotionCodeLibrary {
-    const val API_VERSION = "1.1.0"
+    const val API_VERSION = "1.2.0"
     const val MAX_CURVE_KEYFRAMES = 256
 
     private val MICROSECONDS_PER_SECOND = BigInteger.valueOf(1_000_000L)
@@ -64,8 +64,19 @@ object WolfMotionCodeLibrary {
         return rounded.toLong()
     }
 
-    internal fun <T> immutableCopy(items: List<T>): List<T> =
-        Collections.unmodifiableList(ArrayList(items))
+    /**
+     * Checks caller-controlled collection size before allocating a defensive copy.
+     * Keep this check before ArrayList(items) so oversized input fails closed.
+     */
+    internal fun <T> immutableCopy(
+        items: List<T>,
+        maxSize: Int = Int.MAX_VALUE,
+        description: String = "Collection"
+    ): List<T> {
+        require(maxSize >= 0) { "Maximum collection size cannot be negative" }
+        require(items.size <= maxSize) { "$description exceeds the maximum size of $maxSize" }
+        return Collections.unmodifiableList(ArrayList(items))
+    }
 }
 
 enum class WolfCurveInterpolation {
@@ -84,7 +95,9 @@ class WolfScalarCurve(
     keyframes: List<WolfScalarKeyframe>,
     val interpolation: WolfCurveInterpolation = WolfCurveInterpolation.LINEAR
 ) {
-    val keyframes: List<WolfScalarKeyframe> = WolfMotionCodeLibrary.immutableCopy(keyframes)
+    val keyframes: List<WolfScalarKeyframe> = WolfMotionCodeLibrary.immutableCopy(
+        keyframes, WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES, "Scalar curve keyframes"
+    )
 
     init {
         require(this.keyframes.isNotEmpty()) { "A motion curve needs at least one keyframe" }
@@ -108,8 +121,13 @@ class WolfScalarCurve(
         if (keyframes.size == 1 || t <= keyframes.first().position) return keyframes.first().value
         if (t >= keyframes.last().position) return keyframes.last().value
 
-        val rightIndex = keyframes.indexOfFirst { it.position >= t }
-        val right = keyframes[rightIndex]
+        var low = 1
+        var high = keyframes.lastIndex
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (keyframes[middle].position >= t) high = middle else low = middle + 1
+        }
+        val right = keyframes[low]
         if (t == right.position) return right.value
         val left = keyframes[rightIndex - 1]
         if (interpolation == WolfCurveInterpolation.STEP) return left.value
@@ -192,7 +210,9 @@ class WolfVector3Curve(
     keyframes: List<WolfVector3Keyframe>,
     val interpolation: WolfCurveInterpolation = WolfCurveInterpolation.LINEAR
 ) {
-    val keyframes: List<WolfVector3Keyframe> = WolfMotionCodeLibrary.immutableCopy(keyframes)
+    val keyframes: List<WolfVector3Keyframe> = WolfMotionCodeLibrary.immutableCopy(
+        keyframes, WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES, "Vector3 curve keyframes"
+    )
 
     init {
         require(this.keyframes.isNotEmpty()) { "A vector curve needs at least one keyframe" }
@@ -207,11 +227,40 @@ class WolfVector3Curve(
         }
     }
 
+    /**
+     * Samples all three components from the same segment. This avoids constructing
+     * three scalar curves and three mapped keyframe lists for every rendered frame.
+     */
     fun sample(progress: Double): WolfVector3 {
-        val x = WolfScalarCurve(keyframes.map { WolfScalarKeyframe(it.position, it.value.x) }, interpolation)
-        val y = WolfScalarCurve(keyframes.map { WolfScalarKeyframe(it.position, it.value.y) }, interpolation)
-        val z = WolfScalarCurve(keyframes.map { WolfScalarKeyframe(it.position, it.value.z) }, interpolation)
-        return WolfVector3(x.sample(progress), y.sample(progress), z.sample(progress))
+        val t = WolfMotionCodeLibrary.clampUnit(progress)
+        val first = keyframes[0]
+        val last = keyframes[keyframes.lastIndex]
+        if (keyframes.size == 1 || t <= first.position) return first.value
+        if (t >= last.position) return last.value
+
+        var low = 1
+        var high = keyframes.lastIndex
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (keyframes[middle].position >= t) high = middle else low = middle + 1
+        }
+
+        val right = keyframes[low]
+        if (t == right.position) return right.value
+        val left = keyframes[low - 1]
+        if (interpolation == WolfCurveInterpolation.STEP) return left.value
+
+        val local = (t - left.position) / (right.position - left.position)
+        val resolved = when (interpolation) {
+            WolfCurveInterpolation.STEP -> 0.0
+            WolfCurveInterpolation.LINEAR -> local
+            WolfCurveInterpolation.SMOOTHSTEP -> WolfMotionCodeLibrary.smoothStep(local)
+        }
+        return WolfVector3(
+            WolfMotionCodeLibrary.lerp(left.value.x, right.value.x, resolved),
+            WolfMotionCodeLibrary.lerp(left.value.y, right.value.y, resolved),
+            WolfMotionCodeLibrary.lerp(left.value.z, right.value.z, resolved)
+        )
     }
 }
 
@@ -290,7 +339,9 @@ data class WolfQuaternionKeyframe(
 class WolfQuaternionCurve(
     keyframes: List<WolfQuaternionKeyframe>
 ) {
-    val keyframes: List<WolfQuaternionKeyframe> = WolfMotionCodeLibrary.immutableCopy(keyframes)
+    val keyframes: List<WolfQuaternionKeyframe> = WolfMotionCodeLibrary.immutableCopy(
+        keyframes, WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES, "Quaternion curve keyframes"
+    )
 
     init {
         require(this.keyframes.isNotEmpty()) { "A quaternion curve needs at least one keyframe" }

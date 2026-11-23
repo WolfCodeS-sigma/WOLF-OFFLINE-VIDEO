@@ -73,6 +73,12 @@ class WolfMotionCodeLibraryTest {
     }
 
     @Test
+    fun transformSupportsNegativeScaleForMirroring() {
+        val mirrored = WolfTransform3(scale = WolfVector3(-1.0, 1.0, -1.0))
+        assertEquals(WolfVector3(-2.0, 3.0, -4.0), mirrored.applyToPoint(WolfVector3(2.0, 3.0, 4.0)))
+    }
+
+    @Test
     fun transformAppliesScaleThenRotationThenTranslation() {
         val transform = WolfTransform3(
             translation = WolfVector3(3.0, 0.0, 0.0),
@@ -100,6 +106,35 @@ class WolfMotionCodeLibraryTest {
             throw AssertionError("Expected timestamp overflow rejection")
         } catch (expected: IllegalArgumentException) {
             assertTrue(expected.message!!.contains("Long range"))
+        }
+    }
+
+    @Test
+    fun vectorCurveSamplesAllComponentsWithSharedInterpolationRules() {
+        val smooth = WolfVector3Curve(
+            listOf(
+                WolfVector3Keyframe(0.0, WolfVector3.ZERO),
+                WolfVector3Keyframe(1.0, WolfVector3(10.0, 20.0, 30.0))
+            ),
+            WolfCurveInterpolation.SMOOTHSTEP
+        )
+        assertEquals(WolfVector3(5.0, 10.0, 15.0), smooth.sample(0.5))
+        assertEquals(WolfVector3.ZERO, smooth.sample(-1.0))
+        assertEquals(WolfVector3(10.0, 20.0, 30.0), smooth.sample(2.0))
+    }
+
+    @Test
+    fun vectorCurveRejectsOversizedInputBeforeReadingOrCopyingIt() {
+        val oversized = object : AbstractList<WolfVector3Keyframe>() {
+            override val size: Int = WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES + 1
+            override fun get(index: Int): WolfVector3Keyframe =
+                throw AssertionError("Oversized keyframes must be rejected before iteration")
+        }
+        try {
+            WolfVector3Curve(oversized)
+            throw AssertionError("Expected oversized curve rejection")
+        } catch (_: IllegalArgumentException) {
+            // Expected: size is checked before ArrayList copies or iterates the source.
         }
     }
 
