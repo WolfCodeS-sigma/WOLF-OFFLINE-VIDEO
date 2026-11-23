@@ -507,22 +507,16 @@ class WolfSceneContractTest {
             valid.requestId, valid.contractVersion, valid.status, outputs,
             valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
         )
-        val metadata = valid.outputs.associate { output ->
-            output.outputReference to WolfSceneOutputArtifactMetadata(
-                output.byteCount, output.sha256, output.widthPx, output.heightPx,
-                output.pixelFormat, output.imageEncoding, output.colorSpace, output.alphaMode
-            )
-        }
         val inspected = mutableListOf<String>()
         val verifier = WolfSceneOutputArtifactVerifier { reference ->
             inspected += reference
-            metadata[reference]
+            null
         }
 
         val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
         assertFalse(checked.isValid)
         assertTrue(checked.errors.any { it.contains("opaque artifact identifier") })
-        assertFalse(inspected.contains(oversizedReference))
+        assertTrue(inspected.isEmpty())
     }
 
     @Test
@@ -537,34 +531,115 @@ class WolfSceneContractTest {
             valid.requestId, valid.contractVersion, valid.status, malformed,
             valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
         )
-        val verifier = artifactVerifier(emptyMap())
+        val inspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            null
+        }
         val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
         assertFalse(checked.isValid)
         assertTrue(checked.errors.any { it.contains("presentationTimeUs") })
         assertTrue(checked.errors.any { it.contains("SHA-256") })
         assertTrue(checked.errors.any { it.contains("complete") })
-        assertTrue(checked.errors.any { it.contains("independently verified") })
+        assertTrue(inspected.isEmpty())
     }
 
     @Test
-    fun resultRejectsMetadataHashMismatchAndOutputBytesOverLimit() {
+    fun resultRejectsMetadataHashMismatchAfterStructuralValidation() {
         val request = request()
         val valid = successfulResult(request)
-        val altered = valid.outputs.map { it.copy(byteCount = 40_000_000L) }
+        val altered = valid.outputs.map { it.copy(byteCount = 20_000_000L) }
         val result = WolfSceneRenderResult(
             valid.requestId, valid.contractVersion, valid.status, altered,
             valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
         )
+        val inspected = mutableListOf<String>()
         val metadata = altered.associate { output ->
             output.outputReference to WolfSceneOutputArtifactMetadata(
                 output.byteCount, "c".repeat(64), output.widthPx, output.heightPx,
                 output.pixelFormat, output.imageEncoding, output.colorSpace, output.alphaMode
             )
         }
-        val checked = WolfSceneContractValidator.validateResult(request, result, artifactVerifier(metadata))
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            metadata[reference]
+        }
+
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
         assertFalse(checked.isValid)
         assertTrue(checked.errors.any { it.contains("SHA-256 does not match") })
+        assertEquals(altered.size, inspected.size)
+    }
+
+    @Test
+    fun resultRejectsInvalidByteCountAndDigestBeforeReadingAnyArtifact() {
+        val request = request()
+        val valid = successfulResult(request)
+        val invalidReference = valid.outputs.first().outputReference
+        val malformed = valid.outputs.mapIndexed { index, output ->
+            if (index == 0) output.copy(byteCount = 0L, sha256 = "invalid") else output
+        }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, malformed,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val inspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            null
+        }
+
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("byteCount must be positive") })
+        assertTrue(checked.errors.any { it.contains("SHA-256 is invalid") })
+        assertTrue(inspected.isEmpty())
+        assertFalse(inspected.contains(invalidReference))
+    }
+
+    @Test
+    fun resultRejectsDuplicateArtifactReferencesBeforeReadingAnyArtifact() {
+        val request = request()
+        val valid = successfulResult(request)
+        val duplicatedReference = valid.outputs[0].outputReference
+        val duplicated = valid.outputs.toMutableList().also { outputs ->
+            outputs[1] = outputs[1].copy(outputReference = duplicatedReference)
+        }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, duplicated,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val inspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            null
+        }
+
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
+        assertTrue(checked.errors.any { it.contains("outputReference values must be unique") })
+        assertTrue(inspected.isEmpty())
+    }
+
+    @Test
+    fun resultRejectsOutputBytesOverLimitBeforeReadingAnyArtifact() {
+        val request = request()
+        val valid = successfulResult(request)
+        val oversized = valid.outputs.map { it.copy(byteCount = 40_000_000L) }
+        val result = WolfSceneRenderResult(
+            valid.requestId, valid.contractVersion, valid.status, oversized,
+            valid.resourceUsage, valid.failureCode, valid.failureMessage, valid.runtimeTarget
+        )
+        val inspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            inspected += reference
+            null
+        }
+
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
+        assertFalse(checked.isValid)
         assertTrue(checked.errors.any { it.contains("temporary storage") })
+        assertTrue(inspected.isEmpty())
     }
 
     @Test

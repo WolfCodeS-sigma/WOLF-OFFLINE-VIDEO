@@ -658,29 +658,12 @@ object WolfSceneContractValidator {
                 errors += "JPEG output must use OPAQUE alpha mode"
             }
 
-            // Never pass an untrusted path/URL to the app-private artifact resolver.
-            val metadata = if (referenceIsValid) {
-                runCatching { artifactVerifier.verifyAndInspect(output.outputReference) }.getOrNull()
-            } else {
-                null
-            }
-            if (metadata == null) {
-                errors += "output artifact could not be independently verified"
-            } else {
-                if (metadata.byteCount != output.byteCount ||
-                    metadata.sha256 != output.sha256 ||
-                    metadata.widthPx != output.widthPx ||
-                    metadata.heightPx != output.heightPx ||
-                    metadata.pixelFormat != output.pixelFormat ||
-                    metadata.imageEncoding != output.imageEncoding ||
-                    metadata.colorSpace != output.colorSpace ||
-                    metadata.alphaMode != output.alphaMode
-                ) errors += "output artifact metadata or SHA-256 does not match the verified bytes"
-            }
-
-            totalOutputBytes = safeAdd(totalOutputBytes, output.byteCount, errors)
-            if (output.retainedForReuse) {
-                totalReusableBytes = safeAdd(totalReusableBytes, output.byteCount, errors)
+            // Do not add invalid byte counts to aggregate storage measurements.
+            if (output.byteCount > 0L) {
+                totalOutputBytes = safeAdd(totalOutputBytes, output.byteCount, errors)
+                if (output.retainedForReuse) {
+                    totalReusableBytes = safeAdd(totalReusableBytes, output.byteCount, errors)
+                }
             }
             outputsByLayer[output.layerId]?.add(output)
         }
@@ -708,6 +691,30 @@ object WolfSceneContractValidator {
         }
         if (usage != null && usage.reusableOutputBytes != totalReusableBytes) {
             errors += "reusableOutputBytes does not equal the verified retained output bytes"
+        }
+
+        // Artifact I/O is a second phase. No artifact is opened unless the entire
+        // result structure, references, hashes, frame range, and resource accounting
+        // have passed. This also prevents repeated reads when references are duplicated.
+        if (errors.isEmpty()) {
+            result.outputs.forEach { output ->
+                val metadata = runCatching {
+                    artifactVerifier.verifyAndInspect(output.outputReference)
+                }.getOrNull()
+                if (metadata == null) {
+                    errors += "output artifact could not be independently verified"
+                } else {
+                    if (metadata.byteCount != output.byteCount ||
+                        metadata.sha256 != output.sha256 ||
+                        metadata.widthPx != output.widthPx ||
+                        metadata.heightPx != output.heightPx ||
+                        metadata.pixelFormat != output.pixelFormat ||
+                        metadata.imageEncoding != output.imageEncoding ||
+                        metadata.colorSpace != output.colorSpace ||
+                        metadata.alphaMode != output.alphaMode
+                    ) errors += "output artifact metadata or SHA-256 does not match the verified bytes"
+                }
+            }
         }
         return WolfSceneContractValidation(errors.distinct())
     }
