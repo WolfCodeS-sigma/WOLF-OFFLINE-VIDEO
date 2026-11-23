@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wolf-stage-13-motion-contract-\${{ github.ref }}
+  group: wolf-stage-13-motion-contract-stage-13
   cancel-in-progress: true
 
 jobs:
