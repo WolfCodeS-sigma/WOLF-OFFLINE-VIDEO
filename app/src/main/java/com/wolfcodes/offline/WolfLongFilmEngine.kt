@@ -66,8 +66,7 @@ object WolfLongFilmEngine {
         framesPerScene: List<Int>,
         framesPerSecond: Int = 12,
         introFrames: Int = 0,
-        maxChapterSeconds: Int = DEFAULT_CHAPTER_SECONDS,
-        shotFramesPerScene: List<List<Int>>? = null
+        maxChapterSeconds: Int = DEFAULT_CHAPTER_SECONDS
     ): List<ChapterPlan> {
         val fps = framesPerSecond.coerceIn(1, 60)
         val chapterLimit = maxChapterSeconds.coerceAtLeast(1) * fps
@@ -123,7 +122,8 @@ object WolfLongFilmEngine {
         framesPerScene: List<Int>,
         framesPerSecond: Int = 12,
         introFrames: Int = 0,
-        maxChapterSeconds: Int = DEFAULT_CHAPTER_SECONDS
+        maxChapterSeconds: Int = DEFAULT_CHAPTER_SECONDS,
+        shotFramesPerScene: List<List<Int>>? = null
     ): List<ChapterPlan> {
         require(framesPerSecond in 1..60) { "معدل الإطارات غير صالح" }
         require(maxChapterSeconds in 1..DEFAULT_CHAPTER_SECONDS) { "مدة فصل الإنتاج غير صالحة" }
