@@ -58,4 +58,30 @@ class WolfCinematicAudioTimelineTest {
         assertTrue(failure.isFailure)
         assertTrue(failure.exceptionOrNull()?.message?.contains("تجاوز") == true)
     }
+
+    @Test
+    fun convertedNarrationRetainsIntroOffsetWhenMuxedFromTemporaryAac() {
+        val timeline = WolfCinematicAudioTimeline.create(123, true, 120_000L)
+
+        assertEquals(
+            3_000_000L,
+            OfflineProductionEngine.narrationOffsetForMux(
+                originalNarrationSelected = true,
+                narrationOffsetUs = timeline.narrationOffsetUs
+            )
+        )
+    }
+
+    @Test
+    fun effectsOnlyAudioDoesNotInheritNarrationIntroOffset() {
+        val timeline = WolfCinematicAudioTimeline.create(123, true, null)
+
+        assertEquals(
+            0L,
+            OfflineProductionEngine.narrationOffsetForMux(
+                originalNarrationSelected = false,
+                narrationOffsetUs = timeline.narrationOffsetUs
+            )
+        )
+    }
 }
