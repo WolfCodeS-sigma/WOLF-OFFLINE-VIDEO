@@ -502,17 +502,21 @@ object WolfSceneContractValidator {
             }
             if (output.byteCount <= 0L) errors += "output byteCount must be positive"
             if (!Regex("[0-9a-f]{64}").matches(output.sha256)) errors += "output SHA-256 is invalid"
-            if (!output.outputReference.isSceneArtifactReference()) {
-                errors += "outputReference must be an opaque identifier, not a path or URL"
+            val referenceIsValid = output.outputReference.isSceneArtifactReference()
+            if (!referenceIsValid) {
+                errors += "outputReference must be an opaque artifact identifier, not a path or URL"
             }
             if (!seenReferences.add(output.outputReference)) errors += "outputReference values must be unique"
             if (output.imageEncoding == WolfSceneImageEncoding.JPEG && output.alphaMode != WolfSceneAlphaMode.OPAQUE) {
                 errors += "JPEG output must use OPAQUE alpha mode"
             }
 
-            val metadata = runCatching {
-                artifactVerifier.verifyAndInspect(output.outputReference)
-            }.getOrNull()
+            // Never pass an untrusted path/URL to the app-private artifact resolver.
+            val metadata = if (referenceIsValid) {
+                runCatching { artifactVerifier.verifyAndInspect(output.outputReference) }.getOrNull()
+            } else {
+                null
+            }
             if (metadata == null) {
                 errors += "output artifact could not be independently verified"
             } else {

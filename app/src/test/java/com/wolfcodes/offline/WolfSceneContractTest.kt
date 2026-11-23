@@ -354,9 +354,15 @@ class WolfSceneContractTest {
                 output.pixelFormat, output.imageEncoding, output.colorSpace, output.alphaMode
             )
         }
-        val checked = WolfSceneContractValidator.validateResult(request, result, artifactVerifier(metadata))
+        val referencesInspected = mutableListOf<String>()
+        val verifier = WolfSceneOutputArtifactVerifier { reference ->
+            referencesInspected += reference
+            metadata[reference]
+        }
+        val checked = WolfSceneContractValidator.validateResult(request, result, verifier)
         assertFalse(checked.isValid)
-        assertTrue(checked.errors.any { it.contains("opaque identifier") })
+        assertTrue(checked.errors.any { it.contains("opaque artifact identifier") })
+        assertFalse(referencesInspected.contains("C:private-folder"))
     }
 
     @Test
