@@ -102,6 +102,21 @@ class WolfStoryVoiceTest {
     }
 
     @Test
+    fun startingAnotherNarrationSegmentInvalidatesApprovalButKeepsPreviousTakeUntilMerge() {
+        val approvedScript = WolfStoryVoiceStateMachine.approveScript(session(), "قصة ثابتة", 2L)
+        val take = WolfStoryVoiceStateMachine.saveRecording(
+            approvedScript, "/private/voiceover.m4a", 12000L, 3L
+        )
+        val approved = WolfStoryVoiceStateMachine.approveRecording(take, true, 8192L, 4L)
+        val continuing = WolfStoryVoiceStateMachine.beginAdditionalSegment(approved, 5L)
+
+        assertTrue(continuing.scriptApproved)
+        assertFalse(continuing.voiceApproved)
+        assertEquals(approved.voiceFilePath, continuing.voiceFilePath)
+        assertEquals(approved.recordingStoryHash, continuing.recordingStoryHash)
+    }
+
+    @Test
     fun narrationDurationRoundsUpToWholeSecondForFramePlanning() {
         assertEquals(1, WolfStoryVoiceStateMachine.durationSecondsCeil(1L))
         assertEquals(69, WolfStoryVoiceStateMachine.durationSecondsCeil(68001L))

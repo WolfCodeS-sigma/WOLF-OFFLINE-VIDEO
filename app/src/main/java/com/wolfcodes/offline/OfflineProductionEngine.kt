@@ -28,6 +28,21 @@ object OfflineProductionEngine {
     private const val VIDEO_BITRATE_BPS = 1_600_000L
     private const val CONSERVATIVE_AUDIO_BITRATE_BPS = 512_000L
     private const val EXPORT_SAFETY_MARGIN_BYTES = 128L * 1024L * 1024L
+    internal const val STORYBOARD_RENDER_REVISION = "storyboard-planner-v3"
+
+    /**
+     * Keeps an optional intro inside the requested film runtime, including very short
+     * durations passed by internal callers. The film must always retain at least one
+     * second for its body timeline.
+     */
+    internal fun introDurationSeconds(requestedTotal: Int, includeIntro: Boolean): Int {
+        val safeTotal = requestedTotal.coerceIn(1, 1800)
+        return if (includeIntro) minOf(3, (safeTotal - 1).coerceAtLeast(0)) else 0
+    }
+
+    /** Uses the original still unless a semantic segmentation result has been validated. */
+    internal fun useSafeStillImageFallback(semanticSegmentationValidated: Boolean): Boolean =
+        !semanticSegmentationValidated
 
     /** Estimates peak free space while temporary MP4 and final output copies overlap. */
     internal fun estimatePeakStorageBytes(
@@ -40,6 +55,31 @@ object OfflineProductionEngine {
         val videoCopies = if (usesChapteredRendering) 3L else 2L
         val audioAllowance = if (hasAudio) safeDuration * CONSERVATIVE_AUDIO_BITRATE_BPS / 8L else 0L
         return oneVideoCopy * videoCopies + audioAllowance + EXPORT_SAFETY_MARGIN_BYTES
+    }
+
+    internal data class AudioTimeline(
+        val filmDurationUs: Long,
+        val narrationLimitUs: Long
+    )
+
+    /** When approved narration is authoritative, its measured duration is the film clock. */
+    internal fun buildAudioTimeline(
+        requestedFilmSeconds: Int,
+        narrationTimingEnabled: Boolean,
+        audioDurationMs: Long?
+    ): AudioTimeline {
+        val requestedFilmDurationUs = requestedFilmSeconds.coerceIn(1, 1800).toLong() * 1_000_000L
+        val authoritativeNarrationDurationUs = if (
+            narrationTimingEnabled && audioDurationMs != null && audioDurationMs in 1_000L..1_800_000L
+        ) {
+            Math.multiplyExact(audioDurationMs, 1_000L)
+        } else {
+            null
+        }
+        val filmDurationUs = authoritativeNarrationDurationUs ?: requestedFilmDurationUs
+        // Keep the complete approved narration; scene planning and video frames must grow to cover it.
+        val narrationLimitUs = authoritativeNarrationDurationUs ?: filmDurationUs
+        return AudioTimeline(filmDurationUs, narrationLimitUs)
     }
 
     data class Result(
@@ -84,21 +124,46 @@ object OfflineProductionEngine {
         val fps = 12
         val requestedTotal = seconds.coerceIn(1, 1800)
         val useNarrationTiming = audioDurationIsAuthoritative && audioUri != null &&
-            audioDurationMs != null && audioDurationMs in 1000L..1_800_000L
-        val introSeconds = if (includeIntro) {
-            if (useNarrationTiming) minOf(3, (requestedTotal - 1).coerceAtLeast(0)) else 3
-        } else 0
+            audioDurationMs != null && audioDurationMs in 1_000L..1_800_000L
+        val audioTimeline = buildAudioTimeline(
+            requestedFilmSeconds = requestedTotal,
+            narrationTimingEnabled = useNarrationTiming,
+            audioDurationMs = audioDurationMs
+        )
+        val filmDurationUs = audioTimeline.filmDurationUs
+        val narrationLimitUs = audioTimeline.narrationLimitUs
+        // The approved voice recording defines the true film runtime when narration timing is enabled.
+        // Round up only for second-based planning; frame allocation below uses the exact audio duration.
+        val totalVideoSeconds = ((filmDurationUs + 999_999L) / 1_000_000L)
+            .toInt().coerceIn(1, 1800)
+        val totalVideoFrames = ((filmDurationUs * fps + 999_999L) / 1_000_000L)
+            .toInt().coerceAtLeast(1)
+        val introSeconds = introDurationSeconds(totalVideoSeconds, includeIntro)
         val introFrames = introSeconds * fps
-        val bodySeconds = if (useNarrationTiming) (requestedTotal - introSeconds).coerceAtLeast(1) else requestedTotal
-        val rawScenes = splitStory(story)
-        val scenes = if (useNarrationTiming) {
-            StoryDirectorEngine.fitSceneTextsToDuration(rawScenes, bodySeconds)
-        } else rawScenes
-        val total = if (useNarrationTiming) bodySeconds else max(requestedTotal, scenes.size * 3).coerceAtMost(1800)
-        val totalVideoSeconds = if (useNarrationTiming) requestedTotal else total + introSeconds
-        val totalFrames = total * fps
-        val minimumFrames = if (useNarrationTiming) fps else fps * 3
+        val bodySeconds = (totalVideoSeconds - introSeconds).coerceAtLeast(1)
+        val bodyFrames = (totalVideoFrames - introFrames).coerceAtLeast(1)
+        // The storyboard director is the single source of scene boundaries and shot intent.
+        // Its exact-duration mode keeps every planned scene inside the film body timeline.
+        val filmPlan = StoryDirectorEngine.analyze(
+            story = story,
+            durationSeconds = bodySeconds,
+            aspectRatio = aspectRatio,
+            visualStyle = "رعب سينمائي مظلم",
+            horrorType = "رعب نفسي وخارق للطبيعة",
+            audioDrivenDuration = true,
+            includeIntro = false
+        )
+        val scenePlans = filmPlan.scenes
+        val scenes = scenePlans.map { it.sourceText }
+        val totalFrames = bodyFrames
+        val minimumFrames = 1
         val framesPerScene = OfflineMotionEngine.allocateFrames(scenes, totalFrames, minimumFrames)
+        val shotFrameBudgets = scenePlans.mapIndexed { index, scenePlan ->
+            StoryDirectorEngine.allocateShotFrames(
+                framesPerScene[index],
+                scenePlan.shots.map { it.durationSeconds }
+            )
+        }
         val typographyCues = WolfHorrorTypographyEngine.plan(
             scenes, framesPerScene, fps, enabled = enableHorrorTypography
         )
@@ -111,11 +176,10 @@ object OfflineProductionEngine {
                 maxChapterSeconds = safeChapterDuration
             )
         } else emptyList()
-        val narrationLimitUs = if (useNarrationTiming) {
-            (audioDurationMs ?: 1000L).coerceIn(1000L, 1_800_000L) * 1000L
-        } else totalVideoSeconds.toLong() * 1_000_000L
         val name = "wolf_offline_${System.currentTimeMillis()}.mp4"
         val tempDir = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
+        // Remove only expired files created by this pipeline before checking free storage.
+        WolfMemoryManager.cleanupStaleOfflineTemps(context)
         // Reserve for overlapping temporary/final MP4 copies, optional AAC, and a safety margin.
         val estimatedOutputBytes = estimatePeakStorageBytes(
             totalVideoSeconds,
@@ -136,12 +200,22 @@ object OfflineProductionEngine {
                     ?: chosenUris.getOrNull(if (chosenUris.isEmpty()) -1 else sceneIndex % chosenUris.size)
             }
         }
+        if (sceneShotUris.any { scene -> scene.any { it != null } } &&
+            !WolfImageDepthSegmenter.isSemanticSegmentationReady()
+        ) {
+            WolfDiagnostics.record(
+                context, "سلامة صور المستخدم", "WOLF IMAGE FALLBACK", "WARNING",
+                "تم تعطيل حركة طبقات العمق لأن التحليل المتاح لوني وغير دلالي؛ ستُحفظ الصورة الأصلية دون تشويه.",
+                "SEMANTIC_SEGMENTATION_NOT_AVAILABLE"
+            )
+        }
         val chapterFingerprint = if (chapterPlans.isNotEmpty()) {
             WolfLongFilmEngine.fingerprint(
                 story, framesPerScene, fps, w, h, introFrames, enableHorrorTypography,
                 listOf(
                     includeWatermark.toString(),
                     "depth-segmentation-v${WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION}",
+                    STORYBOARD_RENDER_REVISION,
                     audioUri?.toString().orEmpty(),
                     sceneShotUris.flatten().joinToString("|"),
                     sceneImageAssignments.entries.sortedBy { it.key }
@@ -159,11 +233,13 @@ object OfflineProductionEngine {
                 encodeChaptered(
                     context, silentFile, checkpointProjectId, chapterFingerprint, chapterPlans,
                     scenes, w, h, fps, framesPerScene, sceneShotUris, includeWatermark,
-                    typographyCues, introSeconds, onSceneProgress, onChapterProgress, 1_600_000
+                    typographyCues, introSeconds, onSceneProgress, onChapterProgress, 1_600_000,
+                    shotFrameBudgets, scenePlans.map { it.shots }
                 )
             } else {
                 encode(context, silentFile, scenes, w, h, fps, framesPerScene, sceneShotUris,
-                    includeWatermark, typographyCues, introSeconds, onSceneProgress, 1_600_000)
+                    includeWatermark, typographyCues, introSeconds, onSceneProgress, 1_600_000,
+                    shotFrameBudgets, scenePlans.map { it.shots })
             }
         } catch (primaryError: Exception) {
             silentFile.delete()
@@ -187,7 +263,8 @@ object OfflineProductionEngine {
             )
             try {
                 encode(context, silentFile, scenes, fallbackDimensions.first, fallbackDimensions.second,
-                    fps, framesPerScene, sceneShotUris, includeWatermark, typographyCues, introSeconds, onSceneProgress, 720_000)
+                    fps, framesPerScene, sceneShotUris, includeWatermark, typographyCues, introSeconds, onSceneProgress, 720_000,
+                    shotFrameBudgets, scenePlans.map { it.shots })
                 outputWidth = fallbackDimensions.first
                 outputHeight = fallbackDimensions.second
                 usedReducedQualityFallback = true
@@ -223,9 +300,9 @@ object OfflineProductionEngine {
                     layeredAudioFile = File(tempDir, "layered_$name.m4a")
                     WolfAudioMixer.mix(
                         context, audioUri, generatedAudio, layeredAudioFile,
-                        narrationLimitUs, narrationGain = 0.92, effectsGain = 0.30
+                        filmDurationUs, narrationGain = 0.92, effectsGain = 0.30
                     )
-                    muxAudio(context, silentFile, null, layeredAudioFile, mixedFile, narrationLimitUs, fps)
+                    muxAudio(context, silentFile, null, layeredAudioFile, mixedFile, filmDurationUs, filmDurationUs, fps)
                 } else {
                     convertedAudioFile = audioUri?.let { source ->
                         WolfAudioTranscoder.transcodeToAacIfNeeded(
@@ -235,7 +312,7 @@ object OfflineProductionEngine {
                     }
                     val muxAudioUri = if (convertedAudioFile == null) audioUri else null
                     val muxAudioFile = convertedAudioFile ?: generatedAudio
-                    muxAudio(context,silentFile,muxAudioUri,muxAudioFile,mixedFile,narrationLimitUs, fps)
+                    muxAudio(context,silentFile,muxAudioUri,muxAudioFile,mixedFile,filmDurationUs,narrationLimitUs, fps)
                 }
                 silentFile.delete()
                 tempFile=mixedFile
@@ -318,7 +395,7 @@ object OfflineProductionEngine {
             frames = framesPerScene.sum() + introFrames,
             savedLocation = savedLocation,
             mediaUri = finalReference,
-            durationSeconds = if (useNarrationTiming) requestedTotal else totalVideoSeconds,
+            durationSeconds = totalVideoSeconds,
             framesPerSecond = fps,
             videoWidth = outputWidth,
             videoHeight = outputHeight,
@@ -344,7 +421,9 @@ object OfflineProductionEngine {
         introSeconds: Int,
         onSceneProgress: ((Int, Int) -> Unit)?,
         onChapterProgress: ((Int, Int, String) -> Unit)?,
-        bitRate: Int
+        bitRate: Int,
+        shotFrameBudgets: List<List<Int>>,
+        shotPlansPerScene: List<List<StoryDirectorEngine.ShotPlan>>
     ) {
         val session = WolfLongFilmCheckpointStore.begin(
             context, projectId, fingerprint, fps,
@@ -380,6 +459,26 @@ object OfflineProductionEngine {
                 val chapterImages = chapter.slices.map { slice ->
                     sceneImageUris.getOrElse(slice.sceneIndex) { emptyList() }
                 }
+                val chapterShotSegments = chapter.slices.map { slice ->
+                    StoryDirectorEngine.sliceShotSegments(
+                        shotPlansPerScene.getOrElse(slice.sceneIndex) { emptyList() },
+                        shotFrameBudgets.getOrElse(slice.sceneIndex) { emptyList() },
+                        slice.startFrame,
+                        slice.frameCount
+                    )
+                }
+                val chapterShotBudgets = chapterShotSegments.map { segments ->
+                    segments.map { it.frameCount }
+                }
+                val chapterShotPlans = chapterShotSegments.map { segments ->
+                    segments.map { it.shotPlan }
+                }
+                val chapterShotOffsets = chapterShotSegments.map { segments ->
+                    segments.map { it.startOffsetFrames }
+                }
+                val chapterShotFullFrameCounts = chapterShotSegments.map { segments ->
+                    segments.map { it.totalShotFrames }
+                }
                 val chapterCues = chapter.slices.map { slice ->
                     val source = typographyCues.getOrNull(slice.sceneIndex) ?: return@map null
                     val start = (source.startFrame - slice.startFrame).coerceAtLeast(0)
@@ -397,7 +496,8 @@ object OfflineProductionEngine {
                             totalSlices
                         )
                     },
-                    bitRate
+                    bitRate, chapterShotBudgets, chapterShotPlans,
+                    chapterShotOffsets, chapterShotFullFrameCounts
                 )
                 WolfLongFilmCheckpointStore.markCompleted(
                     context, projectId, chapter.number, chapterFile
@@ -520,7 +620,11 @@ object OfflineProductionEngine {
     private fun encode(context: Context, file: File, scenes: List<String>, w: Int, h: Int, fps: Int,
         framesPerScene: List<Int>, sceneImageUris: List<List<Uri?>>, includeWatermark: Boolean,
         typographyCues: List<WolfHorrorTypographyEngine.Cue?>,
-        introSeconds: Int, onSceneProgress: ((Int, Int) -> Unit)?, bitRate: Int) {
+        introSeconds: Int, onSceneProgress: ((Int, Int) -> Unit)?, bitRate: Int,
+        shotFrameBudgets: List<List<Int>>? = null,
+        shotPlansPerScene: List<List<StoryDirectorEngine.ShotPlan>>? = null,
+        shotFrameOffsets: List<List<Int>>? = null,
+        fullShotFrameCounts: List<List<Int>>? = null) {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, 0x7F000789)
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate.coerceIn(400_000, 2_500_000))
@@ -554,38 +658,65 @@ object OfflineProductionEngine {
             for (s in scenes.indices) {
                 WolfResourceGuard.ensureSafeToContinue(context)
                 val sceneFrames = framesPerScene[s]
-                val baseShotFrames = sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE
-                val extraShotFrames = sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE
+                val plannedShotFrames = shotFrameBudgets?.getOrNull(s)
+                    ?.takeIf { it.isNotEmpty() && it.all { count -> count > 0 } && it.sum() == sceneFrames }
+                val shotFrameCounts = plannedShotFrames ?: List(WolfSceneAssetStore.SHOTS_PER_SCENE) { index ->
+                    sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE +
+                        if (index < sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE) 1 else 0
+                }.filter { it > 0 }
                 var sceneFrameOffset = 0
-                for (shotIndex in 0 until WolfSceneAssetStore.SHOTS_PER_SCENE) {
-                    val shotFrames = baseShotFrames + if (shotIndex < extraShotFrames) 1 else 0
-                    val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
+                for (shotIndex in shotFrameCounts.indices) {
+                    val shotFrames = shotFrameCounts[shotIndex]
+                    val shotPlan = shotPlansPerScene?.getOrNull(s)?.getOrNull(shotIndex)
+                    // Chapter-local shotIndex restarts at zero; ShotPlan.number retains
+                    // the original scene slot so the same user image follows its shot.
+                    val sourceShotIndex = shotPlan?.let {
+                        StoryDirectorEngine.sourceShotIndex(it.number, WolfSceneAssetStore.SHOTS_PER_SCENE)
+                    } ?: shotIndex
+                    val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(sourceShotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
-                    val imageLayers = try {
-                        image?.let { WolfImageDepthSegmenter.segment(it) }
-                    } catch (segmentationError: Exception) {
-                        if (image != null && !image.isRecycled) image.recycle()
+                    if (shotUri != null && image == null) {
                         throw IllegalStateException(
-                            "تعذر فصل عناصر الصورة إلى طبقات عمق: ${segmentationError.message ?: segmentationError.javaClass.simpleName}",
-                            segmentationError
+                            "تعذر قراءة صورة المستخدم المحددة للمشهد؛ تم إيقاف هذا المسار بدل استبدالها برسوم مولدة"
+                        )
+                    }
+                    val preparedShot = WolfSceneRenderPipeline.prepare(
+                        caption = scenes[s],
+                        sceneIndex = s,
+                        source = image
+                    ) { reason ->
+                        WolfDiagnostics.record(
+                            context,
+                            "استعادة الرندر",
+                            "WOLF SCENE RENDER PIPELINE",
+                            "WARNING",
+                            "تم الحفاظ على صورة المستخدم الثابتة أو استخدام مسار البيئة عند غياب الصورة",
+                            reason
                         )
                     }
                     try {
                         for (f in 0 until shotFrames) {
                             if (f % (fps * 5) == 0) WolfResourceGuard.ensureSafeToContinue(context)
-                            val shotProgress = f.toFloat() / max(1, shotFrames - 1)
+                            val shotFrameOffset = shotFrameOffsets?.getOrNull(s)?.getOrNull(shotIndex) ?: 0
+                            val fullShotFrameCount = fullShotFrameCounts?.getOrNull(s)?.getOrNull(shotIndex)
+                                ?: shotFrames
+                            val shotProgress = StoryDirectorEngine.progressForShotFrame(
+                                shotFrameOffset,
+                                f,
+                                fullShotFrameCount
+                            )
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
-                                w, h, scenes[s], s, shotIndex, shotProgress, image, imageLayers, includeWatermark,
-                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps
+                                w, h, scenes[s], s, sourceShotIndex, shotProgress, preparedShot, includeWatermark,
+                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps, shotPlan
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
                             track = drained.first
                             started = drained.second
                         }
                     } finally {
-                        imageLayers?.recycle()
+                        preparedShot.recycle()
                         if (image != null && !image.isRecycled) image.recycle()
                     }
                     sceneFrameOffset += shotFrames
@@ -606,9 +737,9 @@ object OfflineProductionEngine {
         } finally {
             try { inputSurface?.release() } catch (_: Exception) {}
             try { codec.stop() } catch (_: Exception) {}
-            codec.release()
+            try { codec.release() } catch (_: Exception) {}
             try { if (started) muxer?.stop() } catch (_: Exception) {}
-            muxer?.release()
+            try { muxer?.release() } catch (_: Exception) {}
         }
     }
 
@@ -646,120 +777,55 @@ object OfflineProductionEngine {
 
     private fun draw(
         surface: Surface, w: Int, h: Int, caption: String, scene: Int,
-        shotIndex: Int, t: Float, bitmap: Bitmap?, imageLayers: WolfImageDepthSegmenter.Layers?,
+        shotIndex: Int, t: Float, preparedShot: WolfSceneRenderPipeline.PreparedShot,
         includeWatermark: Boolean, typographyCue: WolfHorrorTypographyEngine.Cue?,
-        sceneFrameIndex: Int, fps: Int
+        sceneFrameIndex: Int, fps: Int,
+        shotPlan: StoryDirectorEngine.ShotPlan? = null
     ) {
         val c: Canvas = surface.lockCanvas(null)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         val safeShotIndex = shotIndex.coerceIn(0, WolfSceneAssetStore.SHOTS_PER_SCENE - 1)
+        val plannedProgress = StoryDirectorEngine.motionProgress(shotPlan?.motion.orEmpty(), t)
         try {
-            if(bitmap != null && !bitmap.isRecycled) {
-                c.drawColor(android.graphics.Color.BLACK)
-                val source=Rect(0,0,bitmap.width,bitmap.height)
-                val targetRatio=w.toFloat()/h.toFloat()
-                val imageRatio=bitmap.width.toFloat()/bitmap.height.toFloat()
-                if(imageRatio>targetRatio) {
-                    val cropWidth=(bitmap.height*targetRatio).toInt().coerceAtLeast(1)
-                    source.left=(bitmap.width-cropWidth)/2
-                    source.right=source.left+cropWidth
-                } else {
-                    val cropHeight=(bitmap.width/targetRatio).toInt().coerceAtLeast(1)
-                    source.top=(bitmap.height-cropHeight)/2
-                    source.bottom=source.top+cropHeight
+            val compositionSave = c.save()
+            try {
+                // Storyboard camera composition is applied only to generated environments.
+                if (preparedShot.backend == WolfSceneRenderPipeline.Backend.PROCEDURAL) {
+                    shotPlan?.let {
+                        StoryDirectorEngine.compositionFocusX(it.composition, it.camera)?.let { focusX ->
+                            c.translate((focusX - 0.5f) * w * 0.045f, 0f)
+                        }
+                    }
                 }
-                // Three virtual camera setups per scene, derived from the same still image.
-                // This is a local motion fallback, not three independent generated photographs.
-                val shotProgress = t.coerceIn(0f, 1f)
-                val baseLeft=source.left
-                val baseTop=source.top
-                val baseWidth=source.width()
-                val baseHeight=source.height()
-                val cropScale=when(shotIndex) { 0 -> 1f; 1 -> 0.78f; else -> 0.60f }
-                val cropWidth=(baseWidth*cropScale).toInt().coerceAtLeast(1)
-                val cropHeight=(baseHeight*cropScale).toInt().coerceAtLeast(1)
-                val focusX=when(shotIndex) { 0 -> 0.50f; 1 -> 0.34f+0.30f*shotProgress; else -> 0.62f-0.24f*shotProgress }
-                val focusY=when(shotIndex) { 0 -> 0.50f; 1 -> 0.45f; else -> 0.40f+0.12f*shotProgress }
-                source.left=(baseLeft+(baseWidth-cropWidth)*focusX).toInt().coerceIn(baseLeft,baseLeft+baseWidth-cropWidth)
-                source.top=(baseTop+(baseHeight-cropHeight)*focusY).toInt().coerceIn(baseTop,baseTop+baseHeight-cropHeight)
-                source.right=source.left+cropWidth
-                source.bottom=source.top+cropHeight
-                val camera = OfflineMotionEngine.cameraFrame(shotProgress, scene, caption, safeShotIndex)
-                val baseZoom = when (shotIndex) {
-                    0 -> 1.012f
-                    1 -> 1.034f
-                    else -> 1.058f
+                val renderedBackend = WolfSceneRenderPipeline.render(
+                    canvas = c,
+                    width = w,
+                    height = h,
+                    shotIndex = safeShotIndex,
+                    progress = plannedProgress,
+                    caption = caption,
+                    sceneIndex = scene,
+                    preparedShot = preparedShot
+                ) { reason ->
+                    android.util.Log.w("WOLF_SCENE_RENDER_PIPELINE", reason)
                 }
-                // Keep a small overscan margin so camera movement never exposes black edges.
-                val scale = (baseZoom + camera.zoom).coerceAtLeast(1.006f)
-                val dw = w * scale
-                val dh = h * scale
-                val shiftX = camera.offsetX * w
-                val shiftY = camera.offsetY * h
-                val destination = RectF(
-                    (w - dw) / 2f + shiftX,
-                    (h - dh) / 2f + shiftY,
-                    (w + dw) / 2f + shiftX,
-                    (h + dh) / 2f + shiftY
-                )
-                p.alpha = 255
-                if (imageLayers != null && imageLayers.separated) {
-                    val layerScale = imageLayers.sourceScale
-                    val layerLeft = (source.left * layerScale).toInt()
-                        .coerceIn(0, imageLayers.background.width - 1)
-                    val layerTop = (source.top * layerScale).toInt()
-                        .coerceIn(0, imageLayers.background.height - 1)
-                    val layerRight = (source.right * layerScale).toInt()
-                        .coerceIn(layerLeft + 1, imageLayers.background.width)
-                    val layerBottom = (source.bottom * layerScale).toInt()
-                        .coerceIn(layerTop + 1, imageLayers.background.height)
-                    val layerSource = Rect(layerLeft, layerTop, layerRight, layerBottom)
-                    WolfSceneDepthComposer.renderImageLayers(
-                        canvas = c,
-                        width = w,
-                        height = h,
-                        sceneIndex = scene,
-                        progress = shotProgress,
-                        layers = imageLayers,
-                        source = layerSource,
-                        destination = destination,
-                        rotationDegrees = camera.rotationDegrees
-                    )
-                } else {
-                    val cameraSave = c.save()
-                    c.rotate(camera.rotationDegrees, w / 2f, h / 2f)
-                    c.drawBitmap(bitmap, source, destination, p)
-                    c.restoreToCount(cameraSave)
+                if (renderedBackend == WolfSceneRenderPipeline.Backend.PROCEDURAL) {
+                    drawPlannedLighting(c, w, h, shotPlan?.lighting.orEmpty())
                 }
-                p.color=android.graphics.Color.argb(46,0,0,0)
-                c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
-                if(shotProgress<0.08f) {
-                    val fade=((0.08f-shotProgress)/0.08f*36f).toInt().coerceIn(0,36)
-                    p.color=android.graphics.Color.argb(fade,0,0,0)
-                    c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
-                }
-            } else {
-                WolfSceneArtEngine.draw(c, w, h, caption, scene * WolfSceneAssetStore.SHOTS_PER_SCENE + shotIndex, t)
+            } finally {
+                c.restoreToCount(compositionSave)
             }
-            WolfProceduralMotionEngine.renderDepthAware(
-                canvas = c,
-                width = w,
-                height = h,
-                caption = caption,
-                sceneIndex = scene,
-                shotIndex = safeShotIndex,
-                progress = t
-            )
+
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
             if (includeWatermark) {
-                p.color=android.graphics.Color.WHITE
-                p.textAlign=Paint.Align.CENTER
-                p.textSize=(w * 0.037f).coerceIn(16f,24f)
-                p.setShadowLayer(5f,0f,1f,android.graphics.Color.BLACK)
-                c.drawText("WOLF CODE S",w/2f,h*.965f,p)
+                p.color = android.graphics.Color.WHITE
+                p.textAlign = Paint.Align.CENTER
+                p.textSize = (w * 0.037f).coerceIn(16f, 24f)
+                p.setShadowLayer(5f, 0f, 1f, android.graphics.Color.BLACK)
+                c.drawText(WolfCinematicIdentity.BRAND_NAME, w / 2f, h * 0.965f, p)
                 p.clearShadowLayer()
-                val centerX = w / 2f - p.measureText("WOLF CODE S") / 2f - 24f
-                val centerY = h * .952f
+                val centerX = w / 2f - p.measureText(WolfCinematicIdentity.BRAND_NAME) / 2f - 24f
+                val centerY = h * 0.952f
                 val wolf = Path().apply {
                     moveTo(centerX - 12f, centerY + 8f)
                     lineTo(centerX - 10f, centerY - 11f)
@@ -770,19 +836,50 @@ object OfflineProductionEngine {
                     lineTo(centerX + 12f, centerY + 8f)
                     close()
                 }
-                p.color=android.graphics.Color.BLACK
-                c.drawPath(wolf,p)
-                p.color=android.graphics.Color.RED
+                p.color = android.graphics.Color.BLACK
+                c.drawPath(wolf, p)
+                p.color = android.graphics.Color.RED
                 c.drawCircle(centerX - 4f, centerY, 1.8f, p)
                 c.drawCircle(centerX + 4f, centerY, 1.8f, p)
             }
-            p.color=android.graphics.Color.RED
-            c.drawRect(0f,0f,w*((safeShotIndex + t) / WolfSceneAssetStore.SHOTS_PER_SCENE),5f,p)
         } finally {
             surface.unlockCanvasAndPost(c)
         }
     }
 
+
+    private fun drawPlannedLighting(canvas: Canvas, width: Int, height: Int, lighting: String) {
+        val treatment = StoryDirectorEngine.lightingTreatment(lighting)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        when (treatment) {
+            "COOL" -> {
+                paint.color = android.graphics.Color.argb(16, 54, 82, 112)
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            }
+            "NIGHT" -> {
+                paint.color = android.graphics.Color.argb(22, 2, 5, 14)
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            }
+            "SIDE" -> {
+                paint.shader = android.graphics.LinearGradient(
+                    0f, 0f, width.toFloat(), 0f,
+                    intArrayOf(
+                        android.graphics.Color.argb(28, 0, 0, 0),
+                        android.graphics.Color.TRANSPARENT,
+                        android.graphics.Color.argb(10, 0, 0, 0)
+                    ),
+                    floatArrayOf(0f, 0.58f, 1f),
+                    android.graphics.Shader.TileMode.CLAMP
+                )
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+                paint.shader = null
+            }
+            "LOW_KEY" -> {
+                paint.color = android.graphics.Color.argb(14, 0, 0, 0)
+                canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            }
+        }
+    }
 
     /** Composite a brief atmospheric phrase into the rendered scene, never as UI subtitles. */
     private fun drawHorrorTypography(
@@ -927,14 +1024,13 @@ object OfflineProductionEngine {
             }.coerceIn(0,255)
             paint.color=android.graphics.Color.argb(255-fade,0,0,0)
             canvas.drawRect(0f,0f,w.toFloat(),h.toFloat(),paint)
-            paint.color=android.graphics.Color.rgb(205,12,34)
-            canvas.drawRect(0f,h-5f,w*progress,h.toFloat(),paint)
         } finally {
             surface.unlockCanvasAndPost(canvas)
         }
     }
 
-    private fun muxAudio(context: Context, videoFile: File, audioUri: Uri?, generatedAudioFile: File?, outputFile: File, maxDurationUs: Long, fps: Int) {
+    private fun muxAudio(context: Context, videoFile: File, audioUri: Uri?, generatedAudioFile: File?,
+                         outputFile: File, videoDurationUs: Long, audioDurationUs: Long, fps: Int) {
         val videoExtractor=MediaExtractor()
         val audioExtractor=MediaExtractor()
         var muxer: MediaMuxer?=null
@@ -965,8 +1061,8 @@ object OfflineProductionEngine {
             val outputVideo=muxer.addTrack(videoFormat)
             val outputAudio=muxer.addTrack(audioFormat)
             muxer.start()
-            copyTrack(videoExtractor,videoTrack,muxer,outputVideo,maxDurationUs,fps)
-            copyTrack(audioExtractor,audioTrack,muxer,outputAudio,maxDurationUs)
+            copyTrack(videoExtractor,videoTrack,muxer,outputVideo,videoDurationUs,fps)
+            copyTrack(audioExtractor,audioTrack,muxer,outputAudio,audioDurationUs)
             muxer.stop()
         } finally {
             try { videoExtractor.release() } catch (_:Exception) {}
@@ -991,7 +1087,7 @@ object OfflineProductionEngine {
             if(size<0) break
             val sourcePts=extractor.sampleTime
             val pts=if(frameRate!=null) frameIndex * 1_000_000L / frameRate.coerceAtLeast(1) else sourcePts
-            if(pts<0 || pts>maxDurationUs) break
+            if(pts<0 || pts>=maxDurationUs) break
             val sampleFlags = extractor.sampleFlags
             if (sampleFlags and MediaExtractor.SAMPLE_FLAG_ENCRYPTED != 0) {
                 throw IllegalStateException("لا يمكن دمج ملف صوت أو فيديو محمي بتشفير DRM")
