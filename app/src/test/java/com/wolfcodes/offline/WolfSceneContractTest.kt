@@ -162,7 +162,23 @@ class WolfSceneContractTest {
         )
         assertTrue(singleFrameAtExtremeRate.isValid())
 
-        val invalidRequest = request().copy(timeline = repeatedPtsAtLaterAbsoluteFrames)
+        val baseRequest = request()
+        val invalidRequest = WolfSceneRenderRequest(
+            requestId = baseRequest.requestId,
+            contractVersion = baseRequest.contractVersion,
+            sceneId = baseRequest.sceneId,
+            shotId = baseRequest.shotId,
+            masterSeed = baseRequest.masterSeed,
+            timeline = repeatedPtsAtLaterAbsoluteFrames,
+            canvas = baseRequest.canvas,
+            coordinateSystem = baseRequest.coordinateSystem,
+            camera = baseRequest.camera,
+            layers = baseRequest.layers,
+            assets = baseRequest.assets,
+            resourceEnvelope = baseRequest.resourceEnvelope,
+            runtimeTarget = baseRequest.runtimeTarget,
+            cameraMotion = baseRequest.cameraMotion
+        )
         val checkedRequest = WolfSceneContractValidator.validateRequest(invalidRequest)
         assertFalse(checkedRequest.isValid)
         assertTrue(checkedRequest.errors.any { it.contains("timeline") })
