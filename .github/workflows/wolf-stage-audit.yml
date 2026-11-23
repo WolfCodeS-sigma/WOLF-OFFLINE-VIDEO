@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: wolf-stage-audit-${{ github.ref }}
-  cancel-in-progress: true
+  queue: max
 
 jobs:
   android-audit:

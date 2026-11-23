@@ -35,6 +35,8 @@ Open the repository as an Android Gradle project in a compatible IDE, or use a G
 - `HorrorVideoExporter.kt`: separate Filament prototype path, launched only from the Debug-only UI control and not yet connected to the ordinary `OfflineProductionEngine` film pipeline. Its Filament dependencies are currently declared in the main app Gradle configuration; see the Stage 12 document for the Release packaging caveat.
 
 ## Verification policy
+- `docs/WOLF_CI_CONCURRENCY_POLICY_AR.md`: قواعد تنظيم GitHub Actions، ومنع إلغاء الاختبارات الجارية، وتسلسل عمليات البناء والتحقق.
+
 
 The continuous-integration workflow builds the Debug APK, runs Android lint and JVM unit tests, then runs the Android 12 emulator regression suite for media export, audio, checkpoints, and the bundled asset registry. Testing on the physical Realme 7 remains a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
 

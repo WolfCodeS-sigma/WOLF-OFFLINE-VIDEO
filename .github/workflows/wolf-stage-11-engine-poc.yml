@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: wolf-stage-11-engine-poc-${{ github.ref }}
-  cancel-in-progress: true
+  queue: max
 
 jobs:
   android-engine-pocs:

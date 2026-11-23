@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: filament-native-prototype-${{ github.ref }}
-  cancel-in-progress: true
+  queue: max
 
 jobs:
   android-build:
