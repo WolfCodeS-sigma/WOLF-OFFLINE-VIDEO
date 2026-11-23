@@ -1,6 +1,7 @@
 package com.wolfcodes.offline
 
 import java.math.BigInteger
+import java.util.Collections
 import kotlin.math.acos
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -8,11 +9,16 @@ import kotlin.math.sqrt
 /**
  * Engine-neutral deterministic motion primitives shared by WOLF and renderer adapters.
  *
- * This module deliberately does not allocate film/scene frames, choose camera intent,
- * render pixels, or depend on Android or any external engine.
+ * This module does not allocate film/scene frames, choose camera intent, render pixels,
+ * or depend on Android or any external engine.
  */
 object WolfMotionCodeLibrary {
-    const val API_VERSION = "1.0.0"
+    const val API_VERSION = "1.1.0"
+    const val MAX_CURVE_KEYFRAMES = 256
+
+    private val MICROSECONDS_PER_SECOND = BigInteger.valueOf(1_000_000L)
+    private val TWO = BigInteger.valueOf(2L)
+    private val MAX_LONG = BigInteger.valueOf(Long.MAX_VALUE)
 
     fun clampUnit(value: Double): Double {
         require(value.isFinite()) { "Motion progress must be finite" }
@@ -35,7 +41,8 @@ object WolfMotionCodeLibrary {
 
     /**
      * Converts an absolute frame index to microsecond PTS using rational FPS.
-     * Rounding is nearest-microsecond, half-up; no floating-point clock is involved.
+     * Rounding is nearest-microsecond, half-up. Avoids BigInteger.longValueExact(),
+     * which is unavailable on some supported Android API levels.
      */
     fun framePresentationTimeUs(
         absoluteFrameIndex: Long,
@@ -50,11 +57,15 @@ object WolfMotionCodeLibrary {
             .multiply(BigInteger.valueOf(frameRateDenominator))
             .multiply(MICROSECONDS_PER_SECOND)
         val divisor = BigInteger.valueOf(frameRateNumerator)
-        return numerator.add(divisor.divide(TWO)).divide(divisor).longValueExact()
+        val rounded = numerator.add(divisor.divide(TWO)).divide(divisor)
+        require(rounded.signum() >= 0 && rounded <= MAX_LONG) {
+            "Frame presentation timestamp exceeds the supported Long range"
+        }
+        return rounded.toLong()
     }
 
-    private val MICROSECONDS_PER_SECOND = BigInteger.valueOf(1_000_000L)
-    private val TWO = BigInteger.valueOf(2L)
+    internal fun <T> immutableCopy(items: List<T>): List<T> =
+        Collections.unmodifiableList(ArrayList(items))
 }
 
 enum class WolfCurveInterpolation {
@@ -68,19 +79,25 @@ data class WolfScalarKeyframe(
     val value: Double
 )
 
-data class WolfScalarCurve(
-    val keyframes: List<WolfScalarKeyframe>,
+/** Immutable normalized scalar curve. Positions are in [0,1] and strictly increasing. */
+class WolfScalarCurve(
+    keyframes: List<WolfScalarKeyframe>,
     val interpolation: WolfCurveInterpolation = WolfCurveInterpolation.LINEAR
 ) {
+    val keyframes: List<WolfScalarKeyframe> = WolfMotionCodeLibrary.immutableCopy(keyframes)
+
     init {
-        require(keyframes.isNotEmpty()) { "A motion curve needs at least one keyframe" }
-        require(keyframes.all { it.position.isFinite() && it.value.isFinite() }) {
+        require(this.keyframes.isNotEmpty()) { "A motion curve needs at least one keyframe" }
+        require(this.keyframes.size <= WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES) {
+            "A motion curve exceeds the maximum keyframe count"
+        }
+        require(this.keyframes.all { it.position.isFinite() && it.value.isFinite() }) {
             "Motion keyframes must contain finite values"
         }
-        require(keyframes.all { it.position in 0.0..1.0 }) {
+        require(this.keyframes.all { it.position in 0.0..1.0 }) {
             "Motion keyframe positions must be normalized to 0..1"
         }
-        require(keyframes.zipWithNext().all { (left, right) -> left.position < right.position }) {
+        require(this.keyframes.zipWithNext().all { (left, right) -> left.position < right.position }) {
             "Motion keyframes must be strictly ordered without duplicate positions"
         }
     }
@@ -88,9 +105,7 @@ data class WolfScalarCurve(
     /** Samples a normalized curve; values outside its domain hold the nearest endpoint. */
     fun sample(progress: Double): Double {
         val t = WolfMotionCodeLibrary.clampUnit(progress)
-        if (keyframes.size == 1 || t <= keyframes.first().position) {
-            return keyframes.first().value
-        }
+        if (keyframes.size == 1 || t <= keyframes.first().position) return keyframes.first().value
         if (t >= keyframes.last().position) return keyframes.last().value
 
         val rightIndex = keyframes.indexOfFirst { it.position >= t }
@@ -123,6 +138,7 @@ data class WolfVector3(
 
     operator fun plus(other: WolfVector3) = WolfVector3(x + other.x, y + other.y, z + other.z)
     operator fun minus(other: WolfVector3) = WolfVector3(x - other.x, y - other.y, z - other.z)
+
     operator fun times(scale: Double): WolfVector3 {
         require(scale.isFinite()) { "Vector scale must be finite" }
         return WolfVector3(x * scale, y * scale, z * scale)
@@ -136,11 +152,15 @@ data class WolfVector3(
         x * other.y - y * other.x
     )
 
-    fun length(): Double = sqrt(dot(this))
+    fun length(): Double {
+        val squared = dot(this)
+        require(squared.isFinite() && squared >= 0.0) { "Vector length is outside the supported numeric range" }
+        return sqrt(squared)
+    }
 
     fun normalized(): WolfVector3 {
         val magnitude = length()
-        require(magnitude.isFinite() && magnitude > EPSILON) { "Vector magnitude must be finite and non-zero" }
+        require(magnitude > EPSILON) { "A zero-length vector cannot be normalized" }
         return this * (1.0 / magnitude)
     }
 
@@ -167,25 +187,32 @@ data class WolfVector3Keyframe(
     val value: WolfVector3
 )
 
-data class WolfVector3Curve(
-    val keyframes: List<WolfVector3Keyframe>,
+/** Immutable normalized vector curve. */
+class WolfVector3Curve(
+    keyframes: List<WolfVector3Keyframe>,
     val interpolation: WolfCurveInterpolation = WolfCurveInterpolation.LINEAR
 ) {
+    val keyframes: List<WolfVector3Keyframe> = WolfMotionCodeLibrary.immutableCopy(keyframes)
+
     init {
-        require(keyframes.isNotEmpty()) { "A vector curve needs at least one keyframe" }
-        require(keyframes.all { it.position.isFinite() && it.position in 0.0..1.0 }) {
+        require(this.keyframes.isNotEmpty()) { "A vector curve needs at least one keyframe" }
+        require(this.keyframes.size <= WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES) {
+            "A vector curve exceeds the maximum keyframe count"
+        }
+        require(this.keyframes.all { it.position.isFinite() && it.position in 0.0..1.0 }) {
             "Vector keyframe positions must be finite and normalized to 0..1"
         }
-        require(keyframes.zipWithNext().all { (left, right) -> left.position < right.position }) {
+        require(this.keyframes.zipWithNext().all { (left, right) -> left.position < right.position }) {
             "Vector keyframes must be strictly ordered without duplicate positions"
         }
     }
 
-    fun sample(progress: Double): WolfVector3 = WolfVector3(
-        WolfScalarCurve(keyframes.map { WolfScalarKeyframe(it.position, it.value.x) }, interpolation).sample(progress),
-        WolfScalarCurve(keyframes.map { WolfScalarKeyframe(it.position, it.value.y) }, interpolation).sample(progress),
-        WolfScalarCurve(keyframes.map { WolfScalarKeyframe(it.position, it.value.z) }, interpolation).sample(progress)
-    )
+    fun sample(progress: Double): WolfVector3 {
+        val x = WolfScalarCurve(keyframes.map { WolfScalarKeyframe(it.position, it.value.x) }, interpolation)
+        val y = WolfScalarCurve(keyframes.map { WolfScalarKeyframe(it.position, it.value.y) }, interpolation)
+        val z = WolfScalarCurve(keyframes.map { WolfScalarKeyframe(it.position, it.value.z) }, interpolation)
+        return WolfVector3(x.sample(progress), y.sample(progress), z.sample(progress))
+    }
 }
 
 /** Quaternion uses x/y/z vector components and w scalar component. */
@@ -203,7 +230,9 @@ data class WolfQuaternion(
 
     fun normalized(): WolfQuaternion {
         val magnitude = sqrt(x * x + y * y + z * z + w * w)
-        require(magnitude.isFinite() && magnitude > WolfVector3.EPSILON) { "Quaternion magnitude must be finite and non-zero" }
+        require(magnitude.isFinite() && magnitude > WolfVector3.EPSILON) {
+            "Quaternion magnitude must be finite and non-zero"
+        }
         return WolfQuaternion(x / magnitude, y / magnitude, z / magnitude, w / magnitude)
     }
 
@@ -252,6 +281,45 @@ data class WolfQuaternion(
     }
 }
 
+data class WolfQuaternionKeyframe(
+    val position: Double,
+    val value: WolfQuaternion
+)
+
+/** Immutable normalized quaternion curve using shortest-path spherical interpolation. */
+class WolfQuaternionCurve(
+    keyframes: List<WolfQuaternionKeyframe>
+) {
+    val keyframes: List<WolfQuaternionKeyframe> = WolfMotionCodeLibrary.immutableCopy(keyframes)
+
+    init {
+        require(this.keyframes.isNotEmpty()) { "A quaternion curve needs at least one keyframe" }
+        require(this.keyframes.size <= WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES) {
+            "A quaternion curve exceeds the maximum keyframe count"
+        }
+        require(this.keyframes.all { it.position.isFinite() && it.position in 0.0..1.0 }) {
+            "Quaternion keyframe positions must be finite and normalized to 0..1"
+        }
+        require(this.keyframes.zipWithNext().all { (left, right) -> left.position < right.position }) {
+            "Quaternion keyframes must be strictly ordered without duplicate positions"
+        }
+        this.keyframes.forEach { it.value.normalized() }
+    }
+
+    fun sample(progress: Double): WolfQuaternion {
+        val t = WolfMotionCodeLibrary.clampUnit(progress)
+        if (keyframes.size == 1 || t <= keyframes.first().position) return keyframes.first().value.normalized()
+        if (t >= keyframes.last().position) return keyframes.last().value.normalized()
+
+        val rightIndex = keyframes.indexOfFirst { it.position >= t }
+        val right = keyframes[rightIndex]
+        if (t == right.position) return right.value.normalized()
+        val left = keyframes[rightIndex - 1]
+        val local = (t - left.position) / (right.position - left.position)
+        return left.value.slerp(right.value, local)
+    }
+}
+
 data class WolfTransform3(
     val translation: WolfVector3 = WolfVector3.ZERO,
     val rotation: WolfQuaternion = WolfQuaternion.IDENTITY,
@@ -263,8 +331,10 @@ data class WolfTransform3(
                 kotlin.math.abs(scale.y) > WolfVector3.EPSILON &&
                 kotlin.math.abs(scale.z) > WolfVector3.EPSILON
         ) { "Transform scale components cannot be zero" }
+        rotation.normalized()
     }
 
+    /** Applies scale, then rotation, then translation. */
     fun applyToPoint(point: WolfVector3): WolfVector3 {
         val scaled = WolfVector3(point.x * scale.x, point.y * scale.y, point.z * scale.z)
         return rotation.rotate(scaled) + translation

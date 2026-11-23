@@ -9,12 +9,8 @@ class WolfMotionCodeLibraryTest {
     @Test
     fun scalarCurveUsesLinearInterpolationAndClampsOutsideItsDomain() {
         val curve = WolfScalarCurve(
-            listOf(
-                WolfScalarKeyframe(0.2, 10.0),
-                WolfScalarKeyframe(0.8, 40.0)
-            )
+            listOf(WolfScalarKeyframe(0.2, 10.0), WolfScalarKeyframe(0.8, 40.0))
         )
-
         assertEquals(10.0, curve.sample(-5.0), 0.000001)
         assertEquals(25.0, curve.sample(0.5), 0.000001)
         assertEquals(40.0, curve.sample(1.0), 0.000001)
@@ -30,7 +26,6 @@ class WolfMotionCodeLibraryTest {
             listOf(WolfScalarKeyframe(0.0, 0.0), WolfScalarKeyframe(1.0, 1.0)),
             WolfCurveInterpolation.SMOOTHSTEP
         )
-
         assertEquals(2.0, step.sample(0.499), 0.000001)
         assertEquals(9.0, step.sample(0.5), 0.000001)
         assertEquals(0.5, smooth.sample(0.5), 0.000001)
@@ -40,9 +35,14 @@ class WolfMotionCodeLibraryTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun scalarCurveRejectsDuplicateKeyframePositions() {
-        WolfScalarCurve(
-            listOf(WolfScalarKeyframe(0.5, 1.0), WolfScalarKeyframe(0.5, 2.0))
-        )
+        WolfScalarCurve(listOf(WolfScalarKeyframe(0.5, 1.0), WolfScalarKeyframe(0.5, 2.0)))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun scalarCurveRejectsTooManyKeyframes() {
+        WolfScalarCurve((0..WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES).map {
+            WolfScalarKeyframe(it.toDouble() / WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES, it.toDouble())
+        })
     }
 
     @Test
@@ -60,8 +60,16 @@ class WolfMotionCodeLibraryTest {
         assertEquals(0.0, rotated.x, 0.000001)
         assertEquals(1.0, rotated.y, 0.000001)
 
-        val midpoint = WolfQuaternion.IDENTITY.slerp(quarterTurn, 0.5)
-        assertEquals(midpoint, WolfQuaternion.IDENTITY.slerp(quarterTurn, 0.5))
+        val quaternionCurve = WolfQuaternionCurve(
+            listOf(
+                WolfQuaternionKeyframe(0.0, WolfQuaternion.IDENTITY),
+                WolfQuaternionKeyframe(1.0, quarterTurn)
+            )
+        )
+        assertEquals(
+            WolfQuaternion.IDENTITY.slerp(quarterTurn, 0.5),
+            quaternionCurve.sample(0.5)
+        )
     }
 
     @Test
@@ -86,10 +94,19 @@ class WolfMotionCodeLibraryTest {
     }
 
     @Test
+    fun rationalClockRejectsTimestampOverflowWithoutApiLevelSpecificExactMethod() {
+        try {
+            WolfMotionCodeLibrary.framePresentationTimeUs(Long.MAX_VALUE, 1L, Long.MAX_VALUE)
+            throw AssertionError("Expected timestamp overflow rejection")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("Long range"))
+        }
+    }
+
+    @Test
     fun vectorOperationsPreserveExpectedGeometry() {
         val first = WolfVector3(1.0, 0.0, 0.0)
         val second = WolfVector3(0.0, 1.0, 0.0)
-
         assertEquals(WolfVector3.UNIT_Z, first.cross(second))
         assertEquals(0.0, first.dot(second), 0.0)
         assertEquals(1.0, first.normalized().length(), 0.000001)
@@ -100,5 +117,14 @@ class WolfMotionCodeLibraryTest {
     @Test(expected = IllegalArgumentException::class)
     fun motionClockRejectsInvalidFrameRate() {
         WolfMotionCodeLibrary.framePresentationTimeUs(1L, 0L, 1L)
+    }
+
+    @Test(expected = UnsupportedOperationException::class)
+    fun curveKeyframesAreDefensivelyCopiedAndUnmodifiable() {
+        val source = mutableListOf(WolfScalarKeyframe(0.0, 1.0), WolfScalarKeyframe(1.0, 2.0))
+        val curve = WolfScalarCurve(source)
+        source.clear()
+        assertEquals(2, curve.keyframes.size)
+        (curve.keyframes as MutableList).clear()
     }
 }

@@ -7,14 +7,15 @@ package com.wolfcodes.offline
  * approve assets, or let a renderer rewrite the story/shot plan.
  */
 object WolfSceneContract {
-    const val VERSION = "1.0.0"
+    const val VERSION = "1.1.0"
 }
 
 enum class WolfSceneAxis { X, Y, Z }
 enum class WolfSceneHandedness { RIGHT_HANDED, LEFT_HANDED }
 enum class WolfScenePixelOrigin { TOP_LEFT, BOTTOM_LEFT }
 enum class WolfSceneBlendMode { NORMAL, ADD, MULTIPLY, SCREEN }
-enum class WolfScenePixelFormat { RGBA_8888, RGBA_F16, PNG, WEBP, JPEG }
+enum class WolfScenePixelFormat { RGBA_8888, RGBA_F16 }
+enum class WolfSceneImageEncoding { RAW, PNG, WEBP, JPEG }
 enum class WolfSceneColorSpace { SRGB, LINEAR_SRGB, DISPLAY_P3, BT709 }
 enum class WolfSceneAlphaMode { OPAQUE, STRAIGHT, PREMULTIPLIED }
 enum class WolfSceneRenderStatus { SUCCESS, REJECTED, FAILED, CANCELLED }
@@ -29,6 +30,22 @@ enum class WolfSceneFailureCode {
     RENDER_FAILED,
     CANCELLED,
     INVALID_OUTPUT
+}
+
+/**
+ * Global protocol ceilings are anti-abuse limits, not measured device budgets.
+ * Runtime dispatch must still apply WolfResourceGuard and the approved renderer profile.
+ */
+object WolfSceneContractLimits {
+    const val MAX_CANVAS_DIMENSION_PX = 4096
+    const val MAX_CANVAS_PIXELS = 16_777_216L
+    const val MAX_FRAME_COUNT = 21_600
+    const val MAX_LAYER_COUNT = 16
+    const val MAX_ASSET_COUNT = 128
+    const val MAX_OUTPUT_COUNT = 65_536L
+    const val MAX_KEYFRAME_COUNT = WolfMotionCodeLibrary.MAX_CURVE_KEYFRAMES
+    const val MAX_PIXEL_ASPECT_COMPONENT = 1000
+    const val MAX_IDENTIFIER_LENGTH = 128
 }
 
 data class WolfSceneCoordinateSystem(
@@ -48,8 +65,11 @@ data class WolfSceneCanvas(
     val pixelAspectDenominator: Int = 1
 ) {
     fun isValid(): Boolean =
-        widthPx > 0 && heightPx > 0 &&
-            pixelAspectNumerator > 0 && pixelAspectDenominator > 0
+        widthPx in 1..WolfSceneContractLimits.MAX_CANVAS_DIMENSION_PX &&
+            heightPx in 1..WolfSceneContractLimits.MAX_CANVAS_DIMENSION_PX &&
+            widthPx.toLong() * heightPx.toLong() <= WolfSceneContractLimits.MAX_CANVAS_PIXELS &&
+            pixelAspectNumerator in 1..WolfSceneContractLimits.MAX_PIXEL_ASPECT_COMPONENT &&
+            pixelAspectDenominator in 1..WolfSceneContractLimits.MAX_PIXEL_ASPECT_COMPONENT
 }
 
 data class WolfSceneTimeline(
@@ -59,10 +79,18 @@ data class WolfSceneTimeline(
     val frameRateDenominator: Long
 ) {
     fun isValid(): Boolean {
-        if (startFrameIndex < 0L || frameCount <= 0 ||
-            frameRateNumerator <= 0L || frameRateDenominator <= 0L
+        if (startFrameIndex < 0L ||
+            frameCount !in 1..WolfSceneContractLimits.MAX_FRAME_COUNT ||
+            frameRateNumerator <= 0L ||
+            frameRateDenominator <= 0L
         ) return false
-        return runCatching { Math.addExact(startFrameIndex, frameCount.toLong()) }.isSuccess
+
+        val endExclusive = runCatching { Math.addExact(startFrameIndex, frameCount.toLong()) }.getOrNull()
+            ?: return false
+        return runCatching {
+            WolfMotionCodeLibrary.framePresentationTimeUs(startFrameIndex, frameRateNumerator, frameRateDenominator)
+            WolfMotionCodeLibrary.framePresentationTimeUs(endExclusive - 1L, frameRateNumerator, frameRateDenominator)
+        }.isSuccess
     }
 
     val endFrameExclusive: Long
@@ -98,9 +126,43 @@ data class WolfSceneCameraCommand(
             !nearClip.isFinite() || !farClip.isFinite() ||
             nearClip <= 0.0 || farClip <= nearClip
         ) return false
-        val direction = target - position
-        if (direction.length() <= WolfVector3.EPSILON || up.length() <= WolfVector3.EPSILON) return false
-        return direction.cross(up).length() > WolfVector3.EPSILON
+
+        val direction = runCatching { target - position }.getOrNull() ?: return false
+        val directionLength = runCatching { direction.length() }.getOrNull() ?: return false
+        val upLength = runCatching { up.length() }.getOrNull() ?: return false
+        if (directionLength <= WolfVector3.EPSILON || upLength <= WolfVector3.EPSILON) return false
+        val crossLength = runCatching { direction.cross(up).length() }.getOrNull() ?: return false
+        return crossLength.isFinite() && crossLength > WolfVector3.EPSILON
+    }
+}
+
+data class WolfSceneCameraMotionTrack(
+    val position: WolfVector3Curve,
+    val target: WolfVector3Curve,
+    val up: WolfVector3Curve,
+    val verticalFieldOfViewDegrees: WolfScalarCurve,
+    val nearClip: Double,
+    val farClip: Double
+) {
+    fun isWellFormed(): Boolean {
+        if (!nearClip.isFinite() || !farClip.isFinite() || nearClip <= 0.0 || farClip <= nearClip) {
+            return false
+        }
+        val positions = position.keyframes.map { it.position }
+        if (target.keyframes.map { it.position } != positions ||
+            up.keyframes.map { it.position } != positions ||
+            verticalFieldOfViewDegrees.keyframes.map { it.position } != positions
+        ) return false
+        return positions.all { progress ->
+            WolfSceneCameraCommand(
+                position.sample(progress),
+                target.sample(progress),
+                up.sample(progress),
+                verticalFieldOfViewDegrees.sample(progress),
+                nearClip,
+                farClip
+            ).isValid()
+        }
     }
 }
 
@@ -111,21 +173,51 @@ data class WolfSceneAssetReference(
     val usage: String
 ) {
     fun isWellFormed(): Boolean =
-        assetId.isIdentifier() && version.isNotBlank() &&
-            Regex("[0-9a-f]{64}").matches(sha256) && usage.isNotBlank()
+        assetId.isSceneIdentifier() &&
+            version.isNotBlank() && version.length <= 64 &&
+            Regex("[0-9a-f]{64}").matches(sha256) &&
+            usage.isSceneIdentifier()
 }
 
-data class WolfSceneLayerCommand(
+data class WolfSceneMotionTrack(
+    val targetLayerId: String,
+    val translation: WolfVector3Curve? = null,
+    val rotation: WolfQuaternionCurve? = null,
+    val scale: WolfVector3Curve? = null,
+    val opacity: WolfScalarCurve? = null
+) {
+    fun isWellFormed(): Boolean {
+        if (!targetLayerId.isSceneIdentifier()) return false
+        if (translation == null && rotation == null && scale == null && opacity == null) return false
+        if (opacity != null && opacity.keyframes.any { it.value !in 0.0..1.0 }) return false
+        if (scale != null && scale.keyframes.any {
+                kotlin.math.abs(it.value.x) <= WolfVector3.EPSILON ||
+                    kotlin.math.abs(it.value.y) <= WolfVector3.EPSILON ||
+                    kotlin.math.abs(it.value.z) <= WolfVector3.EPSILON
+            }
+        ) return false
+        return true
+    }
+}
+
+class WolfSceneLayerCommand(
     val layerId: String,
     val zIndex: Int,
     val blendMode: WolfSceneBlendMode,
     val opacityPermille: Int,
     val visible: Boolean = true,
-    val assetIds: List<String> = emptyList()
+    assetIds: List<String> = emptyList(),
+    val motion: WolfSceneMotionTrack? = null
 ) {
+    val assetIds: List<String> = WolfMotionCodeLibrary.immutableCopy(assetIds)
+
     fun isWellFormed(): Boolean =
-        layerId.isIdentifier() && opacityPermille in 0..1000 &&
-            assetIds.all { it.isIdentifier() } && assetIds.distinct().size == assetIds.size
+        layerId.isSceneIdentifier() &&
+            opacityPermille in 0..1000 &&
+            assetIds.size <= WolfSceneContractLimits.MAX_ASSET_COUNT &&
+            assetIds.all { it.isSceneIdentifier() } &&
+            assetIds.distinct().size == assetIds.size &&
+            (motion == null || (motion.targetLayerId == layerId && motion.isWellFormed()))
 }
 
 data class WolfSceneResourceEnvelope(
@@ -138,13 +230,13 @@ data class WolfSceneResourceEnvelope(
     val maxNativeGpuBytes: Long? = null
 ) {
     fun isWellFormed(): Boolean =
-        maxWorkingSetBytes > 0L &&
-            maxTemporaryStorageBytes > 0L &&
-            maxReusableOutputBytes > 0L &&
-            maxTransientElementsPerFrame > 0L &&
-            maxRetainedFrameCount > 0L &&
-            maxExecutionMillis > 0L &&
-            (maxNativeGpuBytes == null || maxNativeGpuBytes > 0L)
+        maxWorkingSetBytes in 1L..(2L * 1024L * 1024L * 1024L) &&
+            maxTemporaryStorageBytes in 1L..(8L * 1024L * 1024L * 1024L) &&
+            maxReusableOutputBytes in 1L..(512L * 1024L * 1024L) &&
+            maxTransientElementsPerFrame in 1L..1_000_000L &&
+            maxRetainedFrameCount in 1L..512L &&
+            maxExecutionMillis in 1L..1_800_000L &&
+            (maxNativeGpuBytes == null || maxNativeGpuBytes in 1L..(2L * 1024L * 1024L * 1024L))
 }
 
 data class WolfSceneRuntimeTarget(
@@ -154,15 +246,15 @@ data class WolfSceneRuntimeTarget(
     val engineVersion: String
 ) {
     fun isWellFormed(): Boolean =
-        adapterId.isIdentifier() && adapterVersion.isNotBlank() &&
-            engineId.isIdentifier() && engineVersion.isNotBlank()
+        adapterId.isSceneIdentifier() && adapterVersion.isNotBlank() && adapterVersion.length <= 64 &&
+            engineId.isSceneIdentifier() && engineVersion.isNotBlank() && engineVersion.length <= 64
 }
 
 /**
  * masterSeed is an explicit 64-bit bit pattern; no wall-clock/device-derived seed is allowed.
  * frame indices are absolute within the film timeline, including chapter-render requests.
  */
-data class WolfSceneRenderRequest(
+class WolfSceneRenderRequest(
     val requestId: String,
     val contractVersion: String,
     val sceneId: String,
@@ -172,11 +264,17 @@ data class WolfSceneRenderRequest(
     val canvas: WolfSceneCanvas,
     val coordinateSystem: WolfSceneCoordinateSystem,
     val camera: WolfSceneCameraCommand?,
-    val layers: List<WolfSceneLayerCommand>,
-    val assets: List<WolfSceneAssetReference>,
+    layers: List<WolfSceneLayerCommand>,
+    assets: List<WolfSceneAssetReference>,
     val resourceEnvelope: WolfSceneResourceEnvelope,
-    val runtimeTarget: WolfSceneRuntimeTarget
-)
+    val runtimeTarget: WolfSceneRuntimeTarget,
+    val cameraMotion: WolfSceneCameraMotionTrack? = null
+) {
+    val layers: List<WolfSceneLayerCommand> = WolfMotionCodeLibrary.immutableCopy(layers)
+    val assets: List<WolfSceneAssetReference> = WolfMotionCodeLibrary.immutableCopy(assets)
+}
+
+enum class WolfSceneImageEncoding { RAW, PNG, WEBP, JPEG }
 
 data class WolfSceneFrameOutput(
     val layerId: String,
@@ -185,12 +283,35 @@ data class WolfSceneFrameOutput(
     val widthPx: Int,
     val heightPx: Int,
     val pixelFormat: WolfScenePixelFormat,
+    val imageEncoding: WolfSceneImageEncoding,
     val colorSpace: WolfSceneColorSpace,
     val alphaMode: WolfSceneAlphaMode,
+    val byteCount: Long,
     val sha256: String,
-    /** Opaque in-process or app-private output handle; never an executable path or URL. */
-    val outputReference: String
+    /** Opaque app-private artifact identifier; never a filesystem path or URL. */
+    val outputReference: String,
+    val retainedForReuse: Boolean = false
 )
+
+data class WolfSceneOutputArtifactMetadata(
+    val byteCount: Long,
+    val sha256: String,
+    val widthPx: Int,
+    val heightPx: Int,
+    val pixelFormat: WolfScenePixelFormat,
+    val imageEncoding: WolfSceneImageEncoding,
+    val colorSpace: WolfSceneColorSpace,
+    val alphaMode: WolfSceneAlphaMode
+)
+
+/**
+ * The implementation must resolve the opaque identifier inside app-private storage,
+ * stream/hash the actual bytes, and return metadata computed from those bytes.
+ * Returning caller-supplied metadata without reading the referenced bytes is invalid.
+ */
+fun interface WolfSceneOutputArtifactVerifier {
+    fun verifyAndInspect(outputReference: String): WolfSceneOutputArtifactMetadata?
+}
 
 data class WolfSceneResourceUsage(
     val peakWorkingSetBytes: Long,
@@ -211,69 +332,100 @@ data class WolfSceneResourceUsage(
             (peakNativeGpuBytes == null || peakNativeGpuBytes >= 0L)
 }
 
-data class WolfSceneRenderResult(
+class WolfSceneRenderResult(
     val requestId: String,
     val contractVersion: String,
     val status: WolfSceneRenderStatus,
-    val outputs: List<WolfSceneFrameOutput> = emptyList(),
+    outputs: List<WolfSceneFrameOutput> = emptyList(),
     val resourceUsage: WolfSceneResourceUsage? = null,
     val failureCode: WolfSceneFailureCode? = null,
-    val failureMessage: String? = null
-)
-
-data class WolfSceneContractValidation(
-    val errors: List<String>
+    val failureMessage: String? = null,
+    val runtimeTarget: WolfSceneRuntimeTarget? = null
 ) {
+    val outputs: List<WolfSceneFrameOutput> = WolfMotionCodeLibrary.immutableCopy(outputs)
+}
+
+class WolfSceneContractValidation(errors: List<String>) {
+    val errors: List<String> = WolfMotionCodeLibrary.immutableCopy(errors)
     val isValid: Boolean get() = errors.isEmpty()
 }
 
 object WolfSceneContractValidator {
     fun validateRequest(request: WolfSceneRenderRequest): WolfSceneContractValidation {
         val errors = mutableListOf<String>()
-        if (!request.requestId.isIdentifier()) errors += "requestId is invalid"
+        if (!request.requestId.isSceneIdentifier()) errors += "requestId is invalid"
         if (request.contractVersion != WolfSceneContract.VERSION) errors += "unsupported contractVersion"
-        if (!request.sceneId.isIdentifier()) errors += "sceneId is invalid"
-        if (!request.shotId.isIdentifier()) errors += "shotId is invalid"
-        if (!request.timeline.isValid()) errors += "timeline is invalid"
-        if (!request.canvas.isValid()) errors += "canvas is invalid"
+        if (!request.sceneId.isSceneIdentifier()) errors += "sceneId is invalid"
+        if (!request.shotId.isSceneIdentifier()) errors += "shotId is invalid"
+        if (!request.timeline.isValid()) errors += "timeline is invalid or its PTS exceeds Long range"
+        if (!request.canvas.isValid()) errors += "canvas dimensions or pixel aspect ratio exceed contract limits"
         if (!request.coordinateSystem.isValid()) errors += "coordinateSystem is invalid"
         if (request.camera != null && !request.camera.isValid()) errors += "camera command is invalid"
+        if (request.cameraMotion != null && !request.cameraMotion.isWellFormed()) {
+            errors += "camera motion track is invalid"
+        }
         if (request.layers.isEmpty()) errors += "at least one scene layer is required"
+        if (request.layers.size > WolfSceneContractLimits.MAX_LAYER_COUNT) errors += "layer count exceeds contract limits"
         if (request.layers.none { it.visible }) errors += "at least one visible scene layer is required"
-        if (request.layers.any { !it.isWellFormed() }) errors += "one or more layer commands are invalid"
+        if (request.layers.any { !it.isWellFormed() }) errors += "one or more layer commands or motion tracks are invalid"
         if (request.layers.map { it.layerId }.distinct().size != request.layers.size) {
             errors += "layerId values must be unique"
         }
+        if (request.layers.map { it.zIndex }.distinct().size != request.layers.size) {
+            errors += "zIndex values must be unique for deterministic layer ordering"
+        }
+        val motionCount = request.layers.count { it.motion != null }
+        if (motionCount > WolfSceneContractLimits.MAX_LAYER_COUNT) errors += "motion track count exceeds contract limits"
+        if (request.assets.size > WolfSceneContractLimits.MAX_ASSET_COUNT) errors += "asset count exceeds contract limits"
         if (request.assets.any { !it.isWellFormed() }) errors += "one or more asset references are invalid"
         if (request.assets.map { it.assetId }.distinct().size != request.assets.size) {
             errors += "assetId values must be unique within a request"
         }
         val knownAssets = request.assets.map { it.assetId }.toSet()
-        if (request.layers.flatMap { it.assetIds }.any { it !in knownAssets }) {
-            errors += "a layer references an asset absent from the request"
+        request.layers.forEach { layer ->
+            if (layer.assetIds.any { it !in knownAssets }) {
+                errors += "a layer references an asset absent from the request"
+            }
         }
-        if (!request.resourceEnvelope.isWellFormed()) errors += "resource envelope must contain finite positive hard limits"
+        if (request.assets.any { asset -> request.layers.none { asset.assetId in it.assetIds } }) {
+            errors += "request contains an unused asset reference"
+        }
+        if (!request.resourceEnvelope.isWellFormed()) errors += "resource envelope is outside contract ceilings"
         if (!request.runtimeTarget.isWellFormed()) errors += "runtime target is invalid"
-        return WolfSceneContractValidation(errors)
+
+        val visibleLayers = request.layers.count { it.visible }
+        if (request.timeline.frameCount > 0 &&
+            visibleLayers > 0 &&
+            request.timeline.frameCount.toLong() * visibleLayers.toLong() > WolfSceneContractLimits.MAX_OUTPUT_COUNT
+        ) {
+            errors += "requested frame output count exceeds contract limits"
+        }
+
+        return WolfSceneContractValidation(errors.distinct())
     }
 
     fun validateResult(
         request: WolfSceneRenderRequest,
-        result: WolfSceneRenderResult
+        result: WolfSceneRenderResult,
+        artifactVerifier: WolfSceneOutputArtifactVerifier
     ): WolfSceneContractValidation {
         val errors = mutableListOf<String>()
         val requestValidation = validateRequest(request)
         if (!requestValidation.isValid) errors += "result cannot be validated against an invalid request"
         if (result.requestId != request.requestId) errors += "result requestId does not match"
         if (result.contractVersion != request.contractVersion) errors += "result contractVersion does not match"
+        if (result.runtimeTarget != request.runtimeTarget) errors += "result runtime/adapter identity does not match the request"
 
         if (result.status != WolfSceneRenderStatus.SUCCESS) {
             if (result.outputs.isNotEmpty()) errors += "failed or cancelled results must not expose partial outputs"
             if (result.failureCode == null) errors += "failed or cancelled results require a failureCode"
-            return WolfSceneContractValidation(errors)
+            if (result.resourceUsage != null) errors += "failed or cancelled results must not publish successful resource usage"
+            return WolfSceneContractValidation(errors.distinct())
         }
 
         if (result.failureCode != null) errors += "successful results cannot contain failureCode"
+        if (result.failureMessage != null) errors += "successful results cannot contain failureMessage"
+
         val usage = result.resourceUsage
         if (usage == null || !usage.isWellFormed()) {
             errors += "successful results require valid resource measurements"
@@ -293,46 +445,115 @@ object WolfSceneContractValidator {
 
         if (result.outputs.isEmpty()) {
             errors += "successful results must contain rendered frame outputs"
-            return WolfSceneContractValidation(errors)
+            return WolfSceneContractValidation(errors.distinct())
         }
 
         val requestedLayers = request.layers.filter { it.visible }.map { it.layerId }.toSet()
-        val unexpectedLayers = result.outputs.map { it.layerId }.toSet() - requestedLayers
-        if (unexpectedLayers.isNotEmpty()) errors += "result contains an unrequested layer"
+        val expectedOutputCount = request.timeline.frameCount.toLong() * requestedLayers.size.toLong()
+        if (expectedOutputCount > WolfSceneContractLimits.MAX_OUTPUT_COUNT ||
+            result.outputs.size.toLong() != expectedOutputCount
+        ) {
+            errors += "result output count does not match the bounded request"
+            return WolfSceneContractValidation(errors.distinct())
+        }
 
-        val duplicateKeys = result.outputs.groupBy { it.layerId to it.frameIndex }.filterValues { it.size > 1 }
-        if (duplicateKeys.isNotEmpty()) errors += "result contains duplicate layer/frame outputs"
+        val outputsByLayer = request.layers.filter { it.visible }.associate { it.layerId to ArrayList<WolfSceneFrameOutput>() }
+        val seenFrames = HashSet<Pair<String, Long>>()
+        val seenReferences = HashSet<String>()
+        var totalOutputBytes = 0L
+        var totalReusableBytes = 0L
 
         result.outputs.forEach { output ->
-            if (output.layerId !in requestedLayers) errors += "output layerId is not requested"
-            if (!request.timeline.contains(output.frameIndex)) errors += "output frameIndex is outside the request"
-            else if (output.presentationTimeUs != request.timeline.presentationTimeUs(output.frameIndex)) {
+            if (output.layerId !in requestedLayers) {
+                errors += "output layerId is not requested"
+                return@forEach
+            }
+            if (!request.timeline.contains(output.frameIndex)) {
+                errors += "output frameIndex is outside the request"
+                return@forEach
+            }
+            if (!seenFrames.add(output.layerId to output.frameIndex)) {
+                errors += "result contains duplicate layer/frame outputs"
+            }
+            if (output.presentationTimeUs != request.timeline.presentationTimeUs(output.frameIndex)) {
                 errors += "output presentationTimeUs does not match the film timeline"
             }
             if (output.widthPx != request.canvas.widthPx || output.heightPx != request.canvas.heightPx) {
                 errors += "output dimensions do not match the requested canvas"
             }
+            if (output.byteCount <= 0L) errors += "output byteCount must be positive"
             if (!Regex("[0-9a-f]{64}").matches(output.sha256)) errors += "output SHA-256 is invalid"
-            if (!output.outputReference.isIdentifier()) errors += "outputReference must be an opaque identifier, not a path or URL"
-            if (output.pixelFormat == WolfScenePixelFormat.JPEG && output.alphaMode != WolfSceneAlphaMode.OPAQUE) {
+            if (!output.outputReference.isSceneIdentifier()) {
+                errors += "outputReference must be an opaque identifier, not a path or URL"
+            }
+            if (!seenReferences.add(output.outputReference)) errors += "outputReference values must be unique"
+            if (output.imageEncoding == WolfSceneImageEncoding.JPEG && output.alphaMode != WolfSceneAlphaMode.OPAQUE) {
                 errors += "JPEG output must use OPAQUE alpha mode"
             }
+            if (output.imageEncoding == WolfSceneImageEncoding.RAW && output.pixelFormat !in WolfScenePixelFormat.values()) {
+                errors += "RAW output pixel format is invalid"
+            }
+
+            val metadata = runCatching {
+                artifactVerifier.verifyAndInspect(output.outputReference)
+            }.getOrNull()
+            if (metadata == null) {
+                errors += "output artifact could not be independently verified"
+            } else {
+                if (metadata.byteCount != output.byteCount ||
+                    metadata.sha256 != output.sha256 ||
+                    metadata.widthPx != output.widthPx ||
+                    metadata.heightPx != output.heightPx ||
+                    metadata.pixelFormat != output.pixelFormat ||
+                    metadata.imageEncoding != output.imageEncoding ||
+                    metadata.colorSpace != output.colorSpace ||
+                    metadata.alphaMode != output.alphaMode
+                ) errors += "output artifact metadata or SHA-256 does not match the verified bytes"
+            }
+
+            totalOutputBytes = safeAdd(totalOutputBytes, output.byteCount, errors)
+            if (output.retainedForReuse) {
+                totalReusableBytes = safeAdd(totalReusableBytes, output.byteCount, errors)
+            }
+            outputsByLayer[output.layerId]?.add(output)
         }
 
-        requestedLayers.forEach { layerId ->
-            val layerOutputs = result.outputs.filter { it.layerId == layerId }
+        outputsByLayer.forEach { (layerId, layerOutputs) ->
             if (layerOutputs.size != request.timeline.frameCount) {
                 errors += "layer $layerId does not contain the complete requested frame range"
             } else {
-                val actual = layerOutputs.map { it.frameIndex }.sorted()
-                val expected = (0 until request.timeline.frameCount)
-                    .map { request.timeline.startFrameIndex + it.toLong() }
-                if (actual != expected) errors += "layer $layerId has a discontinuous frame range"
+                val sorted = layerOutputs.map { it.frameIndex }.sorted()
+                sorted.forEachIndexed { offset, frameIndex ->
+                    val expectedFrame = request.timeline.startFrameIndex + offset.toLong()
+                    if (frameIndex != expectedFrame) {
+                        errors += "layer $layerId has a discontinuous frame range"
+                        return@forEachIndexed
+                    }
+                }
             }
+        }
+
+        if (totalOutputBytes > request.resourceEnvelope.maxTemporaryStorageBytes) {
+            errors += "total output bytes exceed temporary storage envelope"
+        }
+        if (totalReusableBytes > request.resourceEnvelope.maxReusableOutputBytes) {
+            errors += "reusable output bytes exceed reusable output envelope"
+        }
+        if (usage != null && usage.reusableOutputBytes != totalReusableBytes) {
+            errors += "reusableOutputBytes does not equal the verified retained output bytes"
         }
         return WolfSceneContractValidation(errors.distinct())
     }
+
+    private fun safeAdd(current: Long, addition: Long, errors: MutableList<String>): Long =
+        try {
+            Math.addExact(current, addition)
+        } catch (_: ArithmeticException) {
+            errors += "output byte total overflowed"
+            Long.MAX_VALUE
+        }
 }
 
-private fun String.isIdentifier(): Boolean =
-    length in 1..128 && matches(Regex("[A-Za-z0-9][A-Za-z0-9._:-]*"))
+private fun String.isSceneIdentifier(): Boolean =
+    length in 1..WolfSceneContractLimits.MAX_IDENTIFIER_LENGTH &&
+        matches(Regex("[A-Za-z0-9][A-Za-z0-9._:-]*"))
