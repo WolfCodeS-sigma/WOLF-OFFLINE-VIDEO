@@ -173,7 +173,40 @@ jobs:
           emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim -no-metrics
           disable-linux-hw-accel: false
           disable-animations: true
-          script: gradle --no-daemon --max-workers=2 -p engine-pocs/android :app:connectedGodotDebugAndroidTest :app:connectedFilamentDebugAndroidTest :app:connectedLibgdxDebugAndroidTest :app:connectedLottieDebugAndroidTest
+          script: |
+            set +e
+            engine_failures=0
+
+            run_engine_test() {
+              engine_name="$1"
+              gradle_task="$2"
+
+              printf "\n===== WOLF engine regression: %s =====\n" "$engine_name"
+              gradle --no-daemon --max-workers=2 -p engine-pocs/android "$gradle_task"
+              task_status=$?
+
+              if [ "$task_status" -ne 0 ]; then
+                engine_failures=$((engine_failures + 1))
+                printf "\n===== %s failed with exit code %s; collecting emulator diagnostics =====\n" "$engine_name" "$task_status"
+                adb shell dumpsys activity activities 2>&1 | grep -E "mResumedActivity|topResumedActivity" | tail -n 10 || true
+                adb logcat -d -b all -v threadtime 2>&1 | grep -E "Godot|godot|AndroidRuntime|libgodot|EGL|GLES|OpenGL|Vulkan|FATAL|ERROR|Exception|ActivityManager|SurfaceView" | tail -n 250 || true
+                printf "===== End %s diagnostics =====\n" "$engine_name"
+              else
+                printf "===== %s passed =====\n" "$engine_name"
+              fi
+            }
+
+            run_engine_test "Godot" ":app:connectedGodotDebugAndroidTest"
+            run_engine_test "Filament" ":app:connectedFilamentDebugAndroidTest"
+            run_engine_test "libGDX" ":app:connectedLibgdxDebugAndroidTest"
+            run_engine_test "Lottie" ":app:connectedLottieDebugAndroidTest"
+
+            if [ "$engine_failures" -ne 0 ]; then
+              printf "\n%d engine regression group(s) failed after all four groups were executed.\n" "$engine_failures"
+              exit 1
+            fi
+
+            printf "\nAll four isolated engine regression groups passed.\n"
 
   korge-regression:
     name: KorGE Android packaging regression
