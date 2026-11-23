@@ -424,8 +424,9 @@ class HorrorVideoExporter(private val context: Context) {
                     0.0
                 )
 
-                val actualFrameStart = System.nanoTime()
-                check(activeRenderer.beginFrame(activeSwapChain, actualFrameStart)) {
+                val frameStartNanos = System.nanoTime()
+                // No Choreographer/vsync exists in this offline encoder loop; 0 means unknown.
+                check(activeRenderer.beginFrame(activeSwapChain, 0L)) {
                     "تعذر بدء إطار Filament رقم " + (frameIndex + 1)
                 }
                 activeRenderer.render(activeView)
@@ -433,7 +434,7 @@ class HorrorVideoExporter(private val context: Context) {
                 activeEngine.flushAndWait()
                 onFrame(frameIndex + 1, frameCount)
 
-                val earliestNextFrame = actualFrameStart + frameIntervalNanos
+                val earliestNextFrame = frameStartNanos + frameIntervalNanos
                 val frameCompletedAt = System.nanoTime()
                 nextFrameStartNanos = if (frameCompletedAt > earliestNextFrame) {
                     frameCompletedAt
