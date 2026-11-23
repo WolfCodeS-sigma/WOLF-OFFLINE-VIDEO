@@ -174,6 +174,60 @@ class WolfMotionCodeLibraryTest {
     }
 
     @Test
+    fun scalarCurveUsesBinarySearchAcrossMultipleUnevenSegments() {
+        val keyframes = listOf(
+            WolfScalarKeyframe(0.0, 0.0),
+            WolfScalarKeyframe(0.25, 10.0),
+            WolfScalarKeyframe(0.75, 30.0),
+            WolfScalarKeyframe(1.0, 40.0)
+        )
+
+        val linear = WolfScalarCurve(keyframes, WolfCurveInterpolation.LINEAR)
+        assertEquals(5.0, linear.sample(0.125), 0.000001)
+        assertEquals(10.0, linear.sample(0.25), 0.000001)
+        assertEquals(20.0, linear.sample(0.5), 0.000001)
+        assertEquals(35.0, linear.sample(0.875), 0.000001)
+
+        val step = WolfScalarCurve(keyframes, WolfCurveInterpolation.STEP)
+        assertEquals(0.0, step.sample(0.125), 0.000001)
+        assertEquals(10.0, step.sample(0.25), 0.000001)
+        assertEquals(10.0, step.sample(0.5), 0.000001)
+        assertEquals(30.0, step.sample(0.875), 0.000001)
+
+        val smooth = WolfScalarCurve(keyframes, WolfCurveInterpolation.SMOOTHSTEP)
+        assertEquals(5.0, smooth.sample(0.125), 0.000001)
+        assertEquals(13.125, smooth.sample(0.375), 0.000001)
+        assertEquals(35.0, smooth.sample(0.875), 0.000001)
+        assertEquals(0.0, smooth.sample(-1.0), 0.000001)
+        assertEquals(40.0, smooth.sample(2.0), 0.000001)
+    }
+
+    @Test
+    fun vectorCurveScratchSamplingMatchesMultiSegmentSamplingForEveryInterpolation() {
+        val keyframes = listOf(
+            WolfVector3Keyframe(0.0, WolfVector3(0.0, 10.0, -10.0)),
+            WolfVector3Keyframe(0.25, WolfVector3(8.0, 2.0, -2.0)),
+            WolfVector3Keyframe(0.75, WolfVector3(16.0, 14.0, 6.0)),
+            WolfVector3Keyframe(1.0, WolfVector3(20.0, 18.0, 10.0))
+        )
+        val samplePositions = listOf(-0.25, 0.0, 0.125, 0.25, 0.375, 0.5, 0.75, 0.875, 1.0, 1.25)
+
+        WolfCurveInterpolation.values().forEach { interpolation ->
+            val curve = WolfVector3Curve(keyframes, interpolation)
+            val scratch = DoubleArray(4) { -123.0 }
+
+            samplePositions.forEach { progress ->
+                val expected = curve.sample(progress)
+                curve.sampleInto(progress, scratch)
+                assertEquals("$interpolation x at $progress", expected.x, scratch[0], 0.000001)
+                assertEquals("$interpolation y at $progress", expected.y, scratch[1], 0.000001)
+                assertEquals("$interpolation z at $progress", expected.z, scratch[2], 0.000001)
+                assertEquals("scratch capacity beyond Vector3 is untouched", -123.0, scratch[3], 0.0)
+            }
+        }
+    }
+
+    @Test
     fun vectorOperationsPreserveExpectedGeometry() {
         val first = WolfVector3(1.0, 0.0, 0.0)
         val second = WolfVector3(0.0, 1.0, 0.0)
