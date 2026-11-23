@@ -129,7 +129,7 @@ class WolfScalarCurve(
         }
         val right = keyframes[low]
         if (t == right.position) return right.value
-        val left = keyframes[rightIndex - 1]
+        val left = keyframes[low - 1]
         if (interpolation == WolfCurveInterpolation.STEP) return left.value
 
         val local = (t - left.position) / (right.position - left.position)
