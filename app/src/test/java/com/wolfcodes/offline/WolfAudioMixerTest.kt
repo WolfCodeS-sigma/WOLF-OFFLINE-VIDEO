@@ -25,6 +25,33 @@ class WolfAudioMixerTest {
     }
 
     @Test
+    fun narrationActivityDucksEffectsAndSilenceRestoresTheirLevel() {
+        val quiet = WolfAudioMixer.effectsDuckingGain(0.0)
+        val active = WolfAudioMixer.effectsDuckingGain(0.08)
+        assertEquals(1.0, quiet, 0.0001)
+        assertTrue(active < quiet)
+        assertTrue(active >= 0.40)
+    }
+
+    @Test
+    fun noiseGateReducesTheNoiseFloorButKeepsNormalVoiceLevels() {
+        assertEquals(0.0, WolfAudioMixer.noiseGateGain(0.0), 0.0001)
+        assertTrue(WolfAudioMixer.noiseGateGain(0.002) in 0.0..1.0)
+        assertEquals(1.0, WolfAudioMixer.noiseGateGain(0.02), 0.0001)
+    }
+
+    @Test
+    fun duckingDoesNotChangeNarrationLevel() {
+        val unDucked = WolfAudioMixer.mixSample(0.25, 0.4, 0.92, 0.30, 1.0)
+        val ducked = WolfAudioMixer.mixSample(0.25, 0.4, 0.92, 0.30, 0.42)
+        assertTrue(unDucked > ducked)
+        assertEquals(
+            WolfAudioMixer.mixSample(0.25, 0.0, 0.92, 0.30, 0.42),
+            WolfAudioMixer.mixSample(0.25, 0.8, 0.92, 0.0, 0.42)
+        )
+    }
+
+    @Test
     fun limiterPreventsClippingForStrongLayeredSignals() {
         val samples = listOf(
             WolfAudioMixer.mixSample(1.0, 1.0),
