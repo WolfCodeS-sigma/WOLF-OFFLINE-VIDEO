@@ -302,7 +302,10 @@ object StoryDirectorEngine {
     private fun buildContinuityBible(story: String): String {
         val sentences = story.split(Regex("(?<=[.!؟?؛])\\s+|\\n+")).map { it.trim() }.filter { it.isNotEmpty() }
         val appearanceWords = listOf("شعر", "عين", "عيون", "يرتدي", "ترتدي", "ملابس", "وجه", "طويل", "قصير", "معطف", "فستان")
-        val placeWords = listOf("منزل", "بيت", "غرفة", "ممر", "مستشفى", "مدرسة", "غابة", "شارع", "قصر", "مبنى", "قبو")
+        val placeWords = listOf(
+            "منزل", "بيت", "غرفة", "ممر", "مستشفى", "مدرسة", "غابة", "شارع", "قصر", "مبنى", "قبو",
+            "شاطئ", "بحر", "محيط", "ساحل", "صحراء", "رمال", "سرداب", "نافذة", "مزرعة", "حقل"
+        )
         val appearance = sentences.filter { s -> appearanceWords.any { s.contains(it) } }.take(4).joinToString("؛ ")
         val places = sentences.filter { s -> placeWords.any { s.contains(it) } }.take(4).joinToString("؛ ")
         val notes = mutableListOf<String>()
@@ -317,9 +320,15 @@ object StoryDirectorEngine {
             listOf("منزل", "بيت", "شقة", "غرفة") to "مكان داخلي سكني",
             listOf("مستشفى", "عيادة", "مشرحة") to "مكان طبي",
             listOf("غابة", "أشجار") to "غابة كثيفة",
+            listOf("شاطئ", "ساحل") to "شاطئ أو ساحل",
+            listOf("بحر", "محيط", "أمواج") to "بحر مفتوح",
+            listOf("صحراء", "رمال", "كثبان") to "صحراء",
+            listOf("ممر", "ردهة", "سرداب", "قبو") to "ممر أو قبو داخلي",
+            listOf("نافذة", "شرفة") to "بجانب نافذة أو شرفة",
             listOf("شارع", "طريق", "سيارة") to "طريق أو شارع",
             listOf("مدرسة", "فصل", "جامعة") to "مبنى تعليمي",
-            listOf("قبر", "مقابر", "مقبرة") to "مقابر"
+            listOf("قبر", "مقابر", "مقبرة") to "مقابر",
+            listOf("مزرعة", "حقل", "قرية") to "منطقة ريفية"
         )
         return options.firstOrNull { entry -> entry.first.any { text.contains(it) } }?.second
             ?: "الموقع الذي تصفه أحداث القصة، دون إضافة موقع جديد"
