@@ -11,7 +11,8 @@ WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected
 - `MainActivity.kt`: independent offline project and production interface.
 - `WolfProjectStore.kt`: durable local project records with atomic file replacement.
 - `StoryDirectorEngine.kt` and `OfflineSupportEngines.kt`: deterministic story segmentation, shot planning, pacing, and local visual helpers.
-- `WolfSceneArtEngine.kt`, `WolfSceneAssetStore.kt`, and `WolfProceduralMotionEngine.kt`: scene artwork, optional image slots, procedural character/environment motion, fog, particles, rain, spectral silhouettes, and visual effects.
+- `WolfSceneArtEngine.kt`, `WolfSceneAssetStore.kt`, and `WolfProceduralMotionEngine.kt`: scene artwork, project-scoped user image slots, procedural motion, and atmospheric effects.
+- `WolfAssetRegistry.kt` and `app/src/main/assets/wolf_asset_registry.json`: application-bundled cinematic asset registry, SHA-256/file integrity checks, rights/realism/scope/runtime validation, and fail-closed Quality Gate. The initial registry is intentionally empty until real assets pass review.
 - `OfflineProductionEngine.kt`: local frame rendering, H.264 MP4 encoding, audio integration, long-film chapter handling, checkpoint support, recovery paths, and export quality inspection.
 - `WolfStoryVoiceEngine.kt`, `WolfAudioMixer.kt`, `WolfAudioTranscoder.kt`, and `WolfSoundFxEngine.kt`: local narration recording, approval state, audio processing, and procedural sound effects.
 - `WolfLongFilmEngine.kt`: chapter planning and resumable chapter checkpoints.
@@ -29,7 +30,7 @@ Open the repository as an Android Gradle project in a compatible IDE, or use a G
 
 ## Verification policy
 
-The continuous-integration workflow is intentionally limited to Android lint and local JVM unit tests. It does not build an APK, start an emulator, or run instrumentation tests. Device/runtime verification is a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
+The continuous-integration workflow builds the Debug APK, runs Android lint and JVM unit tests, then runs the Android 12 emulator regression suite for media export, audio, checkpoints, and the bundled asset registry. Testing on the physical Realme 7 remains a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
 
 ## Privacy and connectivity
 
