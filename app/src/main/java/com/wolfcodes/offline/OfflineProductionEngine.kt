@@ -140,6 +140,8 @@ object OfflineProductionEngine {
         imageUris: List<Uri> = emptyList(),
         audioUri: Uri? = null,
         aspectRatio: String = "9:16",
+        visualStyle: String = "رعب سينمائي مظلم",
+        horrorType: String = "رعب نفسي وخارق للطبيعة",
         generateSoundEffects: Boolean = false,
         includeWatermark: Boolean = false,
         includeIntro: Boolean = false,
@@ -189,14 +191,16 @@ object OfflineProductionEngine {
             story = story,
             durationSeconds = bodySeconds,
             aspectRatio = aspectRatio,
-            visualStyle = "رعب سينمائي مظلم",
-            horrorType = "رعب نفسي وخارق للطبيعة",
+            visualStyle = visualStyle,
+            horrorType = horrorType,
             audioDrivenDuration = true,
             includeIntro = false
         )
         val scenePlans = filmPlan.scenes
         val scenes = scenePlans.map { it.sourceText }
-        val sceneRenderContexts = scenePlans.map(StoryDirectorEngine::sceneRenderContext)
+        val sceneRenderContexts = scenePlans.map { scenePlan ->
+            StoryDirectorEngine.sceneRenderContext(scenePlan, visualStyle, horrorType)
+        }
         val totalFrames = bodyFrames
         val minimumFrames = 1
         val framesPerScene = OfflineMotionEngine.allocateFrames(scenes, totalFrames, minimumFrames)
@@ -256,6 +260,8 @@ object OfflineProductionEngine {
                 story, framesPerScene, fps, w, h, introFrames, enableHorrorTypography,
                 listOf(
                     includeWatermark.toString(),
+                    visualStyle,
+                    horrorType,
                     "depth-segmentation-v${WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION}",
                     STORYBOARD_RENDER_REVISION,
                     audioUri?.toString().orEmpty(),
@@ -1049,7 +1055,9 @@ object OfflineProductionEngine {
                         plannedProgress,
                         setting = sceneRenderContext?.setting.orEmpty(),
                         mood = sceneRenderContext?.mood.orEmpty(),
-                        continuityKey = sceneRenderContext?.continuityKey ?: 0
+                        continuityKey = sceneRenderContext?.continuityKey ?: 0,
+                        visualStyle = sceneRenderContext?.visualStyle.orEmpty(),
+                        horrorType = sceneRenderContext?.horrorType.orEmpty()
                     )
                 } finally {
                     c.restoreToCount(compositionSave)
