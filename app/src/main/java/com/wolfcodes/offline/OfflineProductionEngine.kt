@@ -39,6 +39,10 @@ object OfflineProductionEngine {
         return if (includeIntro) minOf(3, (safeTotal - 1).coerceAtLeast(0)) else 0
     }
 
+    /** Uses the original still without camera warping when depth segmentation is unavailable. */
+    internal fun useSafeStillImageFallback(depthLayersSeparated: Boolean): Boolean =
+        !depthLayersSeparated
+
     /** Estimates peak free space while temporary MP4 and final output copies overlap. */
     internal fun estimatePeakStorageBytes(
         durationSeconds: Int,
@@ -572,14 +576,20 @@ object OfflineProductionEngine {
                     val shotUri = sceneImageUris.getOrNull(s)?.getOrNull(shotIndex)
                         ?: sceneImageUris.getOrNull(s)?.firstOrNull { it != null }
                     val image = shotUri?.let { uri -> decodeImage(context, uri) }
+                    if (shotUri != null && image == null) {
+                        throw IllegalStateException(
+                            "تعذر قراءة صورة المستخدم المحددة للمشهد؛ تم إيقاف هذا المسار بدل استبدالها برسوم مولدة"
+                        )
+                    }
                     val imageLayers = try {
                         image?.let { WolfImageDepthSegmenter.segment(it) }
                     } catch (segmentationError: Exception) {
-                        if (image != null && !image.isRecycled) image.recycle()
-                        throw IllegalStateException(
-                            "تعذر فصل عناصر الصورة إلى طبقات عمق: ${segmentationError.message ?: segmentationError.javaClass.simpleName}",
-                            segmentationError
+                        WolfDiagnostics.record(
+                            context, "استعادة الرندر", "WOLF IMAGE FALLBACK", "WARNING",
+                            "تعذر فصل الصورة إلى طبقات؛ سيتم الحفاظ على الصورة الأصلية دون تحريك كاميرا مشوّه",
+                            segmentationError.javaClass.simpleName
                         )
+                        null
                     }
                     try {
                         for (f in 0 until shotFrames) {
@@ -616,9 +626,9 @@ object OfflineProductionEngine {
         } finally {
             try { inputSurface?.release() } catch (_: Exception) {}
             try { codec.stop() } catch (_: Exception) {}
-            codec.release()
+            try { codec.release() } catch (_: Exception) {}
             try { if (started) muxer?.stop() } catch (_: Exception) {}
-            muxer?.release()
+            try { muxer?.release() } catch (_: Exception) {}
         }
     }
 
@@ -678,14 +688,18 @@ object OfflineProductionEngine {
                     source.top=(bitmap.height-cropHeight)/2
                     source.bottom=source.top+cropHeight
                 }
-                // Three virtual camera setups per scene, derived from the same still image.
-                // This is a local motion fallback, not three independent generated photographs.
+                val originalSource = Rect(source)
+                // Depth-aware motion is only safe when segmentation produced valid layers.
+                // Otherwise retain the full aspect-matched source crop without camera warping.
                 val shotProgress = t.coerceIn(0f, 1f)
                 val baseLeft=source.left
                 val baseTop=source.top
                 val baseWidth=source.width()
                 val baseHeight=source.height()
-                val cropScale=when(shotIndex) { 0 -> 1f; 1 -> 0.78f; else -> 0.60f }
+                val depthLayersAvailable = imageLayers?.separated == true
+                val cropScale=if (!useSafeStillImageFallback(depthLayersAvailable)) {
+                    when(shotIndex) { 0 -> 1f; 1 -> 0.78f; else -> 0.60f }
+                } else 1f
                 val cropWidth=(baseWidth*cropScale).toInt().coerceAtLeast(1)
                 val cropHeight=(baseHeight*cropScale).toInt().coerceAtLeast(1)
                 val focusX=when(shotIndex) { 0 -> 0.50f; 1 -> 0.34f+0.30f*shotProgress; else -> 0.62f-0.24f*shotProgress }
@@ -694,18 +708,20 @@ object OfflineProductionEngine {
                 source.top=(baseTop+(baseHeight-cropHeight)*focusY).toInt().coerceIn(baseTop,baseTop+baseHeight-cropHeight)
                 source.right=source.left+cropWidth
                 source.bottom=source.top+cropHeight
-                val camera = OfflineMotionEngine.cameraFrame(shotProgress, scene, caption, safeShotIndex)
-                val baseZoom = when (shotIndex) {
+                val camera = if (depthLayersAvailable) {
+                    OfflineMotionEngine.cameraFrame(shotProgress, scene, caption, safeShotIndex)
+                } else null
+                val baseZoom = if (depthLayersAvailable) when (shotIndex) {
                     0 -> 1.012f
                     1 -> 1.034f
                     else -> 1.058f
-                }
-                // Keep a small overscan margin so camera movement never exposes black edges.
-                val scale = (baseZoom + camera.zoom).coerceAtLeast(1.006f)
+                } else 1f
+                // Keep the original image static when segmentation is unavailable.
+                val scale = if (camera == null) 1f else (baseZoom + camera.zoom).coerceAtLeast(1.006f)
                 val dw = w * scale
                 val dh = h * scale
-                val shiftX = camera.offsetX * w
-                val shiftY = camera.offsetY * h
+                val shiftX = camera?.offsetX?.times(w) ?: 0f
+                val shiftY = camera?.offsetY?.times(h) ?: 0f
                 val destination = RectF(
                     (w - dw) / 2f + shiftX,
                     (h - dh) / 2f + shiftY,
@@ -724,22 +740,40 @@ object OfflineProductionEngine {
                     val layerBottom = (source.bottom * layerScale).toInt()
                         .coerceIn(layerTop + 1, imageLayers.background.height)
                     val layerSource = Rect(layerLeft, layerTop, layerRight, layerBottom)
-                    WolfSceneDepthComposer.renderImageLayers(
-                        canvas = c,
-                        width = w,
-                        height = h,
-                        sceneIndex = scene,
-                        progress = shotProgress,
-                        layers = imageLayers,
-                        source = layerSource,
-                        destination = destination,
-                        rotationDegrees = camera.rotationDegrees
-                    )
+                    try {
+                        WolfSceneDepthComposer.renderImageLayers(
+                            canvas = c,
+                            width = w,
+                            height = h,
+                            sceneIndex = scene,
+                            progress = shotProgress,
+                            layers = imageLayers,
+                            source = layerSource,
+                            destination = destination,
+                            rotationDegrees = camera?.rotationDegrees ?: 0f
+                        )
+                    } catch (compositionError: Exception) {
+                        android.util.Log.w(
+                            "WOLF_RENDER",
+                            "Depth composition failed; preserving the original user image",
+                            compositionError
+                        )
+                        c.drawColor(android.graphics.Color.BLACK)
+                        c.drawBitmap(
+                            bitmap,
+                            originalSource,
+                            RectF(0f, 0f, w.toFloat(), h.toFloat()),
+                            p
+                        )
+                    }
                 } else {
                     val cameraSave = c.save()
-                    c.rotate(camera.rotationDegrees, w / 2f, h / 2f)
-                    c.drawBitmap(bitmap, source, destination, p)
-                    c.restoreToCount(cameraSave)
+                    try {
+                        if (camera != null) c.rotate(camera.rotationDegrees, w / 2f, h / 2f)
+                        c.drawBitmap(bitmap, source, destination, p)
+                    } finally {
+                        c.restoreToCount(cameraSave)
+                    }
                 }
                 p.color=android.graphics.Color.argb(46,0,0,0)
                 c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
@@ -786,8 +820,6 @@ object OfflineProductionEngine {
                 c.drawCircle(centerX - 4f, centerY, 1.8f, p)
                 c.drawCircle(centerX + 4f, centerY, 1.8f, p)
             }
-            p.color=android.graphics.Color.RED
-            c.drawRect(0f,0f,w*((safeShotIndex + t) / WolfSceneAssetStore.SHOTS_PER_SCENE),5f,p)
         } finally {
             surface.unlockCanvasAndPost(c)
         }
@@ -937,8 +969,6 @@ object OfflineProductionEngine {
             }.coerceIn(0,255)
             paint.color=android.graphics.Color.argb(255-fade,0,0,0)
             canvas.drawRect(0f,0f,w.toFloat(),h.toFloat(),paint)
-            paint.color=android.graphics.Color.rgb(205,12,34)
-            canvas.drawRect(0f,h-5f,w*progress,h.toFloat(),paint)
         } finally {
             surface.unlockCanvasAndPost(canvas)
         }

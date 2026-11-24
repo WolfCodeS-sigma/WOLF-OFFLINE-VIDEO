@@ -27,7 +27,6 @@ object WolfSceneArtEngine {
         val door = has(caption, "باب", "الباب", "أبواب", "مدخل", "door")
         val cemetery = has(caption, "قبر", "مقبرة", "قبور", "مقابر", "cemetery", "grave")
         val room = has(caption, "غرفة", "المنزل", "بيت", "منزل", "حجرة", "room", "house")
-        val hauntedPresence = has(caption, "ظل", "شبح", "امرأة", "شخص", "كائن", "وحش", "ظهر", "وقف", "ghost", "shadow", "creature")
 
         WolfSceneDepthComposer.render(
             canvas = canvas,
@@ -87,10 +86,6 @@ object WolfSceneArtEngine {
                     p
                 )
 
-                if (hauntedPresence || scene % 3 == 1) {
-                    drawSilhouette(layer, p, w, h, t, scene)
-                }
-
                 p.shader = LinearGradient(
                     0f, 0f, 0f, h,
                     intArrayOf(Color.argb(55, 0, 0, 0), Color.TRANSPARENT, Color.argb(118, 0, 0, 0)),
@@ -102,9 +97,6 @@ object WolfSceneArtEngine {
             }
         )
 
-        p.style = Paint.Style.FILL
-        p.color = Color.argb(90, 190, 8, 28)
-        canvas.drawRect(0f, 0f, w * (0.15f + t * 0.7f), maxOf(2f, h * 0.004f), p)
     }
 
     private fun drawForest(c: Canvas, p: Paint, w: Float, h: Float, t: Float, scene: Int) {
@@ -233,26 +225,6 @@ object WolfSceneArtEngine {
         c.drawRect(w * 0.65f, h * 0.53f, w * 0.75f, h * 0.65f, p)
         p.color = Color.rgb(2, 3, 7)
         c.drawRect(w * 0.45f, h * 0.61f, w * 0.56f, h * 0.82f, p)
-    }
-
-    private fun drawSilhouette(c: Canvas, p: Paint, w: Float, h: Float, t: Float, scene: Int) {
-        val x = w * (0.52f + wave(t * 6.2831853f + scene * 0.7f) * 0.025f)
-        val ground = h * 0.83f
-        p.color = Color.argb(215, 1, 2, 5)
-        c.drawOval(RectF(x - w * 0.045f, ground - h * 0.47f, x + w * 0.045f, ground - h * 0.35f), p)
-        val cloak = Path().apply {
-            moveTo(x - w * 0.045f, ground - h * 0.36f)
-            lineTo(x - w * 0.095f, ground - h * 0.08f)
-            lineTo(x - w * 0.12f, ground)
-            lineTo(x + w * 0.12f, ground)
-            lineTo(x + w * 0.095f, ground - h * 0.08f)
-            lineTo(x + w * 0.045f, ground - h * 0.36f)
-            close()
-        }
-        c.drawPath(cloak, p)
-        p.color = Color.argb(225, 220, 12, 35)
-        c.drawCircle(x - w * 0.018f, ground - h * 0.405f, maxOf(2f, w * 0.004f), p)
-        c.drawCircle(x + w * 0.018f, ground - h * 0.405f, maxOf(2f, w * 0.004f), p)
     }
 
     private fun wave(angle: Float): Float = kotlin.math.sin(angle.toDouble()).toFloat()
