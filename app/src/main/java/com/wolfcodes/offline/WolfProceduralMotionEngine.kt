@@ -109,27 +109,29 @@ object WolfProceduralMotionEngine {
         caption: String,
         sceneIndex: Int,
         shotIndex: Int,
-        progress: Float
+        progress: Float,
+        storyEvent: StoryDirectorEngine.StoryEvent? = null,
+        continuityKey: Int = 0
     ) {
         if (width <= 0 || height <= 0) return
         val t = progress.coerceIn(0f, 1f)
-        val features = featuresFor(caption)
+        val features = featuresFor(caption, storyEvent)
 
-        drawAtDepth(canvas, width, height, sceneIndex, t, 0.16f) {
+        drawAtDepth(canvas, width, height, sceneIndex, t, 0.16f, continuityKey) {
             drawAtmosphere(this, width, height, sceneIndex, t)
             if (features.hasReveal || features.hasChase) {
                 drawEnvironmentalPulse(this, width, height, sceneIndex, t, features.hasChase)
             }
         }
 
-        drawAtDepth(canvas, width, height, sceneIndex, t, 0.54f) {
+        drawAtDepth(canvas, width, height, sceneIndex, t, 0.54f, continuityKey) {
             drawFloatingParticles(this, width, height, sceneIndex, t, features.hasChase)
             if (features.hasForest) {
                 drawWindDrivenBranches(this, width, height, sceneIndex, t)
             }
         }
 
-        drawAtDepth(canvas, width, height, sceneIndex, t, 1.0f) {
+        drawAtDepth(canvas, width, height, sceneIndex, t, 1.0f, continuityKey) {
             if (features.hasRain) {
                 drawRain(this, width, height, sceneIndex, t)
             }
@@ -146,9 +148,11 @@ object WolfProceduralMotionEngine {
         sceneIndex: Int,
         progress: Float,
         factor: Float,
+        continuityKey: Int = 0,
         draw: Canvas.() -> Unit
     ) {
-        val phase = sceneIndex * 0.73f + progress * 6.2831853f
+        val continuityPhase = Math.floorMod(continuityKey, 1009) / 1009f * 6.2831853f
+        val phase = sceneIndex * 0.73f + progress * 6.2831853f + continuityPhase
         val driftX = sin(phase.toDouble()).toFloat() * width * 0.018f * factor
         val driftY = cos((phase * 0.61f + 1.2f).toDouble()).toFloat() * height * 0.009f * factor
         val scale = 1.012f + 0.019f * factor * progress
@@ -163,7 +167,10 @@ object WolfProceduralMotionEngine {
         }
     }
 
-    fun featuresFor(caption: String): SceneFeatures {
+    fun featuresFor(
+        caption: String,
+        storyEvent: StoryDirectorEngine.StoryEvent? = null
+    ): SceneFeatures {
         val text = caption.lowercase(java.util.Locale.ROOT)
         fun containsAny(vararg terms: String): Boolean = terms.any(text::contains)
 
@@ -179,11 +186,11 @@ object WolfProceduralMotionEngine {
             "تشوش", "تشويش", "خلل", "وميض", "تقطع", "اهتزاز الصورة",
             "glitch", "static", "signal", "distortion", "flicker"
         )
-        val chase = containsAny(
+        val chase = storyEvent == StoryDirectorEngine.StoryEvent.CHASE || containsAny(
             "مطاردة", "يطارد", "هرب", "يهرب", "يجري", "ركض", "اندفع", "هاجم",
             "chase", "running", "escape", "attack", "runs"
         )
-        val reveal = containsAny(
+        val reveal = storyEvent == StoryDirectorEngine.StoryEvent.REVEAL || containsAny(
             "ظهر", "ظهرت", "فجأة", "انكشف", "كشف", "التفت", "خلفه", "صرخة",
             "appeared", "revealed", "suddenly", "turned around", "behind"
         )
