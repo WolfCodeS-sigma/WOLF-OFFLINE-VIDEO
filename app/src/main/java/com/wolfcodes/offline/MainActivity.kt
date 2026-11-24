@@ -873,6 +873,8 @@ class MainActivity : Activity() {
         refreshChapterStatus()
         worker.execute {
             try {
+                WolfProjectStore.updateStatus(this, project.id, "قيد الإنتاج", lastError = null)
+                    ?: throw IllegalStateException("تعذر تحديث حالة المشروع قبل بدء التصدير")
                 val voiceSession = WolfStoryVoiceStore.read(this, project.id)
                 val approvedVoice = project.audioUri?.let { storedAudio ->
                     val storedPath = runCatching { Uri.parse(storedAudio).path }.getOrNull()
@@ -889,10 +891,8 @@ class MainActivity : Activity() {
                                 File(approvedPath).isFile
                         }.getOrDefault(false)
                 } ?: false
-                val effectiveDuration = if (approvedVoice) {
-                    (WolfStoryVoiceStateMachine.durationSecondsCeil(voiceSession!!.audioDurationMs) +
-                        if (project.includeIntro) 3 else 0).coerceIn(5, 1800)
-                } else project.durationSeconds
+                // The selected project duration is the baseline; the production timeline
+                // extends it only when intro + the complete approved narration needs more time.
                 val shotAssignments = WolfSceneAssetStore.shotAssignments(this, project.id)
                     .mapNotNull { (slot, value) ->
                         runCatching { slot to Uri.parse(value) }.getOrNull()
@@ -900,7 +900,7 @@ class MainActivity : Activity() {
                 val result = OfflineProductionEngine.render(
                     context = this,
                     story = project.story,
-                    seconds = effectiveDuration,
+                    seconds = project.durationSeconds,
                     imageUris = project.imageUris.mapNotNull { value ->
                         runCatching { Uri.parse(value) }.getOrNull()
                     },
@@ -926,15 +926,36 @@ class MainActivity : Activity() {
                         }
                     }
                 )
+                val projectStateSaved = runCatching {
+                    WolfProjectStore.updateStatus(
+                        this,
+                        project.id,
+                        "مكتمل",
+                        videoLocation = result.mediaUri ?: result.savedLocation,
+                        lastError = null
+                    ) != null
+                }.getOrDefault(false)
                 runOnUiThread {
                     producing = false
                     progress.progress = 100
                     progress.visibility = View.GONE
-                    status.text = "تم حفظ الفيديو: " + result.savedLocation
+                    status.text = if (projectStateSaved) {
+                        "تم حفظ الفيديو: " + result.savedLocation
+                    } else {
+                        "تم حفظ الفيديو، لكن تعذر تحديث حالة المشروع: " + result.savedLocation
+                    }
                     Toast.makeText(this, "تم حفظ الفيديو في Movies/WOLF CODE S", Toast.LENGTH_LONG).show()
                     refreshChapterStatus()
                 }
             } catch (error: Exception) {
+                runCatching {
+                    WolfProjectStore.updateStatus(
+                        this,
+                        project.id,
+                        "فشل الإنتاج",
+                        lastError = error.message ?: error.javaClass.simpleName
+                    )
+                }
                 runOnUiThread {
                     producing = false
                     progress.visibility = View.GONE

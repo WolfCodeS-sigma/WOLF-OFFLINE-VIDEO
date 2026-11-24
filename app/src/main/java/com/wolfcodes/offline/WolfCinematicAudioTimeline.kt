@@ -19,24 +19,27 @@ data class WolfCinematicAudioTimeline(
         ): WolfCinematicAudioTimeline {
             require(requestedDurationSeconds in 1..1800) { "مدة الفيلم غير صالحة" }
             val intro = if (includeIntro) minOf(3, (requestedDurationSeconds - 1).coerceAtLeast(0)) else 0
+            require(
+                authoritativeNarrationDurationMs == null ||
+                    authoritativeNarrationDurationMs in 1_000L..1_800_000L
+            ) { "مدة التسجيل المعتمد غير صالحة؛ لن يتم قص الصوت أو تجاهل مدته" }
             val validNarration = authoritativeNarrationDurationMs
-                ?.takeIf { it in 1_000L..1_800_000L }
-            require(validNarration == null || validNarration + intro.toLong() * 1000L <= 1_800_000L) {
-                "مدة التعليق الصوتي مع المقدمة تتجاوز الحد الأقصى للفيلم؛ قصّر التسجيل أو أوقف المقدمة"
-            }
             val narrationSeconds = validNarration?.let {
                 ((it + 999L) / 1000L).toInt().coerceAtLeast(1)
             }
             val requestedBodySeconds = (requestedDurationSeconds - intro).coerceAtLeast(1)
-            // Keep the established five-second minimum film duration without extending narration.
+            // The user's requested body duration is the minimum target. Extend it only
+            // when the complete narration needs more room after the optional intro.
             val bodySeconds = maxOf(
-                narrationSeconds ?: requestedBodySeconds,
+                requestedBodySeconds,
+                narrationSeconds ?: 0,
                 (5 - intro).coerceAtLeast(1)
             )
             return WolfCinematicAudioTimeline(
                 introSeconds = intro,
                 narrationSeconds = narrationSeconds,
-                totalVideoSeconds = (intro + bodySeconds).coerceIn(1, 1800),
+                // A 30-minute approved narration may add the optional three-second intro.
+                totalVideoSeconds = (intro + bodySeconds).coerceIn(1, 1803),
                 narrationOffsetUs = intro.toLong() * 1_000_000L,
                 narrationLimitUs = validNarration?.coerceAtMost(bodySeconds.toLong() * 1000L)?.times(1000L)
             )
