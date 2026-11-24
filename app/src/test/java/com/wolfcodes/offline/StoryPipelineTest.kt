@@ -120,7 +120,7 @@ class StoryPipelineTest {
 
     @Test
     fun renderRevisionInvalidatesLegacyStoryboardCheckpointFingerprint() {
-        assertEquals("storyboard-planner-v3", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
+        assertEquals("storyboard-planner-v4", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
         assertEquals(2, WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION)
 
         val legacy = WolfLongFilmEngine.fingerprint(
@@ -282,6 +282,66 @@ class StoryPipelineTest {
         assertEquals("NIGHT", StoryDirectorEngine.lightingTreatment("إضاءة ليلية محيطية منخفضة"))
         assertEquals("SIDE", StoryDirectorEngine.lightingTreatment("إضاءة جانبية درامية"))
         assertEquals("NEUTRAL", StoryDirectorEngine.lightingTreatment("إضاءة محيطية طبيعية"))
+    }
+
+    @Test
+    fun storyboardRenderContextCarriesEventSettingAndStableContinuity() {
+        val story = "وصلت إلى المستشفى وسمعت همسًا خلف الباب."
+        val plan = StoryDirectorEngine.analyze(
+            story, 20, "9:16", "رعب سينمائي مظلم", "رعب نفسي"
+        )
+        val scene = plan.scenes.first()
+        val context = StoryDirectorEngine.sceneRenderContext(scene)
+
+        assertEquals(scene.setting, context.setting)
+        assertEquals(scene.mood, context.mood)
+        assertEquals(scene.continuityNotes, context.continuityNotes)
+        assertEquals(StoryDirectorEngine.StoryEvent.SOUND, context.event)
+        assertEquals(context, StoryDirectorEngine.sceneRenderContext(scene))
+        assertEquals(
+            context.continuityKey,
+            StoryDirectorEngine.sceneRenderContext(scene.copy(mood = "مزاج مختلف لنفس الموقع")).continuityKey
+        )
+    }
+
+    @Test
+    fun storyboardCameraIntentChangesTheActualCameraTransform() {
+        val still = OfflineMotionEngine.cameraFrame(
+            0.9f, 0, "قصة اختبار", 0, StoryDirectorEngine.CameraMovement.HOLD
+        )
+        assertEquals(0f, still.zoom, 0.0001f)
+        assertEquals(0f, still.offsetX, 0.0001f)
+        assertEquals(0f, still.rotationDegrees, 0.0001f)
+
+        val trackStart = OfflineMotionEngine.cameraFrame(
+            0f, 0, "مطاردة", 0, StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT
+        )
+        val trackEnd = OfflineMotionEngine.cameraFrame(
+            1f, 0, "مطاردة", 0, StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT
+        )
+        assertTrue(trackStart.offsetX < trackEnd.offsetX)
+
+        val pushStart = OfflineMotionEngine.cameraFrame(
+            0f, 0, "ترقب", 1, StoryDirectorEngine.CameraMovement.SLOW_PUSH_IN
+        )
+        val pushEnd = OfflineMotionEngine.cameraFrame(
+            1f, 0, "ترقب", 1, StoryDirectorEngine.CameraMovement.SLOW_PUSH_IN
+        )
+        assertTrue(pushEnd.zoom > pushStart.zoom)
+    }
+
+    @Test
+    fun compositionVerticalAnchorAndSceneAtmosphereFollowStoryboardContext() {
+        assertEquals(0.58f, StoryDirectorEngine.compositionFocusY("", "زاوية منخفضة") ?: -1f, 0.0001f)
+        assertEquals(0.42f, StoryDirectorEngine.compositionFocusY("", "زاوية مرتفعة") ?: -1f, 0.0001f)
+        assertEquals(null, StoryDirectorEngine.compositionFocusY("تكوين عام بلا زاوية"))
+
+        val hospital = WolfSceneArtEngine.atmosphereProfile("مكان طبي", "رعب سمعي وترقب", 1234)
+        val sameHospitalContinuity = WolfSceneArtEngine.atmosphereProfile("مكان طبي", "رعب سمعي وترقب", 1234)
+        val forest = WolfSceneArtEngine.atmosphereProfile("غابة كثيفة", "رعب سمعي وترقب", 1234)
+        assertEquals(hospital, sameHospitalContinuity)
+        assertTrue(hospital.middleColor != forest.middleColor)
+        assertEquals(hospital.continuityPhase, sameHospitalContinuity.continuityPhase, 0.0001f)
     }
 
     @Test
