@@ -30,6 +30,8 @@ WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected
 
 Open the repository as an Android Gradle project in a compatible IDE, or use a Gradle installation to run the verification tasks.
 
+- `docs/WOLF_STAGE_11_ENGINE_COMPATIBILITY_POC.md` and `engine-pocs/`: isolated Stage 11 compatibility POCs. Godot is the preferred Cocos fallback candidate because it provides an Android library/host model; the isolated POC now tests a bundled project render. Cocos remains blocked pending a licensed Creator GUI export. No POC is a production dependency.
+
 ## Verification policy
 
 The continuous-integration workflow builds the Debug APK, runs Android lint and JVM unit tests, then runs the Android 12 emulator regression suite for media export, audio, checkpoints, and the bundled asset registry. Testing on the physical Realme 7 remains a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
@@ -41,3 +43,5 @@ Project records, narration recordings, rendering, and exported media are stored 
 ## Output
 
 Rendered videos are exported to the device's Movies/WOLF CODE S media collection when the platform media provider is available.
+
+- `asset-intake/` and `tools/asset-intake/`: executable, fail-closed batch intake. Two CC0 environment HDRIs are acquired as candidates in WOLF-ASSET-BATCH-001; neither is reviewed/approved for production or included in the APK. Batch 000-baseline remains empty. See `asset-intake/README.md`.
