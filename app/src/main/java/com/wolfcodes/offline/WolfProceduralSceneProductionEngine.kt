@@ -40,7 +40,8 @@ object WolfProceduralSceneProductionEngine {
         val caption: String,
         val environment: Environment,
         val visualCaption: String,
-        val features: WolfProceduralMotionEngine.SceneFeatures
+        val features: WolfProceduralMotionEngine.SceneFeatures,
+        val objectLayers: List<WolfSceneLayerSystem.Element>
     )
 
     fun plan(caption: String, sceneIndex: Int): ScenePlan {
@@ -59,6 +60,7 @@ object WolfProceduralSceneProductionEngine {
         }
 
         val features = WolfProceduralMotionEngine.featuresFor(caption)
+        val objectLayers = WolfSceneLayerSystem.plan(environment, features, sceneIndex)
         val visualCue = if (features.hasGhost) "$cue — شبح" else cue
 
         return ScenePlan(
@@ -66,7 +68,8 @@ object WolfProceduralSceneProductionEngine {
             caption = caption,
             environment = environment,
             visualCaption = visualCue,
-            features = features
+            features = features,
+            objectLayers = objectLayers
         )
     }
 
@@ -156,19 +159,24 @@ object WolfProceduralSceneProductionEngine {
                 environmentOverride = plan.environment.name,
                 presenceCaption = plan.caption
             )
+
+            // Keep every depth/effect/object pass in the same virtual-camera space
+            // as the base artwork. Restoring before this pass caused the foreground
+            // layers to drift away from the zoomed/reframed background in shots 2/3.
+            WolfProceduralMotionEngine.renderDepthAware(
+                canvas = canvas,
+                width = width,
+                height = height,
+                caption = plan.caption,
+                sceneIndex = plan.sceneIndex,
+                shotIndex = safeShot,
+                progress = t,
+                plannedFeatures = plan.features,
+                environment = plan.environment,
+                plannedLayers = plan.objectLayers
+            )
         } finally {
             canvas.restoreToCount(saved)
         }
-
-        WolfProceduralMotionEngine.renderDepthAware(
-            canvas = canvas,
-            width = width,
-            height = height,
-            caption = plan.caption,
-            sceneIndex = plan.sceneIndex,
-            shotIndex = safeShot,
-            progress = t,
-            plannedFeatures = plan.features
-        )
     }
 }
