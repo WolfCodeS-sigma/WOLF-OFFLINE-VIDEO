@@ -299,6 +299,12 @@ class StoryPipelineTest {
         assertEquals(StoryDirectorEngine.StoryEvent.SOUND, context.event)
         assertEquals(context, StoryDirectorEngine.sceneRenderContext(scene))
         assertEquals(
+            "شاطئ أو ساحل",
+            StoryDirectorEngine.analyze(
+                "وصلت إلى شاطئ البحر ليلًا.", 10, "9:16", "سينمائي", "رعب نفسي"
+            ).scenes.first().setting
+        )
+        assertEquals(
             context.continuityKey,
             StoryDirectorEngine.sceneRenderContext(scene.copy(mood = "مزاج مختلف لنفس الموقع")).continuityKey
         )
