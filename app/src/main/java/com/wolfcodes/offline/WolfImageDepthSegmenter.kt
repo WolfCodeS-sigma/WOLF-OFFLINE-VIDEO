@@ -23,8 +23,11 @@ object WolfImageDepthSegmenter {
         val foreground: Bitmap,
         val sourceScale: Float,
         val confidence: Float,
-        val separated: Boolean
+        val heuristicCandidateSeparated: Boolean,
+        val semanticValidationPassed: Boolean
     ) {
+        val safeForParallax: Boolean
+            get() = heuristicCandidateSeparated && semanticValidationPassed
         fun recycle() {
             if (!background.isRecycled) background.recycle()
             if (!midground.isRecycled) midground.recycle()
@@ -37,8 +40,19 @@ object WolfImageDepthSegmenter {
         val midgroundMask: BooleanArray,
         val foregroundPlaneMask: BooleanArray,
         val confidence: Float,
-        val separated: Boolean
-    )
+        val heuristicCandidateSeparated: Boolean,
+        val semanticValidationPassed: Boolean = false
+    ) {
+        val safeForParallax: Boolean
+            get() = heuristicCandidateSeparated && semanticValidationPassed
+    }
+
+    /**
+     * The current implementation is color-distance/border-connectivity only.
+     * It is deliberately not authorized to drive layer motion until a semantic
+     * model and per-image validation are integrated and tested.
+     */
+    internal fun isSemanticSegmentationReady(): Boolean = false
 
     fun segment(source: Bitmap): Layers {
         require(!source.isRecycled && source.width > 0 && source.height > 0) {
@@ -90,7 +104,8 @@ object WolfImageDepthSegmenter {
                 foreground = foreground,
                 sourceScale = width.toFloat() / source.width.toFloat(),
                 confidence = masks.confidence,
-                separated = masks.separated
+                heuristicCandidateSeparated = masks.heuristicCandidateSeparated,
+                semanticValidationPassed = masks.semanticValidationPassed
             )
         } catch (error: Exception) {
             if (working !== source && !working.isRecycled) working.recycle()
@@ -162,7 +177,8 @@ object WolfImageDepthSegmenter {
                 midgroundMask = BooleanArray(pixels.size),
                 foregroundPlaneMask = BooleanArray(pixels.size),
                 confidence = 0f,
-                separated = false
+                heuristicCandidateSeparated = false,
+                semanticValidationPassed = false
             )
         }
 
@@ -220,7 +236,9 @@ object WolfImageDepthSegmenter {
             midgroundMask = midMask,
             foregroundPlaneMask = frontMask,
             confidence = if (totalAssigned == 0) 0f else confidence,
-            separated = totalAssigned > 0 && confidence >= 0.30f
+            heuristicCandidateSeparated = totalAssigned > 0 && confidence >= 0.30f,
+            // No semantic model currently validates the heuristic mask.
+            semanticValidationPassed = false
         )
     }
 

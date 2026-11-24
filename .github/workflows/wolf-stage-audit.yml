@@ -1,17 +1,26 @@
-name: WOLF stages 01-06 audit
+name: WOLF stages 01-07 regression audit
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/stages-01-06-audit
+      - docs/stage-07-cinematic-asset-inventory
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: wolf-stage-audit-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   android-audit:
-    name: Android debug build, lint and JVM unit tests
+    name: Android debug APK, lint and JVM unit tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out audit branch
@@ -36,3 +45,44 @@ jobs:
 
       - name: Build debug APK and run Android lint and JVM unit tests
         run: gradle --no-daemon :app:assembleDebug lintDebug testDebugUnitTest
+
+  android-emulator-regression:
+    name: Android 12 emulator MP4, audio and checkpoint regression tests
+    needs: android-audit
+    runs-on: macos-15-intel
+    timeout-minutes: 40
+    steps:
+      - name: Check out audit branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platform-tools platforms;android-35 build-tools;35.0.0
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          gradle-version: "8.13"
+          cache-provider: basic
+
+      - name: Run real Android media and checkpoint tests
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 31
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          cores: 4
+          ram-size: 4096M
+          heap-size: 512M
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim -no-metrics
+          disable-animations: true
+          script: gradle --no-daemon :app:connectedDebugAndroidTest

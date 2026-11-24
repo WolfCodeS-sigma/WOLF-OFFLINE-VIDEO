@@ -91,6 +91,9 @@ object WolfSceneDepthComposer {
         rotationDegrees: Float
     ) {
         if (width <= 0 || height <= 0) return
+        check(layers.safeForParallax) {
+            "Depth layers are heuristic-only and have not passed semantic validation"
+        }
         check(!layers.background.isRecycled && !layers.midground.isRecycled && !layers.foreground.isRecycled) {
             "Depth layer bitmap was recycled before composition"
         }

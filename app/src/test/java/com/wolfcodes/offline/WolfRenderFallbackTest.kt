@@ -6,12 +6,27 @@ import org.junit.Test
 
 class WolfRenderFallbackTest {
     @Test
-    fun missingDepthLayersUseTheOriginalStillImageWithoutCameraWarping() {
-        assertTrue(OfflineProductionEngine.useSafeStillImageFallback(depthLayersSeparated = false))
+    fun unvalidatedImageLayersKeepTheOriginalStillImageWithoutCameraWarping() {
+        assertTrue(OfflineProductionEngine.useSafeStillImageFallback(semanticSegmentationValidated = false))
     }
 
     @Test
-    fun validDepthLayersKeepTheDepthAwareMotionPathAvailable() {
-        assertFalse(OfflineProductionEngine.useSafeStillImageFallback(depthLayersSeparated = true))
+    fun onlySemanticallyValidatedLayersMayEnableDepthAwareMotion() {
+        assertFalse(OfflineProductionEngine.useSafeStillImageFallback(semanticSegmentationValidated = true))
+    }
+
+    @Test
+    fun heuristicColorSegmentationCannotEnableDepthAwareMotion() {
+        val candidate = WolfImageDepthSegmenter.analyze(
+            width = 20,
+            height = 20,
+            pixels = IntArray(400) { index ->
+                if (index / 20 in 5..14 && index % 20 in 6..13) 0xFFEFEFEF.toInt()
+                else 0xFF101010.toInt()
+            }
+        )
+        assertTrue(candidate.heuristicCandidateSeparated)
+        assertFalse(candidate.semanticValidationPassed)
+        assertTrue(OfflineProductionEngine.useSafeStillImageFallback(candidate.safeForParallax))
     }
 }
