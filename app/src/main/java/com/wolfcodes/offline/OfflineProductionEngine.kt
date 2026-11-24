@@ -880,7 +880,7 @@ object OfflineProductionEngine {
         val safeShotIndex = shotIndex.coerceIn(0, WolfSceneAssetStore.SHOTS_PER_SCENE - 1)
         val plannedProgress = StoryDirectorEngine.motionProgress(shotPlan?.motion.orEmpty(), t)
         val sceneEvent = sceneRenderContext?.event ?: StoryDirectorEngine.classifyEvent(caption)
-        val cameraMovement = StoryDirectorEngine.resolveCameraMovement(shotPlan?.motion.orEmpty())
+        val cameraMovement = StoryDirectorEngine.resolveCameraMovement(shotPlan?.motion.orEmpty(), caption)
         try {
             if(bitmap != null) {
                 c.drawColor(android.graphics.Color.BLACK)
@@ -949,7 +949,11 @@ object OfflineProductionEngine {
                     depthLayersAvailable && cameraMovement != StoryDirectorEngine.CameraMovement.HOLD
                 ) plannedZoom else 1f
                 // Keep the original image static when segmentation is unavailable.
-                val scale = if (camera == null) 1f else (baseZoom + camera.zoom).coerceAtLeast(1.006f)
+                val scale = when {
+                    camera == null -> 1f
+                    cameraMovement == StoryDirectorEngine.CameraMovement.HOLD -> 1f
+                    else -> (baseZoom + camera.zoom).coerceAtLeast(1.006f)
+                }
                 val dw = w * scale
                 val dh = h * scale
                 val shiftX = camera?.offsetX?.times(w) ?: 0f
