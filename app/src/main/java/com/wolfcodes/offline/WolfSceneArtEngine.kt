@@ -27,7 +27,9 @@ object WolfSceneArtEngine {
     internal fun atmosphereProfile(
         setting: String,
         mood: String,
-        continuityKey: Int
+        continuityKey: Int,
+        visualStyle: String = "",
+        horrorType: String = ""
     ): AtmosphereProfile {
         val colors = when {
             setting.contains("مكان طبي") ->
@@ -49,14 +51,31 @@ object WolfSceneArtEngine {
             else ->
                 intArrayOf(Color.rgb(3, 5, 9), Color.rgb(12, 8, 13), Color.rgb(4, 5, 9), Color.rgb(156, 164, 176))
         }
-        val fogScale = when {
+        val styleLower = visualStyle.lowercase(java.util.Locale.ROOT)
+        val finalColors = if (
+            styleLower.contains("أبيض وأسود") || styleLower.contains("أحادي") ||
+            styleLower.contains("نوير") || styleLower.contains("black and white")
+        ) {
+            intArrayOf(
+                Color.rgb(4, 5, 7), Color.rgb(16, 17, 19),
+                Color.rgb(3, 4, 5), Color.rgb(142, 144, 148)
+            )
+        } else colors
+        val eventFogScale = when {
             mood.contains("مطاردة") -> 1.12f
             mood.contains("سمعي") -> 0.92f
             mood.contains("ظهور") -> 1.06f
             else -> 1f
         }
+        val horrorLower = horrorType.lowercase(java.util.Locale.ROOT)
+        val horrorFogScale = when {
+            horrorLower.contains("خارق") || horrorLower.contains("ماورائي") -> 1.04f
+            horrorLower.contains("نفسي") -> 0.96f
+            else -> 1f
+        }
+        val fogScale = (eventFogScale * horrorFogScale).coerceIn(0.8f, 1.25f)
         val continuityPhase = Math.floorMod(continuityKey, 1009) / 1009f * 6.2831853f
-        return AtmosphereProfile(colors[0], colors[1], colors[2], colors[3], fogScale, continuityPhase)
+        return AtmosphereProfile(finalColors[0], finalColors[1], finalColors[2], finalColors[3], fogScale, continuityPhase)
     }
 
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -77,14 +96,16 @@ object WolfSceneArtEngine {
         progress: Float,
         setting: String = "",
         mood: String = "",
-        continuityKey: Int = 0
+        continuityKey: Int = 0,
+        visualStyle: String = "",
+        horrorType: String = ""
     ) {
         if (width <= 0 || height <= 0) return
 
         val w = width.toFloat()
         val h = height.toFloat()
         val t = progress.coerceIn(0f, 1f)
-        val atmosphere = atmosphereProfile(setting, mood, continuityKey)
+        val atmosphere = atmosphereProfile(setting, mood, continuityKey, visualStyle, horrorType)
         val phase = scene * 0.73f + t * 1.4f + atmosphere.continuityPhase
 
         backgroundPaint.shader = LinearGradient(
