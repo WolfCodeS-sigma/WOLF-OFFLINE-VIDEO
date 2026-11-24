@@ -297,6 +297,12 @@ class StoryPipelineTest {
         assertEquals(scene.mood, context.mood)
         assertEquals(scene.continuityNotes, context.continuityNotes)
         assertEquals(StoryDirectorEngine.StoryEvent.SOUND, context.event)
+        val styledContext = StoryDirectorEngine.sceneRenderContext(
+            scene, "أبيض وأسود نوير", "رعب نفسي"
+        )
+        assertEquals("أبيض وأسود نوير", styledContext.visualStyle)
+        assertEquals("رعب نفسي", styledContext.horrorType)
+        assertTrue(styledContext.continuityKey != context.continuityKey)
         assertEquals(context, StoryDirectorEngine.sceneRenderContext(scene))
         assertEquals(
             "شاطئ أو ساحل",
@@ -350,11 +356,21 @@ class StoryPipelineTest {
         assertEquals(0.42f, StoryDirectorEngine.compositionFocusY("", "زاوية مرتفعة") ?: -1f, 0.0001f)
         assertEquals(null, StoryDirectorEngine.compositionFocusY("تكوين عام بلا زاوية"))
 
-        val hospital = WolfSceneArtEngine.atmosphereProfile("مكان طبي", "رعب سمعي وترقب", 1234)
-        val sameHospitalContinuity = WolfSceneArtEngine.atmosphereProfile("مكان طبي", "رعب سمعي وترقب", 1234)
-        val forest = WolfSceneArtEngine.atmosphereProfile("غابة كثيفة", "رعب سمعي وترقب", 1234)
+        val hospital = WolfSceneArtEngine.atmosphereProfile(
+            "مكان طبي", "رعب سمعي وترقب", 1234, "واقعي", "رعب نفسي"
+        )
+        val sameHospitalContinuity = WolfSceneArtEngine.atmosphereProfile(
+            "مكان طبي", "رعب سمعي وترقب", 1234, "واقعي", "رعب نفسي"
+        )
+        val forest = WolfSceneArtEngine.atmosphereProfile(
+            "غابة كثيفة", "رعب سمعي وترقب", 1234, "واقعي", "رعب نفسي"
+        )
+        val noir = WolfSceneArtEngine.atmosphereProfile(
+            "مكان طبي", "رعب سمعي وترقب", 1234, "أبيض وأسود", "رعب نفسي"
+        )
         assertEquals(hospital, sameHospitalContinuity)
         assertTrue(hospital.middleColor != forest.middleColor)
+        assertTrue(hospital.middleColor != noir.middleColor)
         assertEquals(hospital.continuityPhase, sameHospitalContinuity.continuityPhase, 0.0001f)
     }
 
