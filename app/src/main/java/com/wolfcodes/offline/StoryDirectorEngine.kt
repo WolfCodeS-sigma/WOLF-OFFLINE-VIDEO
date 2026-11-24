@@ -17,6 +17,7 @@ object StoryDirectorEngine {
 
     enum class CameraMovement {
         HOLD,
+        TRACK_LATERAL,
         TRACK_LEFT_TO_RIGHT,
         TRACK_RIGHT_TO_LEFT,
         FOLLOW,
@@ -98,15 +99,23 @@ object StoryDirectorEngine {
     }
 
     /** Translate the director's words into a deterministic camera command, not a generic preset. */
-    fun resolveCameraMovement(motion: String): CameraMovement {
+    fun resolveCameraMovement(motion: String, storyText: String = ""): CameraMovement {
         val value = motion.lowercase(Locale.ROOT)
+        val narrativeDirection = storyText.lowercase(Locale.ROOT)
         return when {
+            value.contains("تثبيت") && value.contains("ثم حركة") -> CameraMovement.SLOW_REVEAL
             value.contains("تثبيت") -> CameraMovement.HOLD
-            value.contains("تتبّع") || value.contains("تتبع") || value.contains("انزلاق جانبي") ->
-                CameraMovement.TRACK_LEFT_TO_RIGHT
-            value.contains("متابعة") -> CameraMovement.FOLLOW
             value.contains("كشف بطيء") -> CameraMovement.SLOW_REVEAL
-            value.contains("اقتراب") -> CameraMovement.SLOW_PUSH_IN
+            value.contains("للداخل") || value.contains("اقتراب") -> CameraMovement.SLOW_PUSH_IN
+            value.contains("تتبّع") || value.contains("تتبع") || value.contains("انزلاق جانبي") ->
+                when {
+                    narrativeDirection.contains("إلى اليمين") || narrativeDirection.contains("نحو اليمين") ->
+                        CameraMovement.TRACK_LEFT_TO_RIGHT
+                    narrativeDirection.contains("إلى اليسار") || narrativeDirection.contains("نحو اليسار") ->
+                        CameraMovement.TRACK_RIGHT_TO_LEFT
+                    else -> CameraMovement.TRACK_LATERAL
+                }
+            value.contains("متابعة") -> CameraMovement.FOLLOW
             value.contains("اهتزاز") -> CameraMovement.RESTRAINED_HANDHELD
             else -> CameraMovement.SLOW_DRIFT
         }
@@ -160,8 +169,8 @@ object StoryDirectorEngine {
     internal fun motionProgress(motion: String, progress: Float): Float {
         val value = progress.coerceIn(0f, 1f)
         return when {
-            motion.contains("تثبيت") -> 0.5f
-            motion.contains("كشف بطيء") || motion.contains("اقتراب بطيء") ->
+            motion.contains("تثبيت") && !motion.contains("ثم حركة") -> 0.5f
+            motion.contains("كشف بطيء") || motion.contains("اقتراب بطيء") || motion.contains("ثم حركة") ->
                 value * value * (3f - 2f * value)
             else -> value
         }
