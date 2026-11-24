@@ -16,6 +16,7 @@ The full staged plan, including the new 2.5D cinematic image engine, local TXT h
 - `WolfProjectStore.kt`: durable local project records with atomic file replacement.
 - `WolfOfflineStoryAiEngine.kt` and `WolfOfflineStoryAiActivity.kt`: local LiteRT-LM story planning, chapter-by-chapter generation, resumable checkpoints, and explicit final approval.
 - `WolfStoryLengthStructureEngine.kt`: offline Arabic/English word counting, deterministic per-chapter word budgets, eight narrative beats, prompt guidance, and quantitative length/reading-time reports.
+- `WolfStoryOriginalityReviewEngine.kt`: offline phrase-overlap review against permitted local references, source-version ledger, internal repeated-phrase checks, and a review gate before final story approval.
 - `WolfHorrorKnowledgeLibrary.kt` and `WolfHorrorKnowledgeLibraryActivity.kt`: private on-device TXT library, categorized/foldered/tagged entries, per-entry local search indexes, source metadata, duplicate detection, original-text preservation, and reference opt-out.
 - `StoryDirectorEngine.kt` and `OfflineSupportEngines.kt`: deterministic story segmentation, shot planning, pacing, and local visual helpers.
 - `WolfSceneArtEngine.kt`, `WolfSceneAssetStore.kt`, and `WolfProceduralMotionEngine.kt`: scene artwork, optional image slots, procedural character/environment motion, fog, particles, rain, spectral silhouettes, and visual effects.

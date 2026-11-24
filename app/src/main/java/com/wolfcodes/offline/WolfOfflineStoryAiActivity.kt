@@ -32,6 +32,7 @@ class WolfOfflineStoryAiActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var planView: TextView
     private lateinit var structureView: TextView
+    private lateinit var originalityView: TextView
     private lateinit var titleField: EditText
     private lateinit var premiseField: EditText
     private lateinit var genreField: EditText
@@ -45,6 +46,15 @@ class WolfOfflineStoryAiActivity : Activity() {
     private lateinit var referenceChoicesContainer: LinearLayout
     private var session: WolfOfflineStoryAiEngine.Session? = null
     private var busy = false
+    @Volatile private var storyTextRevision = 0L
+    private var lastOriginalityReport: WolfStoryOriginalityReviewEngine.Report? = null
+    private var lastOriginalityTextRevision = -1L
+    private var lastOriginalitySelection: Set<String> = emptySet()
+
+    private data class LoadedReferences(
+        val prompts: List<String>,
+        val sources: List<WolfStoryOriginalityReviewEngine.SourceStamp>
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -133,6 +143,12 @@ class WolfOfflineStoryAiActivity : Activity() {
         root.addView(label("تقرير الطول والبنية — WOLF STORY LENGTH & STRUCTURE"))
         structureView = label("سيظهر توزيع الكلمات وإيقاع الفصول هنا")
         root.addView(structureView)
+        root.addView(label("مراجعة الأصالة والمراجع — WOLF STORY ORIGINALITY & REFERENCE REVIEW"))
+        originalityView = label("بعد اكتمال القصة، نفّذ الفحص لمقارنة العبارات مع المراجع المحلية التي استُخدمت أو اخترتها.")
+        root.addView(originalityView)
+        root.addView(button("فحص أصالة القصة والمراجع المحلية").apply {
+            setOnClickListener { reviewOriginality() }
+        })
         root.addView(label("النص النهائي — يمكنك مراجعته وتعديله قبل الاعتماد"))
         storyField = field("ستظهر الفصول هنا بالتتابع", WolfOfflineStoryAiEngine.MAX_STORY_CHARS).apply {
             minLines = 12
@@ -144,6 +160,13 @@ class WolfOfflineStoryAiActivity : Activity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
             override fun afterTextChanged(s: Editable?) {
+                storyTextRevision++
+                lastOriginalityReport = null
+                lastOriginalityTextRevision = -1L
+                lastOriginalitySelection = emptySet()
+                if (::originalityView.isInitialized) {
+                    originalityView.text = "تغير النص؛ أعد فحص الأصالة قبل اعتماد النسخة الحالية."
+                }
                 reportTask?.let { reportHandler.removeCallbacks(it) }
                 val task = Runnable { updateStructureReport() }
                 reportTask = task
@@ -287,19 +310,35 @@ class WolfOfflineStoryAiActivity : Activity() {
             val result = runCatching {
                 if (!model.isLoaded()) model.load(WolfOfflineStoryAiEngine.modelFile(this))
                 val refs = loadReferences(brief.premise, brief.useKnowledgeLibrary, selectedIds)
-                val raw = model.generate(WolfOfflineStoryAiEngine.buildPlanPrompt(brief, refs))
+                val raw = model.generate(WolfOfflineStoryAiEngine.buildPlanPrompt(brief, refs.prompts))
                 val plan = WolfOfflineStoryAiEngine.parsePlan(raw, brief)
-                WolfOfflineStoryAiEngine.newSession(brief, plan).also {
-                    WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), it)
-                }
+                val created = WolfOfflineStoryAiEngine.newSession(brief, plan)
+                WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), created)
+                val ledgerWarning = runCatching {
+                    WolfStoryOriginalityReviewEngine.recordSources(
+                        File(filesDir, WolfStoryOriginalityReviewEngine.DIRECTORY_NAME),
+                        created.id,
+                        "المخطط",
+                        refs.sources
+                    )
+                }.exceptionOrNull()?.message
+                created to ledgerWarning
             }
             runOnUiThread {
-                result.onSuccess {
-                    session = it
-                    planView.text = formatPlan(it)
+                result.onSuccess { (created, ledgerWarning) ->
+                    session = created
+                    lastOriginalityReport = null
+                lastOriginalityTextRevision = -1L
+                    lastOriginalitySelection = emptySet()
+                    planView.text = formatPlan(created)
+                    originalityView.text = "سُجلت المراجع المستخدمة في المخطط. أكمل الفصول ثم نفّذ الفحص."
                     storyField.setText("")
                     storyField.isEnabled = false
-                    setBusy(false, "تم إنشاء المخطط. راجعه ثم ابدأ توليد الفصل الأول.")
+                    setBusy(false, if (ledgerWarning == null) {
+                        "تم إنشاء المخطط. راجعه ثم ابدأ توليد الفصل الأول."
+                    } else {
+                        "تم إنشاء المخطط، لكن تعذر حفظ سجل المراجع: $ledgerWarning"
+                    })
                 }.onFailure { setBusy(false, "تعذر إنشاء المخطط: ${it.message}") }
             }
         }
@@ -322,18 +361,35 @@ class WolfOfflineStoryAiActivity : Activity() {
             val result = runCatching {
                 if (!model.isLoaded()) model.load(WolfOfflineStoryAiEngine.modelFile(this))
                 val refs = loadReferences(current.brief.premise, current.brief.useKnowledgeLibrary, selectedIds)
-                val chapter = model.generate(WolfOfflineStoryAiEngine.buildChapterPrompt(current, refs))
-                WolfOfflineStoryAiEngine.withChapter(current, chapter).also {
-                    WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), it)
-                }
+                val chapter = model.generate(WolfOfflineStoryAiEngine.buildChapterPrompt(current, refs.prompts))
+                val updated = WolfOfflineStoryAiEngine.withChapter(current, chapter)
+                WolfOfflineStoryAiEngine.saveSession(WolfOfflineStoryAiEngine.sessionRoot(this), updated)
+                val ledgerWarning = runCatching {
+                    WolfStoryOriginalityReviewEngine.recordSources(
+                        File(filesDir, WolfStoryOriginalityReviewEngine.DIRECTORY_NAME),
+                        current.id,
+                        "الفصل ${current.nextChapterIndex + 1}",
+                        refs.sources
+                    )
+                }.exceptionOrNull()?.message
+                updated to ledgerWarning
             }
             runOnUiThread {
-                result.onSuccess {
-                    session = it
-                    storyField.setText(formatChapters(it))
-                    storyField.isEnabled = it.isComplete
-                    setBusy(false, if (it.isComplete) "اكتملت الفصول. راجع القصة واعتمدها عند رضاك."
-                    else "تم حفظ الفصل ${it.chapters.size} من ${it.plan.chapterTitles.size}. يمكنك المتابعة لاحقًا.")
+                result.onSuccess { (updated, ledgerWarning) ->
+                    session = updated
+                    lastOriginalityReport = null
+                lastOriginalityTextRevision = -1L
+                    lastOriginalitySelection = emptySet()
+                    originalityView.text = "سُجلت المراجع المستخدمة حتى الآن. نفّذ الفحص بعد اكتمال النص ومراجعته."
+                    storyField.setText(formatChapters(updated))
+                    storyField.isEnabled = updated.isComplete
+                    val normalMessage = if (updated.isComplete) {
+                        "اكتملت الفصول. راجع النص ثم نفّذ فحص الأصالة قبل الاعتماد."
+                    } else {
+                        "تم حفظ الفصل ${updated.chapters.size} من ${updated.plan.chapterTitles.size}. يمكنك المتابعة لاحقًا."
+                    }
+                    setBusy(false, if (ledgerWarning == null) normalMessage
+                    else "$normalMessage تعذر تحديث سجل بعض المراجع: $ledgerWarning")
                 }.onFailure { setBusy(false, "تعذر توليد الفصل: ${it.message}") }
             }
         }
@@ -347,12 +403,18 @@ class WolfOfflineStoryAiActivity : Activity() {
             .toSet()
 
     private fun refreshReferenceChoices() {
-        if (!::referenceChoicesContainer.isInitialized) return
+        if (busy || !::referenceChoicesContainer.isInitialized) return
         worker.execute {
             val root = File(filesDir, "wolf_horror_knowledge_library")
             val allAllowed = WolfHorrorKnowledgeLibrary.selectedStoryReferences(root)
             val entries = allAllowed.take(40)
             runOnUiThread {
+                lastOriginalityReport = null
+                lastOriginalityTextRevision = -1L
+                lastOriginalitySelection = emptySet()
+                if (::originalityView.isInitialized) {
+                    originalityView.text = "تم تحديث قائمة المراجع؛ أعد فحص الأصالة قبل الاعتماد."
+                }
                 referenceChoicesContainer.removeAllViews()
                 if (entries.isEmpty()) {
                     referenceChoicesContainer.addView(label("لا توجد مراجع مسموح بها بعد. أضف قصصًا إلى المكتبة أو فعّل استخدامها من إعداداتها."))
@@ -362,10 +424,17 @@ class WolfOfflineStoryAiActivity : Activity() {
                             text = "${entry.title} — ${entry.sourceType}"
                             tag = entry.id
                             setTextColor(0xFFE0E0E8.toInt())
+                            isEnabled = !busy
                             setOnCheckedChangeListener { view, checked ->
                                 if (checked && selectedReferenceIds().size > 3) {
                                     view.isChecked = false
                                     Toast.makeText(this@WolfOfflineStoryAiActivity, "يمكن اختيار 3 مراجع كحد أقصى", Toast.LENGTH_SHORT).show()
+                                }
+                                lastOriginalityReport = null
+                lastOriginalityTextRevision = -1L
+                                lastOriginalitySelection = emptySet()
+                                if (::originalityView.isInitialized) {
+                                    originalityView.text = "تغير اختيار المراجع؛ أعد فحص الأصالة قبل اعتماد القصة."
                                 }
                             }
                         })
@@ -378,8 +447,8 @@ class WolfOfflineStoryAiActivity : Activity() {
         }
     }
 
-    private fun loadReferences(query: String, enabled: Boolean, selectedIds: Set<String>): List<String> {
-        if (!enabled) return emptyList()
+    private fun loadReferences(query: String, enabled: Boolean, selectedIds: Set<String>): LoadedReferences {
+        if (!enabled) return LoadedReferences(emptyList(), emptyList())
         val root = File(filesDir, "wolf_horror_knowledge_library")
         val matches = if (selectedIds.isNotEmpty()) {
             WolfHorrorKnowledgeLibrary.selectedStoryReferences(root, selectedIds)
@@ -389,11 +458,175 @@ class WolfOfflineStoryAiActivity : Activity() {
             WolfHorrorKnowledgeLibrary.searchStoryReferences(root, focusedQuery)
                 .ifEmpty { WolfHorrorKnowledgeLibrary.searchStoryReferences(root, terms.firstOrNull().orEmpty()) }
         }
-        return matches.take(3).mapNotNull { entry ->
+        val loaded = matches.take(3).mapNotNull { entry ->
             val text = WolfHorrorKnowledgeLibrary.readContent(root, entry.id) ?: return@mapNotNull null
-            "عنوان المرجع: ${entry.title}\nنوع المصدر: ${entry.sourceType}\nملخص: ${entry.summary}\nمقتطف: ${text.take(1_200)}"
+            if (WolfStoryOriginalityReviewEngine.fingerprint(text) != entry.contentFingerprint) {
+                return@mapNotNull null
+            }
+            val source = WolfStoryOriginalityReviewEngine.SourceStamp(
+                id = entry.id,
+                title = entry.title,
+                sourceType = entry.sourceType,
+                sourceLabel = entry.sourceLabel,
+                contentFingerprint = entry.contentFingerprint,
+                sourceDate = entry.sourceDate
+            )
+            val prompt = "عنوان المرجع: ${entry.title}\nنوع المصدر: ${entry.sourceType}\nملخص: ${entry.summary}\nمقتطف: ${text.take(1_200)}"
+            source to prompt
+        }
+        return LoadedReferences(loaded.map { it.second }, loaded.map { it.first })
+    }
+
+    private fun reviewOriginality() {
+        if (busy) return
+        val current = session
+        if (current == null || !current.isComplete) {
+            status.text = "أكمل جميع الفصول أولًا قبل فحص الأصالة والمراجع."
+            return
+        }
+        val storyText = storyField.text.toString().trim()
+        if (storyText.length < 500) {
+            status.text = "النص النهائي أقصر من الحد الأدنى للمراجعة؛ راجعه وأكمل القصة."
+            return
+        }
+        if (storyText.length > WolfStoryOriginalityReviewEngine.MAX_STORY_CHARS) {
+            status.text = "النص تجاوز حد المراجعة المحلي الآمن البالغ 4 ملايين حرف."
+            return
+        }
+
+        val capturedRevision = storyTextRevision
+        val selectedIds = selectedReferenceIds()
+        setBusy(true, "جارٍ فحص العبارات ومقارنتها بالمراجع المحلية...")
+        worker.execute {
+            val reviewResult = runCatching {
+                val ledgerRoot = File(filesDir, WolfStoryOriginalityReviewEngine.DIRECTORY_NAME)
+                val ledgerResult = runCatching {
+                    WolfStoryOriginalityReviewEngine.loadSources(ledgerRoot, current.id)
+                }
+                val historicalSources = ledgerResult.getOrDefault(emptyList())
+                val libraryRoot = File(filesDir, "wolf_horror_knowledge_library")
+                val requestedIds = (historicalSources.map { it.id } + selectedIds).toSet()
+                val permittedEntries = WolfHorrorKnowledgeLibrary
+                    .selectedStoryReferences(libraryRoot, requestedIds)
+                    .associateBy { it.id }
+                val unavailable = historicalSources
+                    .filter { it.id !in permittedEntries }
+                    .map {
+                        WolfStoryOriginalityReviewEngine.UnavailableSource(
+                            it,
+                            "المصدر حُذف أو لم يعد مسموحًا باستخدامه في المراجع"
+                        )
+                    }.toMutableList()
+
+                val candidates = linkedMapOf<String, Pair<WolfStoryOriginalityReviewEngine.SourceStamp, WolfHorrorKnowledgeLibrary.Entry>>()
+                fun sourceStampForEntry(
+                    entry: WolfHorrorKnowledgeLibrary.Entry,
+                    previous: WolfStoryOriginalityReviewEngine.SourceStamp?,
+                    selectedNow: Boolean
+                ): WolfStoryOriginalityReviewEngine.SourceStamp {
+                    val metadataChanged = previous != null && (
+                        previous.title != entry.title ||
+                            previous.sourceType != entry.sourceType ||
+                            previous.sourceLabel != entry.sourceLabel ||
+                            previous.sourceDate != entry.sourceDate
+                        )
+                    val usages = buildList {
+                        addAll(previous?.usages.orEmpty())
+                        if (metadataChanged) add("تم تحديث بيانات المصدر في المكتبة بعد استخدامه")
+                        if (selectedNow) add("اختير للمراجعة الحالية")
+                    }.distinct()
+                    return WolfStoryOriginalityReviewEngine.SourceStamp(
+                        id = entry.id,
+                        title = entry.title,
+                        sourceType = entry.sourceType,
+                        sourceLabel = entry.sourceLabel,
+                        contentFingerprint = entry.contentFingerprint,
+                        sourceDate = entry.sourceDate,
+                        usages = usages
+                    )
+                }
+
+                permittedEntries.values.filter { it.id in selectedIds }.forEach { entry ->
+                    val previous = historicalSources.firstOrNull {
+                        it.id == entry.id && it.contentFingerprint == entry.contentFingerprint
+                    }
+                    val source = sourceStampForEntry(entry, previous, selectedNow = true)
+                    candidates["${source.id}|${source.contentFingerprint}"] = source to entry
+                }
+                historicalSources.forEach { source ->
+                    val entry = permittedEntries[source.id] ?: return@forEach
+                    val sourceForReport = if (source.contentFingerprint == entry.contentFingerprint) {
+                        sourceStampForEntry(entry, source, selectedNow = false)
+                    } else {
+                        source
+                    }
+                    candidates.putIfAbsent(
+                        "${source.id}|${source.contentFingerprint}",
+                        sourceForReport to entry
+                    )
+                }
+
+                val contentCandidates = candidates.values.filter { (source, entry) ->
+                    if (source.contentFingerprint == entry.contentFingerprint) {
+                        true
+                    } else {
+                        unavailable += WolfStoryOriginalityReviewEngine.UnavailableSource(
+                            source,
+                            "تغيرت بصمة المرجع في المكتبة منذ استخدامه؛ لم تتم قراءة محتوى النسخة الجديدة على أنها النسخة القديمة"
+                        )
+                        false
+                    }
+                }
+                val referenceSequence = contentCandidates.asSequence().map { (source, entry) ->
+                    WolfStoryOriginalityReviewEngine.ReferenceText(
+                        source,
+                        WolfHorrorKnowledgeLibrary.readContent(libraryRoot, entry.id).orEmpty()
+                    )
+                }
+                val report = WolfStoryOriginalityReviewEngine.analyze(storyText, referenceSequence, unavailable)
+                report to ledgerResult.exceptionOrNull()?.message
+            }
+            runOnUiThread {
+                reviewResult.onSuccess { (report, ledgerWarning) ->
+                    if (storyTextRevision == capturedRevision && session?.id == current.id) {
+                        originalityView.text = buildString {
+                            append(WolfStoryOriginalityReviewEngine.formatReport(report))
+                            if (ledgerWarning != null) {
+                                appendLine()
+                                appendLine()
+                                append("تعذر قراءة سجل المراجع السابق: $ledgerWarning")
+                            }
+                        }
+                        if (ledgerWarning == null) {
+                            lastOriginalityReport = report
+                            lastOriginalityTextRevision = capturedRevision
+                            lastOriginalitySelection = selectedIds
+                            setBusy(false, "اكتمل فحص الأصالة. راجع النتائج والأمثلة وحدود الفحص قبل الاعتماد.")
+                        } else {
+                            // Never approve a story when historical source usage could not be read:
+                            // the report would otherwise omit references that influenced generation.
+                            lastOriginalityReport = null
+                            lastOriginalityTextRevision = -1L
+                            lastOriginalitySelection = emptySet()
+                            setBusy(false, "تعذر قراءة سجل المراجع السابق؛ لا يمكن اعتماد القصة قبل استعادة السجل وإعادة الفحص.")
+                        }
+                    } else {
+                        lastOriginalityReport = null
+                        lastOriginalityTextRevision = -1L
+                        lastOriginalitySelection = emptySet()
+                        setBusy(false, "تغير النص أثناء الفحص؛ أعد تشغيل مراجعة الأصالة على النسخة الحالية.")
+                    }
+                }.onFailure {
+                    lastOriginalityReport = null
+                    lastOriginalityTextRevision = -1L
+                    lastOriginalitySelection = emptySet()
+                    originalityView.text = "تعذر إكمال فحص الأصالة: ${it.message}"
+                    setBusy(false, "تعذر إكمال مراجعة الأصالة.")
+                }
+            }
         }
     }
+
     private fun updateStructureReport() {
         if (!::structureView.isInitialized || !::storyField.isInitialized) return
         val revision = ++reportRevision
@@ -481,6 +714,13 @@ class WolfOfflineStoryAiActivity : Activity() {
             return
         }
         val finalText = storyField.text.toString().trim()
+        val review = lastOriginalityReport
+        if (review == null || lastOriginalityTextRevision != storyTextRevision ||
+            lastOriginalitySelection != selectedReferenceIds()
+        ) {
+            status.text = "يجب فحص النسخة الحالية واختيارات المراجع أولًا. أي تعديل يتطلب تشغيل المراجعة من جديد."
+            return
+        }
         if (finalText.length < 500) {
             status.text = "النص النهائي قصير جدًا؛ راجع الفصول وأكملها أولًا."
             return
@@ -489,13 +729,63 @@ class WolfOfflineStoryAiActivity : Activity() {
             status.text = "النص النهائي تجاوز الحد المحلي الآمن البالغ 4 ملايين حرف."
             return
         }
+        val reviewConfirmation = buildString {
+            appendLine("نتيجة فحص الأصالة: ${review.overallSeverity.label}")
+            appendLine("نسبة نوافذ العبارات المميزة المتطابقة: ${review.overallOverlapPercent}%")
+            appendLine("عدد المراجع التي قورنت فعليًا: ${review.checkedSources}")
+            appendLine("عدد المراجع غير المتاحة: ${review.unavailableSources.size}")
+            appendLine("عدد التحذيرات وحدود الفحص: ${review.warnings.size}")
+            appendLine()
+            appendLine("التقرير الكامل والأمثلة ظاهرة في قسم مراجعة الأصالة على الشاشة.")
+            append("أؤكد أنني راجعت التقرير وأفهم أن الفحص محلي ومحدود بالمراجع المتاحة، ولا يثبت الأصالة بشكل قاطع. هل تريد اعتماد هذه النسخة وحفظها؟")
+        }
         AlertDialog.Builder(this)
-            .setTitle("اعتماد القصة النهائية")
-            .setMessage("سيتم حفظ النص الذي راجعته الآن كقصة من تأليف التطبيق داخل مكتبة المعرفة. هل توافق؟")
-            .setPositiveButton("اعتماد وحفظ") { _, _ ->
+            .setTitle("مراجعة الأصالة ثم اعتماد القصة")
+            .setMessage(reviewConfirmation)
+            .setPositiveButton("أؤكد المراجعة والاعتماد") { _, _ ->
+                val currentReport = lastOriginalityReport
+                if (currentReport?.storyFingerprint != review.storyFingerprint ||
+                    lastOriginalityTextRevision != storyTextRevision ||
+                    lastOriginalitySelection != selectedReferenceIds()
+                ) {
+                    status.text = "تغير النص بعد المراجعة؛ أعد الفحص قبل الاعتماد."
+                    return@setPositiveButton
+                }
                 setBusy(true, "جارٍ حفظ النسخة النهائية المعتمدة...")
                 worker.execute {
                     val result = runCatching {
+                        require(WolfStoryOriginalityReviewEngine.fingerprint(finalText) == review.storyFingerprint) {
+                            "تغير النص بعد المراجعة. أعد فحص الأصالة قبل الاعتماد."
+                        }
+                        val libraryRoot = File(filesDir, "wolf_horror_knowledge_library")
+                        val checkedSources = review.checkedSourceVersions.distinctBy {
+                            "${it.id}|${it.contentFingerprint}"
+                        }
+                        val checkedIds = checkedSources.map { it.id }.toSet()
+                        val currentEntries = if (checkedIds.isEmpty()) emptyMap() else {
+                            WolfHorrorKnowledgeLibrary.selectedStoryReferences(libraryRoot, checkedIds)
+                                .associateBy { it.id }
+                        }
+                        checkedSources.forEach { source ->
+                            val entry = currentEntries[source.id]
+                                ?: error("تغيرت صلاحية مرجع ${source.title} منذ الفحص. أعد مراجعة الأصالة قبل الاعتماد.")
+                            require(entry.contentFingerprint == source.contentFingerprint) {
+                                "تغير محتوى مرجع ${source.title} منذ الفحص. أعد مراجعة الأصالة قبل الاعتماد."
+                            }
+                            require(
+                                entry.title == source.title &&
+                                    entry.sourceType == source.sourceType &&
+                                    entry.sourceLabel == source.sourceLabel &&
+                                    entry.sourceDate == source.sourceDate
+                            ) {
+                                "تغيرت بيانات مرجع ${source.title} منذ الفحص. أعد مراجعة الأصالة قبل الاعتماد."
+                            }
+                            val currentText = WolfHorrorKnowledgeLibrary.readContent(libraryRoot, source.id)
+                                ?: error("تعذر قراءة مرجع ${source.title}. أعد مراجعة الأصالة قبل الاعتماد.")
+                            require(WolfStoryOriginalityReviewEngine.fingerprint(currentText) == source.contentFingerprint) {
+                                "تغيرت نسخة مرجع ${source.title} منذ الفحص. أعد مراجعة الأصالة قبل الاعتماد."
+                            }
+                        }
                         val root = WolfOfflineStoryAiEngine.sessionRoot(this)
                         // Persist the user's reviewed text before attempting the optional library save.
                         val reviewed = value.copy(
@@ -517,7 +807,6 @@ class WolfOfflineStoryAiActivity : Activity() {
                     runOnUiThread {
                         result.onSuccess { (approved, saved) ->
                             session = approved
-                            storyField.setText(approved.finalText)
                             setBusy(false, when {
                                 saved == null -> "تم اعتماد النص وحفظه داخل جلسة التأليف. الحفظ التلقائي في المكتبة معطّل من إعداداتها."
                                 saved.duplicateOfExisting -> "تم الاعتماد؛ المحتوى موجود بالفعل في المكتبة."
@@ -525,6 +814,10 @@ class WolfOfflineStoryAiActivity : Activity() {
                             })
                         }.onFailure {
                             session = value.copy(finalText = finalText, approved = false)
+                            lastOriginalityReport = null
+                lastOriginalityTextRevision = -1L
+                            lastOriginalitySelection = emptySet()
+                            originalityView.text = "تعذر إكمال الاعتماد. أعد فحص الأصالة قبل المحاولة مرة أخرى."
                             setBusy(false, "تم الاحتفاظ بالنص المعدّل كمسودة إن أمكن؛ تعذر إكمال الاعتماد: ${it.message}")
                         }
                     }
@@ -560,6 +853,15 @@ class WolfOfflineStoryAiActivity : Activity() {
 
     private fun setBusy(value: Boolean, message: String) {
         busy = value
+        if (::storyField.isInitialized) {
+            storyField.isEnabled = !value && session?.isComplete == true
+        }
+        if (::referenceChoicesContainer.isInitialized) {
+            for (index in 0 until referenceChoicesContainer.childCount) {
+                referenceChoicesContainer.getChildAt(index).isEnabled = !value
+            }
+        }
+        if (::libraryToggle.isInitialized) libraryToggle.isEnabled = !value
         status.text = message
     }
 
