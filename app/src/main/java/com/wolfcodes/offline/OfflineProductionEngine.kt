@@ -659,7 +659,7 @@ object OfflineProductionEngine {
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         val safeShotIndex = shotIndex.coerceIn(0, WolfSceneAssetStore.SHOTS_PER_SCENE - 1)
         try {
-            WolfSceneRenderPipeline.render(
+            val renderedBackend = WolfSceneRenderPipeline.render(
                 canvas = c,
                 width = w,
                 height = h,
@@ -676,6 +676,19 @@ object OfflineProductionEngine {
                     "WARNING",
                     "تعذر رسم الصورة المرفوعة؛ تم الرجوع إلى المحرك الإجرائي",
                     reason
+                )
+            }
+            // Add articulated subject/prop motion only to the uploaded-image route.
+            // The established procedural renderer already owns its motion and fallback path.
+            if (renderedBackend == WolfSceneRenderPipeline.Backend.UPLOADED_IMAGE) {
+                WolfCinematicMotionEngine.render(
+                    canvas = c,
+                    width = w,
+                    height = h,
+                    caption = caption,
+                    sceneIndex = scene,
+                    shotIndex = safeShotIndex,
+                    progress = t
                 )
             }
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
