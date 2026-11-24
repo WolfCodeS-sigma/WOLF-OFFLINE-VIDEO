@@ -100,6 +100,86 @@ class StoryPipelineTest {
     }
 
     @Test
+    fun storyboardShotFrameBudgetsPreserveExactSceneFrames() {
+        val plan = StoryDirectorEngine.analyze(
+            "سمعت خطوات في الممر. هربت إلى الغرفة ثم ظهر ظل خلف الباب.",
+            30, "9:16", "رعب سينمائي مظلم", "رعب نفسي", audioDrivenDuration = true
+        )
+        val sceneFrames = OfflineMotionEngine.allocateFrames(
+            plan.scenes.map { it.sourceText }, 360, minimumFramesPerScene = 1
+        )
+        val shotFrames = plan.scenes.mapIndexed { index, scene ->
+            StoryDirectorEngine.allocateShotFrames(
+                sceneFrames[index], scene.shots.map { it.durationSeconds }
+            )
+        }
+        assertEquals(360, shotFrames.sumOf { it.sum() })
+        assertTrue(shotFrames.all { it.isNotEmpty() && it.all { frames -> frames > 0 } })
+        assertEquals(sceneFrames, shotFrames.map { it.sum() })
+    }
+
+    @Test
+    fun storyboardChapterSlicesPreserveShotBoundariesAndFrames() {
+        val shots = listOf(2, 5, 3)
+        val slice = StoryDirectorEngine.sliceShotFrames(shots, startFrame = 4, frameCount = 5)
+        assertEquals(listOf(3, 2), slice)
+        assertEquals(5, slice.sum())
+        assertEquals(2, StoryDirectorEngine.sliceShotPlans(
+            listOf(
+                StoryDirectorEngine.ShotPlan(1, "A", "24mm", "", "", "", 2, ""),
+                StoryDirectorEngine.ShotPlan(2, "B", "50mm", "", "", "", 5, ""),
+                StoryDirectorEngine.ShotPlan(3, "C", "85mm", "", "", "", 3, "")
+            ),
+            shots, startFrame = 4, frameCount = 5
+        ).size)
+    }
+
+    @Test
+    fun chapterStartingAtSecondOrThirdShotKeepsOriginalImageSlots() {
+        val sourceImages = listOf("image-1", "image-2", "image-3")
+        val originalPlans = listOf(
+            StoryDirectorEngine.ShotPlan(1, "A", "24mm", "تكوين واسع", "إضاءة منخفضة", "تثبيت", 2, ""),
+            StoryDirectorEngine.ShotPlan(2, "B", "50mm", "المصدر الصوتي", "إضاءة باردة", "اقتراب بطيء", 5, ""),
+            StoryDirectorEngine.ShotPlan(3, "C", "85mm", "حجب جزئي", "إضاءة ليلية", "كشف بطيء", 3, "")
+        )
+        val originalFrameBudgets = listOf(2, 5, 3)
+
+        val chapterStartingInsideShotTwo = StoryDirectorEngine.sliceShotPlans(
+            originalPlans, originalFrameBudgets, startFrame = 4, frameCount = 6
+        )
+        assertEquals(listOf(2, 3), chapterStartingInsideShotTwo.map { it.number })
+        val secondChapterImages = chapterStartingInsideShotTwo.map { shot ->
+            sourceImages[StoryDirectorEngine.sourceShotIndex(shot.number)]
+        }
+        assertEquals(listOf("image-2", "image-3"), secondChapterImages)
+
+        val chapterStartingAtShotThree = StoryDirectorEngine.sliceShotPlans(
+            originalPlans, originalFrameBudgets, startFrame = 7, frameCount = 3
+        )
+        assertEquals(listOf(3), chapterStartingAtShotThree.map { it.number })
+        assertEquals(
+            listOf("image-3"),
+            chapterStartingAtShotThree.map { shot ->
+                sourceImages[StoryDirectorEngine.sourceShotIndex(shot.number)]
+            }
+        )
+    }
+
+    @Test
+    fun storyboardMotionCompositionAndLightingReachDeterministicRenderIntents() {
+        assertEquals(0.5f, StoryDirectorEngine.motionProgress("تثبيت الكاميرا", 0.9f), 0.0001f)
+        assertEquals(0.5f, StoryDirectorEngine.motionProgress("كشف بطيء ومحدود", 0.5f), 0.0001f)
+        assertEquals(0.64f, StoryDirectorEngine.compositionFocusX("اترك مساحة بصرية للمصدر الصوتي المذكور") ?: -1f, 0.0001f)
+        assertEquals(0.66f, StoryDirectorEngine.compositionFocusX("تكوين اللقطة", "لقطة واسعة مع حجب جزئي للكادر") ?: -1f, 0.0001f)
+        assertEquals(0.38f, StoryDirectorEngine.compositionFocusX("حافظ على الاستمرارية", "لقطة متوسطة من خلف الشخصية") ?: -1f, 0.0001f)
+        assertEquals(null, StoryDirectorEngine.compositionFocusX("تكوين عام بلا توجيه محدد"))
+        assertEquals("COOL", StoryDirectorEngine.lightingTreatment("إضاءة عملية باردة"))
+        assertEquals("NIGHT", StoryDirectorEngine.lightingTreatment("إضاءة ليلية محيطية منخفضة"))
+        assertEquals("SIDE", StoryDirectorEngine.lightingTreatment("إضاءة جانبية درامية"))
+        assertEquals("NEUTRAL", StoryDirectorEngine.lightingTreatment("إضاءة محيطية طبيعية"))
+    }
+
+    @Test
     fun directorCreatesThreeShotDescriptionsPerScene() {
         val story = "دخلت الغرفة. ظهر ظل خلف النافذة."
         val plan = StoryDirectorEngine.analyze(story, 20, "9:16", "سينمائي", "رعب نفسي")
