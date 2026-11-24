@@ -880,6 +880,7 @@ object OfflineProductionEngine {
         val safeShotIndex = shotIndex.coerceIn(0, WolfSceneAssetStore.SHOTS_PER_SCENE - 1)
         val plannedProgress = StoryDirectorEngine.motionProgress(shotPlan?.motion.orEmpty(), t)
         val sceneEvent = sceneRenderContext?.event ?: StoryDirectorEngine.classifyEvent(caption)
+        val sourceSceneIndex = (sceneRenderContext?.sceneNumber?.minus(1) ?: scene).coerceAtLeast(0)
         val cameraMovement = StoryDirectorEngine.resolveCameraMovement(shotPlan?.motion.orEmpty(), caption)
         try {
             if(bitmap != null) {
@@ -932,7 +933,7 @@ object OfflineProductionEngine {
                 source.bottom=source.top+cropHeight
                 val camera = if (depthLayersAvailable) {
                     OfflineMotionEngine.cameraFrame(
-                        shotProgress, scene, caption, safeShotIndex, cameraMovement
+                        shotProgress, sourceSceneIndex, caption, safeShotIndex, cameraMovement
                     )
                 } else null
                 val plannedZoom = when {
@@ -981,7 +982,7 @@ object OfflineProductionEngine {
                             canvas = c,
                             width = w,
                             height = h,
-                            sceneIndex = scene,
+                            sceneIndex = sourceSceneIndex,
                             progress = shotProgress,
                             layers = imageLayers,
                             source = layerSource,
@@ -1030,7 +1031,7 @@ object OfflineProductionEngine {
                 // Procedural scenes contain atmosphere only, so the planned camera can move
                 // this background safely without inventing or deforming story subjects.
                 val sceneCamera = OfflineMotionEngine.cameraFrame(
-                    plannedProgress, scene, caption, safeShotIndex, cameraMovement
+                    plannedProgress, sourceSceneIndex, caption, safeShotIndex, cameraMovement
                 )
                 val compositionSave = c.save()
                 try {
@@ -1044,7 +1045,7 @@ object OfflineProductionEngine {
                     c.translate(-w * 0.5f, -h * 0.5f)
                     WolfSceneArtEngine.draw(
                         c, w, h, caption,
-                        scene * WolfSceneAssetStore.SHOTS_PER_SCENE + safeShotIndex,
+                        sourceSceneIndex * WolfSceneAssetStore.SHOTS_PER_SCENE + safeShotIndex,
                         plannedProgress,
                         setting = sceneRenderContext?.setting.orEmpty(),
                         mood = sceneRenderContext?.mood.orEmpty(),
@@ -1059,7 +1060,7 @@ object OfflineProductionEngine {
                 width = w,
                 height = h,
                 caption = caption,
-                sceneIndex = scene,
+                sceneIndex = sourceSceneIndex,
                 shotIndex = safeShotIndex,
                 progress = plannedProgress,
                 storyEvent = sceneEvent,
