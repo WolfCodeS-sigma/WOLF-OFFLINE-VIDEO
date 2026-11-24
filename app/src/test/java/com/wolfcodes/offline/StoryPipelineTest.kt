@@ -332,6 +332,14 @@ class StoryPipelineTest {
             StoryDirectorEngine.CameraMovement.TRACK_RIGHT_TO_LEFT,
             StoryDirectorEngine.resolveCameraMovement("تتبّع جانبي", "تحركت الشخصية نحو اليسار")
         )
+        assertEquals(
+            StoryDirectorEngine.CameraMovement.RESTRAINED_HANDHELD,
+            StoryDirectorEngine.resolveCameraMovement(
+                "تثبيت قصير ثم حركة دقيقة",
+                "تتحرك الشخصية داخل الممر",
+                "لقطة قريبة بعدسة 85mm مع اهتزاز محدود"
+            )
+        )
 
         val trackStart = OfflineMotionEngine.cameraFrame(
             0f, 0, "مطاردة", 0, StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT
