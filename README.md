@@ -23,6 +23,7 @@ The full staged plan, including the new 2.5D cinematic image engine, local TXT h
 - `OfflineProductionEngine.kt`: local frame rendering, H.264 MP4 encoding, audio integration, long-film chapter handling, checkpoint support, recovery paths, and export quality inspection.
 - `WolfStoryVoiceEngine.kt`, `WolfAudioMixer.kt`, `WolfAudioTranscoder.kt`, and `WolfSoundFxEngine.kt`: local narration recording, approval state, audio processing, and procedural sound effects.
 - `WolfLongFilmEngine.kt`: chapter planning and resumable chapter checkpoints.
+- `WolfFilmProductionCoordinator.kt`: Phase 14 orchestration for 12-scene/36-shot plans, shot-aligned five-minute chapters, resumable motion offsets, and ordered film assembly.
 - `WolfDiagnostics.kt`, `WolfResourceGuard.kt`, `WolfMemoryManager.kt`, and `WolfFilmQualityInspector.kt`: diagnostics, resource protection, memory safeguards, and output inspection.
 - `app/src/test`: offline unit tests.
 
