@@ -33,23 +33,23 @@ object WolfSceneArtEngine {
     ): AtmosphereProfile {
         val colors = when {
             setting.contains("مكان طبي") ->
-                intArrayOf(Color.rgb(2, 7, 14), Color.rgb(8, 17, 27), Color.rgb(3, 7, 13), Color.rgb(132, 158, 180))
+                intArrayOf(opaqueRgb(2, 7, 14), opaqueRgb(8, 17, 27), opaqueRgb(3, 7, 13), opaqueRgb(132, 158, 180))
             setting.contains("غابة") ->
-                intArrayOf(Color.rgb(2, 7, 8), Color.rgb(7, 15, 17), Color.rgb(2, 7, 10), Color.rgb(112, 146, 148))
+                intArrayOf(opaqueRgb(2, 7, 8), opaqueRgb(7, 15, 17), opaqueRgb(2, 7, 10), opaqueRgb(112, 146, 148))
             setting.contains("شاطئ") || setting.contains("بحر") ->
-                intArrayOf(Color.rgb(2, 7, 15), Color.rgb(5, 17, 27), Color.rgb(2, 8, 14), Color.rgb(116, 151, 172))
+                intArrayOf(opaqueRgb(2, 7, 15), opaqueRgb(5, 17, 27), opaqueRgb(2, 8, 14), opaqueRgb(116, 151, 172))
             setting.contains("مقابر") ->
-                intArrayOf(Color.rgb(4, 7, 8), Color.rgb(11, 15, 13), Color.rgb(3, 6, 7), Color.rgb(126, 143, 132))
+                intArrayOf(opaqueRgb(4, 7, 8), opaqueRgb(11, 15, 13), opaqueRgb(3, 6, 7), opaqueRgb(126, 143, 132))
             setting.contains("صحراء") ->
-                intArrayOf(Color.rgb(12, 8, 8), Color.rgb(23, 14, 12), Color.rgb(8, 7, 8), Color.rgb(164, 137, 120))
+                intArrayOf(opaqueRgb(12, 8, 8), opaqueRgb(23, 14, 12), opaqueRgb(8, 7, 8), opaqueRgb(164, 137, 120))
             setting.contains("ممر") || setting.contains("داخلي") ->
-                intArrayOf(Color.rgb(4, 6, 10), Color.rgb(12, 13, 18), Color.rgb(4, 5, 9), Color.rgb(142, 150, 164))
+                intArrayOf(opaqueRgb(4, 6, 10), opaqueRgb(12, 13, 18), opaqueRgb(4, 5, 9), opaqueRgb(142, 150, 164))
             setting.contains("طريق") || setting.contains("شارع") ->
-                intArrayOf(Color.rgb(5, 7, 11), Color.rgb(17, 11, 14), Color.rgb(4, 6, 9), Color.rgb(154, 145, 148))
+                intArrayOf(opaqueRgb(5, 7, 11), opaqueRgb(17, 11, 14), opaqueRgb(4, 6, 9), opaqueRgb(154, 145, 148))
             setting.contains("مكان داخلي") ->
-                intArrayOf(Color.rgb(5, 5, 9), Color.rgb(16, 10, 14), Color.rgb(4, 4, 8), Color.rgb(153, 145, 153))
+                intArrayOf(opaqueRgb(5, 5, 9), opaqueRgb(16, 10, 14), opaqueRgb(4, 4, 8), opaqueRgb(153, 145, 153))
             else ->
-                intArrayOf(Color.rgb(3, 5, 9), Color.rgb(12, 8, 13), Color.rgb(4, 5, 9), Color.rgb(156, 164, 176))
+                intArrayOf(opaqueRgb(3, 5, 9), opaqueRgb(12, 8, 13), opaqueRgb(4, 5, 9), opaqueRgb(156, 164, 176))
         }
         val styleLower = visualStyle.lowercase(java.util.Locale.ROOT)
         val finalColors = if (
@@ -57,8 +57,8 @@ object WolfSceneArtEngine {
             styleLower.contains("نوير") || styleLower.contains("black and white")
         ) {
             intArrayOf(
-                Color.rgb(4, 5, 7), Color.rgb(16, 17, 19),
-                Color.rgb(3, 4, 5), Color.rgb(142, 144, 148)
+                opaqueRgb(4, 5, 7), opaqueRgb(16, 17, 19),
+                opaqueRgb(3, 4, 5), opaqueRgb(142, 144, 148)
             )
         } else colors
         val eventFogScale = when {
@@ -77,6 +77,9 @@ object WolfSceneArtEngine {
         val continuityPhase = Math.floorMod(continuityKey, 1009) / 1009f * 6.2831853f
         return AtmosphereProfile(finalColors[0], finalColors[1], finalColors[2], finalColors[3], fogScale, continuityPhase)
     }
+
+    private fun opaqueRgb(red: Int, green: Int, blue: Int): Int =
+        (0xFF shl 24) or ((red and 0xFF) shl 16) or ((green and 0xFF) shl 8) or (blue and 0xFF)
 
     private val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val fogPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
