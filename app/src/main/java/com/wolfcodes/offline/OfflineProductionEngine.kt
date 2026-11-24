@@ -406,8 +406,22 @@ object OfflineProductionEngine {
         val finalReference = mediaReference
             ?: throw IllegalStateException("تم حفظ الفيديو لكن تعذر الحصول على مرجع لملف التسليم")
         val requiresAudioTrack = audioUri != null || generatedAudio != null
+        val expectedNarrationOnly = audioUri != null && generatedAudio == null
+        val expectedAudioStartUs = if (expectedNarrationOnly) audioTimeline.narrationOffsetUs else null
+        val expectedAudioEndUs = if (expectedNarrationOnly) {
+            Math.addExact(audioTimeline.narrationOffsetUs, narrationLimitUs)
+        } else null
         val qualityReport = WolfFilmQualityInspector.inspect(
-            context, finalReference, totalVideoSeconds, requiresAudioTrack
+            context = context,
+            mediaReference = finalReference,
+            expectedDurationSeconds = totalVideoSeconds,
+            requireAudio = requiresAudioTrack,
+            expectedVideoWidth = outputWidth,
+            expectedVideoHeight = outputHeight,
+            expectedVideoFrames = totalVideoFrames.toLong(),
+            expectedFrameRate = fps,
+            expectedAudioStartUs = expectedAudioStartUs,
+            expectedAudioEndUs = expectedAudioEndUs
         )
         if (!qualityReport.passed) {
             if (finalReference.startsWith("content://")) {

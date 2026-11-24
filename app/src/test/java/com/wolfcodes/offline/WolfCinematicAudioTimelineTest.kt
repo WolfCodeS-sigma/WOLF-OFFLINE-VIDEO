@@ -7,6 +7,46 @@ import org.junit.Test
 
 class WolfCinematicAudioTimelineTest {
     @Test
+    fun shortNarrationDoesNotShortenTheUserSelectedThirtySecondFilm() {
+        val plan = WolfCinematicAudioTimeline.create(30, true, 7_000L)
+
+        assertEquals(3, plan.introSeconds)
+        assertEquals(7, plan.narrationSeconds)
+        assertEquals(30, plan.totalVideoSeconds)
+        assertEquals(3_000_000L, plan.narrationOffsetUs)
+        assertEquals(7_000_000L, plan.narrationLimitUs)
+    }
+
+    @Test
+    fun narrationLongerThanTheSelectedBodyExtendsVideoWithoutTrimmingAudio() {
+        val plan = WolfCinematicAudioTimeline.create(30, true, 40_000L)
+
+        assertEquals(3, plan.introSeconds)
+        assertEquals(40, plan.narrationSeconds)
+        assertEquals(43, plan.totalVideoSeconds)
+        assertEquals(3_000_000L, plan.narrationOffsetUs)
+        assertEquals(40_000_000L, plan.narrationLimitUs)
+    }
+
+    @Test
+    fun shortNarrationKeepsTheSelectedDurationWhenIntroIsDisabled() {
+        val plan = WolfCinematicAudioTimeline.create(30, false, 7_000L)
+
+        assertEquals(0, plan.introSeconds)
+        assertEquals(30, plan.totalVideoSeconds)
+        assertEquals(0L, plan.narrationOffsetUs)
+        assertEquals(7_000_000L, plan.narrationLimitUs)
+    }
+
+    @Test
+    fun narrationMustFitAfterIntroEvenWhenItOnlySlightlyExceedsTheRemainingBody() {
+        val plan = WolfCinematicAudioTimeline.create(30, true, 27_500L)
+
+        assertEquals(31, plan.totalVideoSeconds)
+        assertEquals(27_500_000L, plan.narrationLimitUs)
+    }
+
+    @Test
     fun narrationStartsAfterThreeSecondIntroAndVideoKeepsBothDurations() {
         val plan = WolfCinematicAudioTimeline.create(123, true, 120_000L)
         assertEquals(3, plan.introSeconds)

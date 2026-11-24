@@ -28,9 +28,11 @@ data class WolfCinematicAudioTimeline(
                 ((it + 999L) / 1000L).toInt().coerceAtLeast(1)
             }
             val requestedBodySeconds = (requestedDurationSeconds - intro).coerceAtLeast(1)
-            // Keep the established five-second minimum film duration without extending narration.
+            // The user's requested body duration is the minimum target. Extend it only
+            // when the complete narration needs more room after the optional intro.
             val bodySeconds = maxOf(
-                narrationSeconds ?: requestedBodySeconds,
+                requestedBodySeconds,
+                narrationSeconds ?: 0,
                 (5 - intro).coerceAtLeast(1)
             )
             return WolfCinematicAudioTimeline(
