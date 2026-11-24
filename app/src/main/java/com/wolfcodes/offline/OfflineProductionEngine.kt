@@ -71,6 +71,11 @@ object OfflineProductionEngine {
         audioDurationMs: Long?,
         includeIntro: Boolean = false
     ): AudioTimeline {
+        if (narrationTimingEnabled) {
+            require(audioDurationMs != null && audioDurationMs in 1_000L..1_800_000L) {
+                "مدة تسجيل الراوي المعتمد غير صالحة"
+            }
+        }
         val timeline = WolfCinematicAudioTimeline.create(
             requestedDurationSeconds = requestedFilmSeconds.coerceIn(1, 1800),
             includeIntro = includeIntro,
@@ -136,8 +141,13 @@ object OfflineProductionEngine {
         val h = dimensions.second
         val fps = 12
         val requestedTotal = seconds.coerceIn(1, 1800)
-        val useNarrationTiming = audioDurationIsAuthoritative && audioUri != null &&
-            audioDurationMs != null && audioDurationMs in 1_000L..1_800_000L
+        if (audioDurationIsAuthoritative) {
+            require(audioUri != null) { "مصدر تسجيل الراوي المعتمد غير موجود" }
+            require(audioDurationMs != null && audioDurationMs in 1_000L..1_800_000L) {
+                "مدة تسجيل الراوي المعتمد غير صالحة؛ أعد التحقق من التسجيل قبل التصدير"
+            }
+        }
+        val useNarrationTiming = audioDurationIsAuthoritative && audioUri != null
         val audioTimeline = buildAudioTimeline(
             requestedFilmSeconds = requestedTotal,
             narrationTimingEnabled = useNarrationTiming,
@@ -149,7 +159,7 @@ object OfflineProductionEngine {
         // The approved voice recording defines the true film runtime when narration timing is enabled.
         // Round up only for second-based planning; frame allocation below uses the exact audio duration.
         val totalVideoSeconds = ((filmDurationUs + 999_999L) / 1_000_000L)
-            .toInt().coerceIn(1, 1800)
+            .toInt().coerceIn(1, 1803)
         val totalVideoFrames = ((filmDurationUs * fps + 999_999L) / 1_000_000L)
             .toInt().coerceAtLeast(1)
         val introSeconds = audioTimeline.introSeconds
@@ -408,7 +418,7 @@ object OfflineProductionEngine {
         val requiresAudioTrack = audioUri != null || generatedAudio != null
         val expectedNarrationOnly = audioUri != null && generatedAudio == null
         val expectedAudioStartUs = if (expectedNarrationOnly) audioTimeline.narrationOffsetUs else null
-        val expectedAudioEndUs = if (expectedNarrationOnly) {
+        val expectedAudioEndUs = if (expectedNarrationOnly && useNarrationTiming) {
             Math.addExact(audioTimeline.narrationOffsetUs, narrationLimitUs)
         } else null
         val qualityReport = WolfFilmQualityInspector.inspect(

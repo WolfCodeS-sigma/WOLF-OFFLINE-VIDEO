@@ -111,8 +111,13 @@ object WolfFilmQualityInspector {
             issues += "عدد إطارات الفيديو الفعلي ${videoSamples.count} بدلًا من $expectedVideoFrames"
         }
 
-        val estimatedFrameRate = if (duration != null && duration!! > 0.0 && videoSamples.count > 0L) {
-            videoSamples.count / duration!!
+        val videoTimestampSpanUs = if (
+            videoSamples.firstPresentationTimeUs != null && videoSamples.lastPresentationTimeUs != null
+        ) {
+            videoSamples.lastPresentationTimeUs!! - videoSamples.firstPresentationTimeUs!!
+        } else 0L
+        val estimatedFrameRate = if (videoSamples.count > 1L && videoTimestampSpanUs > 0L) {
+            (videoSamples.count - 1L) * 1_000_000.0 / videoTimestampSpanUs.toDouble()
         } else null
         if (expectedFrameRate != null) {
             if (estimatedFrameRate == null) {
