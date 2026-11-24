@@ -103,6 +103,14 @@ class MainActivity : Activity() {
         root.addView(soundEffectsToggle)
 
         root.addView(button("حفظ المشروع").apply { setOnClickListener { saveProject() } })
+        root.addView(button("فتح WOLF HORROR KNOWLEDGE LIBRARY").apply {
+            setOnClickListener {
+                startActivity(android.content.Intent(this@MainActivity, WolfHorrorKnowledgeLibraryActivity::class.java))
+            }
+        })
+        root.addView(button("إضافة القصة الحالية إلى المكتبة").apply {
+            setOnClickListener { saveCurrentStoryToKnowledgeLibrary() }
+        })
         root.addView(label("يمكن إنشاء المشاهد تلقائيًا من نص القصة دون صور مرجعية أو اتصال بالإنترنت؛ الصور اختيارية فقط."))
         root.addView(button("اختيار صور متعددة (اختياري)").apply {
             setOnClickListener { chooseMultipleImages() }
@@ -303,6 +311,49 @@ class MainActivity : Activity() {
             }.onFailure { showError(it) }
         }
         refreshProjectList()
+    }
+
+    private fun saveCurrentStoryToKnowledgeLibrary() {
+        val story = storyField.text.toString().trim()
+        if (story.length < 20) {
+            status.text = "اكتب القصة أولًا قبل إضافتها إلى المكتبة"
+            return
+        }
+        val title = titleField.text.toString().trim().ifBlank {
+            story.lineSequence().firstOrNull { it.isNotBlank() }?.take(48) ?: "قصة مستخدم"
+        }
+        status.text = "جارٍ حفظ نسخة من القصة في مكتبة المعرفة..."
+        worker.execute {
+            val result = runCatching {
+                WolfHorrorKnowledgeLibrary.createFromText(
+                    File(filesDir, "wolf_horror_knowledge_library"),
+                    WolfHorrorKnowledgeLibrary.Draft(
+                        title = title,
+                        category = "قصص المستخدم",
+                        folder = "قصصي المضافة",
+                        tags = listOf("من محرر الفيلم"),
+                        sourceType = WolfHorrorKnowledgeLibrary.SOURCE_USER_SUBMITTED,
+                        sourceLabel = "أضيفت من محرر WOLF OFFLINE VIDEO",
+                        includeInStoryReferences = true
+                    ),
+                    story
+                )
+            }
+            runOnUiThread {
+                result.onSuccess { saved ->
+                    status.text = if (saved.duplicateOfExisting) {
+                        "هذه القصة موجودة بالفعل في المكتبة: " + saved.entry.title
+                    } else {
+                        "تم حفظ نسخة مستقلة من القصة داخل WOLF HORROR KNOWLEDGE LIBRARY"
+                    }
+                    Toast.makeText(
+                        this,
+                        if (saved.duplicateOfExisting) "القصة موجودة بالفعل" else "تمت إضافة القصة إلى المكتبة",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }.onFailure { showError(it) }
+            }
+        }
     }
 
     private fun saveProject() {
