@@ -56,13 +56,13 @@ class StoryPipelineTest {
 
     
     @Test
-    fun approvedNarrationDurationDefinesActualFilmRuntime() {
+    fun approvedNarrationKeepsSelectedFilmDurationAndOnlyExtendsWhenNeeded() {
         val shorterNarration = OfflineProductionEngine.buildAudioTimeline(
             requestedFilmSeconds = 30,
             narrationTimingEnabled = true,
             audioDurationMs = 7_000L
         )
-        assertEquals(7_000_000L, shorterNarration.filmDurationUs)
+        assertEquals(30_000_000L, shorterNarration.filmDurationUs)
         assertEquals(7_000_000L, shorterNarration.narrationLimitUs)
 
         val longerNarration = OfflineProductionEngine.buildAudioTimeline(
@@ -81,13 +81,14 @@ class StoryPipelineTest {
         assertEquals(30_000_000L, withoutNarrationTiming.filmDurationUs)
         assertEquals(30_000_000L, withoutNarrationTiming.narrationLimitUs)
 
-        val missingNarrationDuration = OfflineProductionEngine.buildAudioTimeline(
-            requestedFilmSeconds = 30,
-            narrationTimingEnabled = true,
-            audioDurationMs = null
-        )
-        assertEquals(30_000_000L, missingNarrationDuration.filmDurationUs)
-        assertEquals(30_000_000L, missingNarrationDuration.narrationLimitUs)
+        val missingNarrationDuration = runCatching {
+            OfflineProductionEngine.buildAudioTimeline(
+                requestedFilmSeconds = 30,
+                narrationTimingEnabled = true,
+                audioDurationMs = null
+            )
+        }
+        assertTrue(missingNarrationDuration.isFailure)
     }
 
     @Test
