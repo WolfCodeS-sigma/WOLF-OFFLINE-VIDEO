@@ -887,7 +887,9 @@ object OfflineProductionEngine {
         val plannedProgress = StoryDirectorEngine.motionProgress(shotPlan?.motion.orEmpty(), t)
         val sceneEvent = sceneRenderContext?.event ?: StoryDirectorEngine.classifyEvent(caption)
         val sourceSceneIndex = (sceneRenderContext?.sceneNumber?.minus(1) ?: scene).coerceAtLeast(0)
-        val cameraMovement = StoryDirectorEngine.resolveCameraMovement(shotPlan?.motion.orEmpty(), caption)
+        val cameraMovement = StoryDirectorEngine.resolveCameraMovement(
+            shotPlan?.motion.orEmpty(), caption, shotPlan?.camera.orEmpty()
+        )
         try {
             if(bitmap != null) {
                 c.drawColor(android.graphics.Color.BLACK)
