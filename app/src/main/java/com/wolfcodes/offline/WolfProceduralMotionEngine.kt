@@ -119,7 +119,7 @@ object WolfProceduralMotionEngine {
 
         drawAtDepth(canvas, width, height, sceneIndex, t, 0.16f, continuityKey) {
             drawAtmosphere(this, width, height, sceneIndex, t)
-            if (features.hasReveal || features.hasChase) {
+            if (features.hasReveal || features.hasChase || storyEvent == StoryDirectorEngine.StoryEvent.SOUND) {
                 drawEnvironmentalPulse(this, width, height, sceneIndex, t, features.hasChase)
             }
         }
