@@ -340,6 +340,22 @@ class StoryPipelineTest {
                 "لقطة قريبة بعدسة 85mm مع اهتزاز محدود"
             )
         )
+        val chasePlan = StoryDirectorEngine.analyze(
+            "هربت الشخصية عبر الممر وواصلت الركض.", 18, "9:16", "سينمائي", "رعب نفسي"
+        )
+        assertEquals(
+            StoryDirectorEngine.StoryEvent.CHASE,
+            StoryDirectorEngine.classifyEvent(chasePlan.scenes.first().sourceText)
+        )
+        assertEquals(3, chasePlan.scenes.first().shots.size)
+        assertEquals(
+            StoryDirectorEngine.CameraMovement.TRACK_LATERAL,
+            StoryDirectorEngine.resolveCameraMovement(
+                chasePlan.scenes.first().shots.first().motion,
+                chasePlan.scenes.first().sourceText,
+                chasePlan.scenes.first().shots.first().camera
+            )
+        )
 
         val trackStart = OfflineMotionEngine.cameraFrame(
             0f, 0, "مطاردة", 0, StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT
