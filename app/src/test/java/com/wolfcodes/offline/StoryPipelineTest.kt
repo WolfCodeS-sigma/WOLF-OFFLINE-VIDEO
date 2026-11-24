@@ -120,7 +120,7 @@ class StoryPipelineTest {
 
     @Test
     fun renderRevisionInvalidatesLegacyStoryboardCheckpointFingerprint() {
-        assertEquals("storyboard-planner-v3", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
+        assertEquals("storyboard-planner-v4", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
         assertEquals(2, WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION)
 
         val legacy = WolfLongFilmEngine.fingerprint(
@@ -282,6 +282,120 @@ class StoryPipelineTest {
         assertEquals("NIGHT", StoryDirectorEngine.lightingTreatment("إضاءة ليلية محيطية منخفضة"))
         assertEquals("SIDE", StoryDirectorEngine.lightingTreatment("إضاءة جانبية درامية"))
         assertEquals("NEUTRAL", StoryDirectorEngine.lightingTreatment("إضاءة محيطية طبيعية"))
+    }
+
+    @Test
+    fun storyboardRenderContextCarriesEventSettingAndStableContinuity() {
+        val story = "وصلت إلى المستشفى وسمعت همسًا خلف الباب."
+        val plan = StoryDirectorEngine.analyze(
+            story, 20, "9:16", "رعب سينمائي مظلم", "رعب نفسي"
+        )
+        val scene = plan.scenes.first()
+        val context = StoryDirectorEngine.sceneRenderContext(scene)
+
+        assertEquals(scene.setting, context.setting)
+        assertEquals(scene.mood, context.mood)
+        assertEquals(scene.continuityNotes, context.continuityNotes)
+        assertEquals(StoryDirectorEngine.StoryEvent.SOUND, context.event)
+        val styledContext = StoryDirectorEngine.sceneRenderContext(
+            scene, "أبيض وأسود نوير", "رعب نفسي"
+        )
+        assertEquals("أبيض وأسود نوير", styledContext.visualStyle)
+        assertEquals("رعب نفسي", styledContext.horrorType)
+        assertTrue(styledContext.continuityKey != context.continuityKey)
+        assertEquals(context, StoryDirectorEngine.sceneRenderContext(scene))
+        assertEquals(
+            "شاطئ أو ساحل",
+            StoryDirectorEngine.analyze(
+                "وصلت إلى شاطئ البحر ليلًا.", 10, "9:16", "سينمائي", "رعب نفسي"
+            ).scenes.first().setting
+        )
+        assertEquals(
+            context.continuityKey,
+            StoryDirectorEngine.sceneRenderContext(scene.copy(mood = "مزاج مختلف لنفس الموقع")).continuityKey
+        )
+    }
+
+    @Test
+    fun storyboardCameraIntentChangesTheActualCameraTransform() {
+        val still = OfflineMotionEngine.cameraFrame(
+            0.9f, 0, "قصة اختبار", 0, StoryDirectorEngine.CameraMovement.HOLD
+        )
+        assertEquals(0f, still.zoom, 0.0001f)
+        assertEquals(0f, still.offsetX, 0.0001f)
+        assertEquals(0f, still.rotationDegrees, 0.0001f)
+        assertEquals(
+            StoryDirectorEngine.CameraMovement.SLOW_REVEAL,
+            StoryDirectorEngine.resolveCameraMovement("تثبيت قصير ثم حركة دقيقة تكشف التفصيل")
+        )
+        assertEquals(
+            StoryDirectorEngine.CameraMovement.TRACK_RIGHT_TO_LEFT,
+            StoryDirectorEngine.resolveCameraMovement("تتبّع جانبي", "تحركت الشخصية نحو اليسار")
+        )
+        assertEquals(
+            StoryDirectorEngine.CameraMovement.RESTRAINED_HANDHELD,
+            StoryDirectorEngine.resolveCameraMovement(
+                "تثبيت قصير ثم حركة دقيقة",
+                "تتحرك الشخصية داخل الممر",
+                "لقطة قريبة بعدسة 85mm مع اهتزاز محدود"
+            )
+        )
+        val chasePlan = StoryDirectorEngine.analyze(
+            "هربت الشخصية عبر الممر وواصلت الركض.", 18, "9:16", "سينمائي", "رعب نفسي"
+        )
+        assertEquals(
+            StoryDirectorEngine.StoryEvent.CHASE,
+            StoryDirectorEngine.classifyEvent(chasePlan.scenes.first().sourceText)
+        )
+        assertEquals(3, chasePlan.scenes.first().shots.size)
+        assertEquals(
+            StoryDirectorEngine.CameraMovement.TRACK_LATERAL,
+            StoryDirectorEngine.resolveCameraMovement(
+                chasePlan.scenes.first().shots.first().motion,
+                chasePlan.scenes.first().sourceText,
+                chasePlan.scenes.first().shots.first().camera
+            )
+        )
+
+        val trackStart = OfflineMotionEngine.cameraFrame(
+            0f, 0, "مطاردة", 0, StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT
+        )
+        val trackEnd = OfflineMotionEngine.cameraFrame(
+            1f, 0, "مطاردة", 0, StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT
+        )
+        assertTrue(trackStart.offsetX < trackEnd.offsetX)
+
+        val pushStart = OfflineMotionEngine.cameraFrame(
+            0f, 0, "ترقب", 1, StoryDirectorEngine.CameraMovement.SLOW_PUSH_IN
+        )
+        val pushEnd = OfflineMotionEngine.cameraFrame(
+            1f, 0, "ترقب", 1, StoryDirectorEngine.CameraMovement.SLOW_PUSH_IN
+        )
+        assertTrue(pushEnd.zoom > pushStart.zoom)
+    }
+
+    @Test
+    fun compositionVerticalAnchorAndSceneAtmosphereFollowStoryboardContext() {
+        assertEquals(0.58f, StoryDirectorEngine.compositionFocusY("", "زاوية منخفضة") ?: -1f, 0.0001f)
+        assertEquals(0.42f, StoryDirectorEngine.compositionFocusY("", "زاوية مرتفعة") ?: -1f, 0.0001f)
+        assertEquals(null, StoryDirectorEngine.compositionFocusY("تكوين عام بلا زاوية"))
+
+        val hospital = WolfSceneArtEngine.atmosphereProfile(
+            "مكان طبي", "رعب سمعي وترقب", 1234, "واقعي", "رعب نفسي"
+        )
+        val sameHospitalContinuity = WolfSceneArtEngine.atmosphereProfile(
+            "مكان طبي", "رعب سمعي وترقب", 1234, "واقعي", "رعب نفسي"
+        )
+        val forest = WolfSceneArtEngine.atmosphereProfile(
+            "غابة كثيفة", "رعب سمعي وترقب", 1234, "واقعي", "رعب نفسي"
+        )
+        val noir = WolfSceneArtEngine.atmosphereProfile(
+            "مكان طبي", "رعب سمعي وترقب", 1234, "أبيض وأسود", "رعب نفسي"
+        )
+        assertEquals(hospital, sameHospitalContinuity)
+        assertTrue(hospital.middleColor != forest.middleColor)
+        assertTrue(hospital.middleColor != noir.middleColor)
+        assertEquals(hospital.continuityPhase, sameHospitalContinuity.continuityPhase, 0.0001f)
     }
 
     @Test
