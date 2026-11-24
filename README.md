@@ -29,6 +29,7 @@ The full staged plan, including the new 2.5D cinematic image engine, local TXT h
 - `WolfDiagnostics.kt`, `WolfResourceGuard.kt`, `WolfMemoryManager.kt`, and `WolfFilmQualityInspector.kt`: diagnostics, resource protection, memory safeguards, and output inspection.
 - `app/src/test`: offline unit tests.
 - `docs/WOLF_AUDIO_CINEMATIC_IDENTITY_PHASE_15.md`: Phase 15 implementation notes and verification boundaries.
+- `docs/PHASE_16_OFFLINE_RUNTIME_CLOSURE.md`: offline boundary, audit findings, and verification limits.
 
 ## Build requirements
 
@@ -41,11 +42,17 @@ Open the repository as an Android Gradle project in a compatible IDE, or use a G
 
 ## Verification policy
 
-The continuous-integration workflow is intentionally limited to Android lint and local JVM unit tests. It does not build an APK, start an emulator, or run instrumentation tests. Device/runtime verification is a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
+The continuous-integration workflow runs the offline runtime contract check, Android lint, and local JVM unit tests. It does not build an APK, start an emulator, or run instrumentation tests. Device/runtime verification is a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
 
 ## Privacy and connectivity
 
+The application runtime is designed to operate without internet access. The Android manifest does not request Internet or network-state permissions. The production source is guarded against common network APIs, embedded HTTP(S) endpoints, WebView, and unapproved direct runtime dependencies by the `:app:verifyOfflineRuntime` Gradle task.
+
 Project records, narration recordings, horror knowledge TXT entries, their indexes, rendering, and exported media are stored locally. The offline production path does not require an account, API key, paid service, remote controller, or cloud backup. User-selected image URIs are retained as local document references.
+
+The story-writing AI uses the on-device LiteRT-LM runtime. A compatible `.litertlm` model file must be selected and imported by the user from local storage before AI story generation can run. The application does not download model weights. Without an imported model, the user can still write or paste a story manually and use the local film-production pipeline.
+
+The offline contract task is a source/manifest/direct-dependency guard. It is not a physical-device network-capture test and cannot prove the behavior of Android, the operating system, or transitive native code at runtime. CI verification must therefore not be described as a completed device test.
 
 ## Output
 
