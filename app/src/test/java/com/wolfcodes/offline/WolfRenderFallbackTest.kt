@@ -16,6 +16,50 @@ class WolfRenderFallbackTest {
     }
 
     @Test
+    fun noSelectedUserImageKeepsTheProceduralSceneFallbackAvailable() {
+        OfflineProductionEngine.validateRenderFallbackState(
+            userImageSelected = false,
+            imageAvailable = false,
+            imageRecycled = false
+        )
+    }
+
+    @Test
+    fun validSelectedUserImageRemainsOnTheUploadedImagePath() {
+        OfflineProductionEngine.validateRenderFallbackState(
+            userImageSelected = true,
+            imageAvailable = true,
+            imageRecycled = false
+        )
+    }
+
+    @Test
+    fun missingSelectedUserImageFailsInsteadOfSwitchingToProceduralArtwork() {
+        val failure = runCatching {
+            OfflineProductionEngine.validateRenderFallbackState(
+                userImageSelected = true,
+                imageAvailable = false,
+                imageRecycled = false
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+    }
+
+    @Test
+    fun recycledBitmapFailsInsteadOfSwitchingToProceduralArtwork() {
+        val failure = runCatching {
+            OfflineProductionEngine.validateRenderFallbackState(
+                userImageSelected = true,
+                imageAvailable = true,
+                imageRecycled = true
+            )
+        }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+    }
+
+    @Test
     fun heuristicColorSegmentationCannotEnableDepthAwareMotion() {
         val candidate = WolfImageDepthSegmenter.analyze(
             width = 20,

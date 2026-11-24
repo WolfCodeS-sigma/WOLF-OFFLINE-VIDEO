@@ -44,6 +44,23 @@ object OfflineProductionEngine {
     internal fun useSafeStillImageFallback(semanticSegmentationValidated: Boolean): Boolean =
         !semanticSegmentationValidated
 
+    /**
+     * A procedural scene is valid only when no user image was selected.
+     * A selected image that is missing or recycled must fail closed, never become generated art.
+     */
+    internal fun validateRenderFallbackState(
+        userImageSelected: Boolean,
+        imageAvailable: Boolean,
+        imageRecycled: Boolean
+    ) {
+        check(!imageRecycled) {
+            "صورة المستخدم لم تعد صالحة أثناء الرندر؛ أوقفنا التصدير بدل استبدالها بمشهد إجرائي"
+        }
+        check(!userImageSelected || imageAvailable) {
+            "صورة المستخدم المحددة غير متاحة أثناء الرندر؛ أوقفنا التصدير بدل استبدالها بمشهد إجرائي"
+        }
+    }
+
     /** Estimates peak free space while temporary MP4 and final output copies overlap. */
     internal fun estimatePeakStorageBytes(
         durationSeconds: Int,
@@ -766,7 +783,8 @@ object OfflineProductionEngine {
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
                                 w, h, scenes[s], s, sourceShotIndex, shotProgress, image, imageLayers, includeWatermark,
-                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps, shotPlan
+                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps, shotPlan,
+                                userImageSelected = shotUri != null
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
                             track = drained.first
@@ -837,14 +855,20 @@ object OfflineProductionEngine {
         shotIndex: Int, t: Float, bitmap: Bitmap?, imageLayers: WolfImageDepthSegmenter.Layers?,
         includeWatermark: Boolean, typographyCue: WolfHorrorTypographyEngine.Cue?,
         sceneFrameIndex: Int, fps: Int,
-        shotPlan: StoryDirectorEngine.ShotPlan? = null
+        shotPlan: StoryDirectorEngine.ShotPlan? = null,
+        userImageSelected: Boolean = bitmap != null
     ) {
+        validateRenderFallbackState(
+            userImageSelected = userImageSelected,
+            imageAvailable = bitmap != null,
+            imageRecycled = bitmap?.isRecycled == true
+        )
         val c: Canvas = surface.lockCanvas(null)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         val safeShotIndex = shotIndex.coerceIn(0, WolfSceneAssetStore.SHOTS_PER_SCENE - 1)
         val plannedProgress = StoryDirectorEngine.motionProgress(shotPlan?.motion.orEmpty(), t)
         try {
-            if(bitmap != null && !bitmap.isRecycled) {
+            if(bitmap != null) {
                 c.drawColor(android.graphics.Color.BLACK)
                 val source=Rect(0,0,bitmap.width,bitmap.height)
                 val targetRatio=w.toFloat()/h.toFloat()
@@ -1106,15 +1130,18 @@ object OfflineProductionEngine {
             if (phase % 2 == 0) 2.2f else -1.6f
         } else 0f
         val save = canvas.save()
-        canvas.rotate(if (phase % 7 == 0) -0.45f else 0.18f, x, y)
-        paint.style = Paint.Style.STROKE
-        paint.strokeWidth = (w * 0.0018f).coerceIn(0.8f, 1.8f)
-        paint.color = android.graphics.Color.argb((alpha * 0.42f).toInt(), 95, 0, 10)
-        canvas.drawText(cue.text, x + jitter, y, paint)
-        paint.style = Paint.Style.FILL
-        paint.color = android.graphics.Color.argb(alpha, 235, 32, 48)
-        canvas.drawText(cue.text, x + jitter, y, paint)
-        canvas.restoreToCount(save)
+        try {
+            canvas.rotate(if (phase % 7 == 0) -0.45f else 0.18f, x, y)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = (w * 0.0018f).coerceIn(0.8f, 1.8f)
+            paint.color = android.graphics.Color.argb((alpha * 0.42f).toInt(), 95, 0, 10)
+            canvas.drawText(cue.text, x + jitter, y, paint)
+            paint.style = Paint.Style.FILL
+            paint.color = android.graphics.Color.argb(alpha, 235, 32, 48)
+            canvas.drawText(cue.text, x + jitter, y, paint)
+        } finally {
+            canvas.restoreToCount(save)
+        }
     }
 
     /** Three-second branded wolf signature, rendered locally with no external artwork. */
