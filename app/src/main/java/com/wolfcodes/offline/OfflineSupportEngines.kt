@@ -138,8 +138,15 @@ object OfflineMotionEngine {
      * repeat the same pan/zoom pattern. The source remains a still image; this is 2.5D
      * camera motion, not generated character or object animation.
      */
-    fun cameraFrame(progress: Float, scene: Int, caption: String, shotIndex: Int): CameraFrame {
+    fun cameraFrame(
+        progress: Float,
+        scene: Int,
+        caption: String,
+        shotIndex: Int,
+        movement: StoryDirectorEngine.CameraMovement? = null
+    ): CameraFrame {
         val t = progress.coerceIn(0f, 1f)
+        if (movement != null) return cameraFrameForMovement(t, scene, movement)
         val eased = t * t * (3f - 2f * t)
         val wave = sin(t * (2f * PI) + scene * 0.61).toFloat()
         val envelope = sin(PI * t).toFloat().coerceAtLeast(0f)
@@ -216,6 +223,50 @@ object OfflineMotionEngine {
             offsetY = panY.coerceIn(-0.10f, 0.10f),
             rotationDegrees = rotation.coerceIn(-0.65f, 0.65f)
         )
+    }
+
+    private fun cameraFrameForMovement(
+        progress: Float,
+        scene: Int,
+        movement: StoryDirectorEngine.CameraMovement
+    ): CameraFrame {
+        val t = progress.coerceIn(0f, 1f)
+        val eased = t * t * (3f - 2f * t)
+        val wave = sin(t * (2.0 * PI) + scene * 0.61).toFloat()
+        val envelope = sin(PI * t).toFloat().coerceAtLeast(0f)
+        return when (movement) {
+            StoryDirectorEngine.CameraMovement.HOLD ->
+                CameraFrame(zoom = 0f, offsetX = 0f, offsetY = 0f, rotationDegrees = 0f)
+            StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT ->
+                CameraFrame(0.006f * eased, -0.040f + 0.080f * eased, -0.004f * envelope, 0f)
+            StoryDirectorEngine.CameraMovement.TRACK_RIGHT_TO_LEFT ->
+                CameraFrame(0.006f * eased, 0.040f - 0.080f * eased, 0.004f * envelope, 0f)
+            StoryDirectorEngine.CameraMovement.FOLLOW ->
+                CameraFrame(0.014f * eased, -0.028f + 0.056f * eased, 0.006f * wave * envelope, 0f)
+            StoryDirectorEngine.CameraMovement.SLOW_PUSH_IN ->
+                CameraFrame(0.036f * eased, 0f, 0.003f * wave * envelope, 0f)
+            StoryDirectorEngine.CameraMovement.SLOW_REVEAL -> {
+                val reveal = ((t - 0.42f) / 0.58f).coerceIn(0f, 1f)
+                val revealEase = reveal * reveal * (3f - 2f * reveal)
+                CameraFrame(0.028f * revealEase, 0.012f * revealEase, -0.018f * revealEase, 0f)
+            }
+            StoryDirectorEngine.CameraMovement.RESTRAINED_HANDHELD ->
+                CameraFrame(
+                    zoom = 0.010f * eased,
+                    offsetX = sin(t * (10.0 * PI) + scene).toFloat() * 0.008f * envelope,
+                    offsetY = sin(t * (8.0 * PI) + scene * 0.4).toFloat() * 0.006f * envelope,
+                    rotationDegrees = sin(t * (8.0 * PI) + scene).toFloat() * 0.16f * envelope
+                )
+            StoryDirectorEngine.CameraMovement.SLOW_DRIFT ->
+                CameraFrame(0.014f * eased, -0.015f + 0.030f * eased, 0.006f * wave * envelope, 0f)
+        }.let { frame ->
+            frame.copy(
+                zoom = frame.zoom.coerceIn(-0.012f, 0.045f),
+                offsetX = frame.offsetX.coerceIn(-0.06f, 0.06f),
+                offsetY = frame.offsetY.coerceIn(-0.04f, 0.04f),
+                rotationDegrees = frame.rotationDegrees.coerceIn(-0.20f, 0.20f)
+            )
+        }
     }
 
     fun cameraZoom(progress: Float, scene: Int, caption: String): Float {
