@@ -34,8 +34,14 @@ object WolfSceneArtEngine {
                 intArrayOf(Color.rgb(2, 7, 14), Color.rgb(8, 17, 27), Color.rgb(3, 7, 13), Color.rgb(132, 158, 180))
             setting.contains("غابة") ->
                 intArrayOf(Color.rgb(2, 7, 8), Color.rgb(7, 15, 17), Color.rgb(2, 7, 10), Color.rgb(112, 146, 148))
+            setting.contains("شاطئ") || setting.contains("بحر") ->
+                intArrayOf(Color.rgb(2, 7, 15), Color.rgb(5, 17, 27), Color.rgb(2, 8, 14), Color.rgb(116, 151, 172))
             setting.contains("مقابر") ->
                 intArrayOf(Color.rgb(4, 7, 8), Color.rgb(11, 15, 13), Color.rgb(3, 6, 7), Color.rgb(126, 143, 132))
+            setting.contains("صحراء") ->
+                intArrayOf(Color.rgb(12, 8, 8), Color.rgb(23, 14, 12), Color.rgb(8, 7, 8), Color.rgb(164, 137, 120))
+            setting.contains("ممر") || setting.contains("داخلي") ->
+                intArrayOf(Color.rgb(4, 6, 10), Color.rgb(12, 13, 18), Color.rgb(4, 5, 9), Color.rgb(142, 150, 164))
             setting.contains("طريق") || setting.contains("شارع") ->
                 intArrayOf(Color.rgb(5, 7, 11), Color.rgb(17, 11, 14), Color.rgb(4, 6, 9), Color.rgb(154, 145, 148))
             setting.contains("مكان داخلي") ->
