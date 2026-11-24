@@ -312,6 +312,14 @@ class StoryPipelineTest {
         assertEquals(0f, still.zoom, 0.0001f)
         assertEquals(0f, still.offsetX, 0.0001f)
         assertEquals(0f, still.rotationDegrees, 0.0001f)
+        assertEquals(
+            StoryDirectorEngine.CameraMovement.SLOW_REVEAL,
+            StoryDirectorEngine.resolveCameraMovement("تثبيت قصير ثم حركة دقيقة تكشف التفصيل")
+        )
+        assertEquals(
+            StoryDirectorEngine.CameraMovement.TRACK_RIGHT_TO_LEFT,
+            StoryDirectorEngine.resolveCameraMovement("تتبّع جانبي", "تحركت الشخصية نحو اليسار")
+        )
 
         val trackStart = OfflineMotionEngine.cameraFrame(
             0f, 0, "مطاردة", 0, StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT
