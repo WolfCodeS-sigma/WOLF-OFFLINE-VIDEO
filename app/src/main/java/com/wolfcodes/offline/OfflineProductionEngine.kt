@@ -56,6 +56,28 @@ object OfflineProductionEngine {
         return oneVideoCopy * videoCopies + audioAllowance + EXPORT_SAFETY_MARGIN_BYTES
     }
 
+    internal data class AudioTimeline(
+        val filmDurationUs: Long,
+        val narrationLimitUs: Long
+    )
+
+    /** Keep the requested film clock independent from the optional narration clock. */
+    internal fun buildAudioTimeline(
+        requestedFilmSeconds: Int,
+        narrationTimingEnabled: Boolean,
+        audioDurationMs: Long?
+    ): AudioTimeline {
+        val filmDurationUs = requestedFilmSeconds.coerceIn(1, 1800).toLong() * 1_000_000L
+        val narrationLimitUs = if (
+            narrationTimingEnabled && audioDurationMs != null && audioDurationMs in 1_000L..1_800_000L
+        ) {
+            audioDurationMs * 1_000L
+        } else {
+            filmDurationUs
+        }
+        return AudioTimeline(filmDurationUs, narrationLimitUs)
+    }
+
     data class Result(
         val scenes: Int,
         val frames: Int,
@@ -141,10 +163,13 @@ object OfflineProductionEngine {
             )
         } else emptyList()
         // Narration may end early; the video and generated effects retain the full film timeline.
-        val filmDurationUs = totalVideoSeconds.toLong() * 1_000_000L
-        val narrationLimitUs = if (useNarrationTiming) {
-            (audioDurationMs ?: 1000L).coerceIn(1000L, 1_800_000L) * 1000L
-        } else filmDurationUs
+        val audioTimeline = buildAudioTimeline(
+            requestedFilmSeconds = totalVideoSeconds,
+            narrationTimingEnabled = useNarrationTiming,
+            audioDurationMs = audioDurationMs
+        )
+        val filmDurationUs = audioTimeline.filmDurationUs
+        val narrationLimitUs = audioTimeline.narrationLimitUs
         val name = "wolf_offline_${System.currentTimeMillis()}.mp4"
         val tempDir = File(context.cacheDir, "WOLF_OFFLINE").apply { mkdirs() }
         // Reserve for overlapping temporary/final MP4 copies, optional AAC, and a safety margin.
@@ -417,20 +442,25 @@ object OfflineProductionEngine {
                 val chapterImages = chapter.slices.map { slice ->
                     sceneImageUris.getOrElse(slice.sceneIndex) { emptyList() }
                 }
-                val chapterShotBudgets = chapter.slices.map { slice ->
-                    StoryDirectorEngine.sliceShotFrames(
-                        shotFrameBudgets.getOrElse(slice.sceneIndex) { emptyList() },
-                        slice.startFrame,
-                        slice.frameCount
-                    )
-                }
-                val chapterShotPlans = chapter.slices.map { slice ->
-                    StoryDirectorEngine.sliceShotPlans(
+                val chapterShotSegments = chapter.slices.map { slice ->
+                    StoryDirectorEngine.sliceShotSegments(
                         shotPlansPerScene.getOrElse(slice.sceneIndex) { emptyList() },
                         shotFrameBudgets.getOrElse(slice.sceneIndex) { emptyList() },
                         slice.startFrame,
                         slice.frameCount
                     )
+                }
+                val chapterShotBudgets = chapterShotSegments.map { segments ->
+                    segments.map { it.frameCount }
+                }
+                val chapterShotPlans = chapterShotSegments.map { segments ->
+                    segments.map { it.shotPlan }
+                }
+                val chapterShotOffsets = chapterShotSegments.map { segments ->
+                    segments.map { it.startOffsetFrames }
+                }
+                val chapterShotFullFrameCounts = chapterShotSegments.map { segments ->
+                    segments.map { it.totalShotFrames }
                 }
                 val chapterCues = chapter.slices.map { slice ->
                     val source = typographyCues.getOrNull(slice.sceneIndex) ?: return@map null
@@ -449,7 +479,8 @@ object OfflineProductionEngine {
                             totalSlices
                         )
                     },
-                    bitRate, chapterShotBudgets, chapterShotPlans
+                    bitRate, chapterShotBudgets, chapterShotPlans,
+                    chapterShotOffsets, chapterShotFullFrameCounts
                 )
                 WolfLongFilmCheckpointStore.markCompleted(
                     context, projectId, chapter.number, chapterFile
@@ -574,7 +605,9 @@ object OfflineProductionEngine {
         typographyCues: List<WolfHorrorTypographyEngine.Cue?>,
         introSeconds: Int, onSceneProgress: ((Int, Int) -> Unit)?, bitRate: Int,
         shotFrameBudgets: List<List<Int>>? = null,
-        shotPlansPerScene: List<List<StoryDirectorEngine.ShotPlan>>? = null) {
+        shotPlansPerScene: List<List<StoryDirectorEngine.ShotPlan>>? = null,
+        shotFrameOffsets: List<List<Int>>? = null,
+        fullShotFrameCounts: List<List<Int>>? = null) {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, 0x7F000789)
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate.coerceIn(400_000, 2_500_000))
@@ -644,7 +677,14 @@ object OfflineProductionEngine {
                     try {
                         for (f in 0 until shotFrames) {
                             if (f % (fps * 5) == 0) WolfResourceGuard.ensureSafeToContinue(context)
-                            val shotProgress = f.toFloat() / max(1, shotFrames - 1)
+                            val shotFrameOffset = shotFrameOffsets?.getOrNull(s)?.getOrNull(shotIndex) ?: 0
+                            val fullShotFrameCount = fullShotFrameCounts?.getOrNull(s)?.getOrNull(shotIndex)
+                                ?: shotFrames
+                            val shotProgress = StoryDirectorEngine.progressForShotFrame(
+                                shotFrameOffset,
+                                f,
+                                fullShotFrameCount
+                            )
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
                                 w, h, scenes[s], s, sourceShotIndex, shotProgress, image, imageLayers, includeWatermark,

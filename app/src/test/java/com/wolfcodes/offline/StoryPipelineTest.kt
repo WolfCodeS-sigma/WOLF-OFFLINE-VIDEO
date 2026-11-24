@@ -57,22 +57,29 @@ class StoryPipelineTest {
     
     @Test
     fun requestedFilmDurationIsIndependentFromShortNarration() {
-        val requestedFilmSeconds = 30
-        val narrationSeconds = 7
-        val fps = 12
-        val totalFrames = requestedFilmSeconds * fps
-        val sceneTexts = StoryDirectorEngine.fitSceneTextsToDuration(
-            (1..11).map { "مشهد رقم $it" },
-            requestedFilmSeconds
-        )
-        val frameCounts = OfflineMotionEngine.allocateFrames(
-            sceneTexts, totalFrames, minimumFramesPerScene = 1
+        val timeline = OfflineProductionEngine.buildAudioTimeline(
+            requestedFilmSeconds = 30,
+            narrationTimingEnabled = true,
+            audioDurationMs = 7_000L
         )
 
-        assertEquals(30, requestedFilmSeconds)
-        assertEquals(7, narrationSeconds)
-        assertEquals(360, frameCounts.sum())
-        assertEquals(requestedFilmSeconds * fps, frameCounts.sum())
+        assertEquals(30_000_000L, timeline.filmDurationUs)
+        assertEquals(7_000_000L, timeline.narrationLimitUs)
+
+        val withoutNarrationTiming = OfflineProductionEngine.buildAudioTimeline(
+            requestedFilmSeconds = 30,
+            narrationTimingEnabled = false,
+            audioDurationMs = 7_000L
+        )
+        assertEquals(30_000_000L, withoutNarrationTiming.filmDurationUs)
+        assertEquals(30_000_000L, withoutNarrationTiming.narrationLimitUs)
+
+        val missingNarrationDuration = OfflineProductionEngine.buildAudioTimeline(
+            requestedFilmSeconds = 30,
+            narrationTimingEnabled = true,
+            audioDurationMs = null
+        )
+        assertEquals(30_000_000L, missingNarrationDuration.narrationLimitUs)
     }
 
     @Test
@@ -162,6 +169,40 @@ class StoryPipelineTest {
             chapterStartingAtShotThree.map { shot ->
                 sourceImages[StoryDirectorEngine.sourceShotIndex(shot.number)]
             }
+        )
+    }
+
+    @Test
+    fun chapterBoundaryPreservesProgressWithinAnInterruptedShot() {
+        val shots = listOf(
+            StoryDirectorEngine.ShotPlan(1, "A", "24mm", "", "", "تثبيت", 2, ""),
+            StoryDirectorEngine.ShotPlan(2, "B", "50mm", "", "", "اقتراب بطيء", 5, ""),
+            StoryDirectorEngine.ShotPlan(3, "C", "85mm", "", "", "كشف بطيء", 3, "")
+        )
+        val segments = StoryDirectorEngine.sliceShotSegments(
+            shots,
+            listOf(2, 5, 3),
+            startFrame = 4,
+            frameCount = 6
+        )
+
+        assertEquals(listOf(2, 3), segments.map { it.shotPlan.number })
+        assertEquals(2, segments[0].startOffsetFrames)
+        assertEquals(3, segments[0].frameCount)
+        assertEquals(5, segments[0].totalShotFrames)
+        assertEquals(0, segments[1].startOffsetFrames)
+        assertEquals(3, segments[1].frameCount)
+        assertEquals(3, segments[1].totalShotFrames)
+
+        assertEquals(
+            0.5f,
+            StoryDirectorEngine.progressForShotFrame(segments[0].startOffsetFrames, 0, segments[0].totalShotFrames),
+            0.0001f
+        )
+        assertEquals(
+            1f,
+            StoryDirectorEngine.progressForShotFrame(segments[0].startOffsetFrames, 2, segments[0].totalShotFrames),
+            0.0001f
         )
     }
 

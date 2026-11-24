@@ -6,6 +6,12 @@ import java.util.Locale
 object StoryDirectorEngine {
     data class ShotPlan(val number: Int, val type: String, val camera: String, val composition: String,
         val lighting: String, val motion: String, val durationSeconds: Int, val prompt: String)
+    data class ShotFrameSlice(
+        val shotPlan: ShotPlan,
+        val frameCount: Int,
+        val startOffsetFrames: Int,
+        val totalShotFrames: Int
+    )
     data class ScenePlan(val number: Int, val sourceText: String, val setting: String, val mood: String,
         val continuityNotes: String, val durationSeconds: Int, val shots: List<ShotPlan>)
     data class FilmPlan(val totalDurationSeconds: Int, val aspectRatio: String, val visualStyle: String,
@@ -59,6 +65,19 @@ object StoryDirectorEngine {
         require(shotNumber > 0) { "رقم اللقطة يجب أن يكون موجبًا" }
         require(shotsPerScene > 0) { "عدد لقطات المشهد يجب أن يكون موجبًا" }
         return (shotNumber - 1) % shotsPerScene
+    }
+
+    /** Return the normalized progress of a frame within its original, unsliced shot. */
+    internal fun progressForShotFrame(
+        startOffsetFrames: Int,
+        frameIndex: Int,
+        totalShotFrames: Int
+    ): Float {
+        require(startOffsetFrames >= 0 && frameIndex >= 0)
+        require(totalShotFrames > 0 && startOffsetFrames + frameIndex < totalShotFrames) {
+            "إطار اللقطة خارج نطاقها الأصلي"
+        }
+        return (startOffsetFrames + frameIndex).toFloat() / maxOf(1, totalShotFrames - 1)
     }
 
     /** Convert the planned motion description into a restrained normalized timeline. */
@@ -117,20 +136,57 @@ object StoryDirectorEngine {
         return result
     }
 
+    /**
+     * Intersect a chapter slice with the original shot ranges while preserving each
+     * shot's offset and full frame count. The offset prevents motion from restarting
+     * when a chapter boundary falls in the middle of a shot.
+     */
+    fun sliceShotSegments(
+        shots: List<ShotPlan>,
+        shotFrames: List<Int>,
+        startFrame: Int,
+        frameCount: Int
+    ): List<ShotFrameSlice> {
+        require(shots.isNotEmpty() && shots.size == shotFrames.size)
+        require(startFrame >= 0 && frameCount > 0)
+        require(shotFrames.all { it > 0 })
+        val totalFrames = shotFrames.sum()
+        require(startFrame <= totalFrames && frameCount <= totalFrames - startFrame) {
+            "شريحة الفصل تتجاوز نطاق إطارات المشهد"
+        }
+        val endFrame = startFrame + frameCount
+        val result = mutableListOf<ShotFrameSlice>()
+        var cursor = 0
+        shots.forEachIndexed { index, shot ->
+            val shotStart = cursor
+            val shotEnd = shotStart + shotFrames[index]
+            val overlapStart = maxOf(startFrame, shotStart)
+            val overlapEnd = minOf(endFrame, shotEnd)
+            if (overlapEnd > overlapStart) {
+                result.add(
+                    ShotFrameSlice(
+                        shotPlan = shot,
+                        frameCount = overlapEnd - overlapStart,
+                        startOffsetFrames = overlapStart - shotStart,
+                        totalShotFrames = shotFrames[index]
+                    )
+                )
+            }
+            cursor = shotEnd
+        }
+        require(result.sumOf { it.frameCount } == frameCount) {
+            "تعذر مطابقة كل إطارات شريحة الفصل مع اللقطات الأصلية"
+        }
+        return result
+    }
+
     /** Intersect a scene's shot-frame ranges with one chapter slice without losing frames. */
     fun sliceShotFrames(shotFrames: List<Int>, startFrame: Int, frameCount: Int): List<Int> {
-        require(startFrame >= 0 && frameCount > 0)
-        require(shotFrames.isNotEmpty() && shotFrames.all { it > 0 })
-        val endFrame = startFrame + frameCount
-        val result = mutableListOf<Int>()
-        var cursor = 0
-        shotFrames.forEach { length ->
-            val overlap = (minOf(endFrame, cursor + length) - maxOf(startFrame, cursor)).coerceAtLeast(0)
-            if (overlap > 0) result.add(overlap)
-            cursor += length
+        val placeholderShots = shotFrames.mapIndexed { index, _ ->
+            ShotPlan(index + 1, "", "", "", "", "", 1, "")
         }
-        require(result.sum() == frameCount) { "شريحة الفصل تتجاوز نطاق إطارات المشهد" }
-        return result
+        return sliceShotSegments(placeholderShots, shotFrames, startFrame, frameCount)
+            .map { it.frameCount }
     }
 
     /** Return the shot descriptions intersecting a chapter slice, preserving their order. */
@@ -139,20 +195,8 @@ object StoryDirectorEngine {
         shotFrames: List<Int>,
         startFrame: Int,
         frameCount: Int
-    ): List<ShotPlan> {
-        require(shots.size == shotFrames.size)
-        val endFrame = startFrame + frameCount
-        val result = mutableListOf<ShotPlan>()
-        var cursor = 0
-        shots.forEachIndexed { index, shot ->
-            if (minOf(endFrame, cursor + shotFrames[index]) > maxOf(startFrame, cursor)) {
-                result.add(shot)
-            }
-            cursor += shotFrames[index]
-        }
-        require(result.isNotEmpty()) { "لا توجد لقطة مخططة ضمن شريحة الفصل" }
-        return result
-    }
+    ): List<ShotPlan> = sliceShotSegments(shots, shotFrames, startFrame, frameCount)
+        .map { it.shotPlan }
 
     fun promptsForSharing(plan: FilmPlan): String = plan.scenes.flatMap { it.shots }.joinToString("\n\n") { shot ->
         "اللقطة ${shot.number} — ${shot.type}\n${shot.prompt}"
