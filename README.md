@@ -30,7 +30,9 @@ WOLF OFFLINE VIDEO builds a film locally from story text, optional user-selected
 
 Open the repository as an Android Gradle project in a compatible IDE, or use a Gradle installation to run the verification tasks.
 
-- `docs/WOLF_STAGE_11_ENGINE_COMPATIBILITY_POC.md` and `engine-pocs/`: isolated Stage 11 compatibility POCs. Godot is the preferred Cocos fallback candidate because it provides an Android library/host model; the isolated POC now tests a bundled project render. Cocos remains blocked pending a licensed Creator GUI export. No POC is a production dependency.
+- `docs/WOLF_STAGE_11_ENGINE_COMPATIBILITY_POC.md` and `engine-pocs/`: Stage 11 compatibility evidence. The projects under `engine-pocs/` remain isolated. Godot is the preferred Cocos fallback candidate after its Android sample-scene render proof; Cocos remains blocked pending a licensed Creator-generated Android export and rendered-frame proof.
+- `docs/WOLF_STAGE_12_FINAL_ENGINE_ROLES_AR.md`: final role allocation for WOLF Motion Hub, Godot, Filament, libGDX, KorGE, Lottie, Cocos, SceneView, and Blender, including proof levels and production-integration gates.
+- `HorrorVideoExporter.kt`: separate Filament prototype path, launched only from the Debug-only UI control and not yet connected to the ordinary `OfflineProductionEngine` film pipeline. Its Filament dependencies are currently declared in the main app Gradle configuration; see the Stage 12 document for the Release packaging caveat.
 
 ## Verification policy
 
