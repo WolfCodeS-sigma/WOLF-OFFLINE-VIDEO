@@ -553,6 +553,7 @@ object OfflineProductionEngine {
             }
             for (s in scenes.indices) {
                 WolfResourceGuard.ensureSafeToContinue(context)
+                val proceduralPlan = WolfProceduralSceneProductionEngine.plan(scenes[s], s)
                 val sceneFrames = framesPerScene[s]
                 val baseShotFrames = sceneFrames / WolfSceneAssetStore.SHOTS_PER_SCENE
                 val extraShotFrames = sceneFrames % WolfSceneAssetStore.SHOTS_PER_SCENE
@@ -582,7 +583,7 @@ object OfflineProductionEngine {
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
                                 w, h, scenes[s], s, shotIndex, shotProgress, image, imageLayers, includeWatermark,
-                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps
+                                typographyCues.getOrNull(s), sceneFrameOffset + f, fps, proceduralPlan
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
                             track = drained.first
@@ -652,7 +653,8 @@ object OfflineProductionEngine {
         surface: Surface, w: Int, h: Int, caption: String, scene: Int,
         shotIndex: Int, t: Float, bitmap: Bitmap?, imageLayers: WolfImageDepthSegmenter.Layers?,
         includeWatermark: Boolean, typographyCue: WolfHorrorTypographyEngine.Cue?,
-        sceneFrameIndex: Int, fps: Int
+        sceneFrameIndex: Int, fps: Int,
+        proceduralPlan: WolfProceduralSceneProductionEngine.ScenePlan
     ) {
         val c: Canvas = surface.lockCanvas(null)
         val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -743,17 +745,26 @@ object OfflineProductionEngine {
                     c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
                 }
             } else {
-                WolfSceneArtEngine.draw(c, w, h, caption, scene * WolfSceneAssetStore.SHOTS_PER_SCENE + shotIndex, t)
+                WolfProceduralSceneProductionEngine.render(
+                    canvas = c,
+                    width = w,
+                    height = h,
+                    plan = proceduralPlan,
+                    shotIndex = safeShotIndex,
+                    progress = t
+                )
             }
-            WolfProceduralMotionEngine.renderDepthAware(
-                canvas = c,
-                width = w,
-                height = h,
-                caption = caption,
-                sceneIndex = scene,
-                shotIndex = safeShotIndex,
-                progress = t
-            )
+            if (bitmap != null && !bitmap.isRecycled) {
+                WolfProceduralMotionEngine.renderDepthAware(
+                    canvas = c,
+                    width = w,
+                    height = h,
+                    caption = caption,
+                    sceneIndex = scene,
+                    shotIndex = safeShotIndex,
+                    progress = t
+                )
+            }
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
             if (includeWatermark) {
                 p.color=android.graphics.Color.WHITE

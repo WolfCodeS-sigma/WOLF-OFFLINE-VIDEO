@@ -13,7 +13,16 @@ import android.graphics.Shader
  * This is procedural illustration, not AI-generated photography.
  */
 object WolfSceneArtEngine {
-    fun draw(canvas: Canvas, width: Int, height: Int, caption: String, scene: Int, progress: Float) {
+    fun draw(
+        canvas: Canvas,
+        width: Int,
+        height: Int,
+        caption: String,
+        scene: Int,
+        progress: Float,
+        environmentOverride: String? = null,
+        presenceCaption: String = caption
+    ) {
         if (width <= 0 || height <= 0) return
         val w = width.toFloat()
         val h = height.toFloat()
@@ -21,13 +30,24 @@ object WolfSceneArtEngine {
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         val pulse = wave((t * 6.2831853f) + scene * 0.83f) * 0.5f + 0.5f
 
-        val forest = has(caption, "غابة", "شجرة", "أشجار", "الغابة", "forest", "trees")
-        val corridor = has(caption, "ممر", "طرقة", "ممرًا", "الممر", "hallway", "corridor")
-        val window = has(caption, "نافذة", "شباك", "النافذة", "زجاج", "window")
-        val door = has(caption, "باب", "الباب", "أبواب", "مدخل", "door")
-        val cemetery = has(caption, "قبر", "مقبرة", "قبور", "مقابر", "cemetery", "grave")
-        val room = has(caption, "غرفة", "المنزل", "بيت", "منزل", "حجرة", "room", "house")
-        val hauntedPresence = has(caption, "ظل", "شبح", "امرأة", "شخص", "كائن", "وحش", "ظهر", "وقف", "ghost", "shadow", "creature")
+        val explicitEnvironment = environmentOverride?.uppercase(java.util.Locale.ROOT)
+        val forest = explicitEnvironment?.let { it == "FOREST" }
+            ?: has(caption, "غابة", "شجرة", "أشجار", "الغابة", "forest", "trees")
+        val corridor = explicitEnvironment?.let { it == "CORRIDOR" }
+            ?: has(caption, "ممر", "طرقة", "ممرًا", "الممر", "hallway", "corridor")
+        val window = explicitEnvironment?.let { it == "WINDOW" }
+            ?: has(caption, "نافذة", "شباك", "النافذة", "زجاج", "window")
+        val door = explicitEnvironment?.let { it == "DOOR" }
+            ?: has(caption, "باب", "الباب", "أبواب", "مدخل", "door")
+        val cemetery = explicitEnvironment?.let { it == "CEMETERY" }
+            ?: has(caption, "قبر", "مقبرة", "قبور", "مقابر", "cemetery", "grave")
+        val room = explicitEnvironment?.let { it == "ROOM" }
+            ?: has(caption, "غرفة", "المنزل", "بيت", "منزل", "حجرة", "room", "house")
+        val hauntedPresence = has(
+            presenceCaption,
+            "ظل", "شبح", "امرأة", "شخص", "كائن", "وحش", "ظهر", "وقف",
+            "ghost", "shadow", "creature"
+        )
 
         WolfSceneDepthComposer.render(
             canvas = canvas,
