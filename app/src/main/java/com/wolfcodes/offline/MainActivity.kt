@@ -906,6 +906,8 @@ class MainActivity : Activity() {
                     },
                     audioUri = if (approvedVoice) Uri.parse(project.audioUri!!) else null,
                     aspectRatio = project.aspectRatio,
+                    visualStyle = project.visualStyle,
+                    horrorType = project.horrorType,
                     generateSoundEffects = project.soundEffectsEnabled,
                     includeWatermark = project.includeWatermark,
                     includeIntro = project.includeIntro,
