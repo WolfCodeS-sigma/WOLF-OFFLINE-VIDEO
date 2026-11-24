@@ -12,6 +12,28 @@ object StoryDirectorEngine {
         val startOffsetFrames: Int,
         val totalShotFrames: Int
     )
+
+    enum class StoryEvent { CHASE, SOUND, REVEAL, SUSPENSE }
+
+    enum class CameraMovement {
+        HOLD,
+        TRACK_LEFT_TO_RIGHT,
+        TRACK_RIGHT_TO_LEFT,
+        FOLLOW,
+        SLOW_PUSH_IN,
+        SLOW_REVEAL,
+        RESTRAINED_HANDHELD,
+        SLOW_DRIFT
+    }
+
+    data class SceneRenderContext(
+        val sceneNumber: Int,
+        val setting: String,
+        val mood: String,
+        val continuityNotes: String,
+        val continuityKey: Int,
+        val event: StoryEvent
+    )
     data class ScenePlan(val number: Int, val sourceText: String, val setting: String, val mood: String,
         val continuityNotes: String, val durationSeconds: Int, val shots: List<ShotPlan>)
     data class FilmPlan(val totalDurationSeconds: Int, val aspectRatio: String, val visualStyle: String,
@@ -45,6 +67,60 @@ object StoryDirectorEngine {
                 buildShots(index + 1, text, sceneDuration, aspectRatio, visualStyle, horrorType, setting, mood, bible))
         }
         return FilmPlan(safeDuration, aspectRatio, visualStyle, horrorType, bible, scenes)
+    }
+
+    /** Classify the dominant story event once so planning and rendering use the same intent. */
+    fun classifyEvent(text: String): StoryEvent {
+        val lower = text.lowercase(Locale.ROOT)
+        return when {
+            listOf("يطارد", "يجري", "هرب", "يهرب", "مطاردة", "يلحق", "ركض", "فرّ", "chase", "running", "escape")
+                .any { lower.contains(it) } -> StoryEvent.CHASE
+            listOf("همس", "صوت", "أنفاس", "ينادي", "طرق", "خطوات", "صرير", "whisper", "footsteps", "knock")
+                .any { lower.contains(it) } -> StoryEvent.SOUND
+            listOf("ظهر", "ظهرت", "انكشف", "اكتشف", "وجد", "رأى", "اختفى", "ظل", "وجه", "شبح", "appeared", "revealed", "shadow")
+                .any { lower.contains(it) } -> StoryEvent.REVEAL
+            else -> StoryEvent.SUSPENSE
+        }
+    }
+
+    /** Carry scene-level narrative continuity into the actual render path without drawing story text. */
+    fun sceneRenderContext(scene: ScenePlan): SceneRenderContext {
+        val stableContinuity = scene.continuityNotes.trim().replace(Regex("\\s+"), " ")
+        val continuityKey = (scene.setting.trim().lowercase(Locale.ROOT) + "|" + stableContinuity).hashCode()
+        return SceneRenderContext(
+            sceneNumber = scene.number,
+            setting = scene.setting,
+            mood = scene.mood,
+            continuityNotes = scene.continuityNotes,
+            continuityKey = continuityKey,
+            event = classifyEvent(scene.sourceText)
+        )
+    }
+
+    /** Translate the director's words into a deterministic camera command, not a generic preset. */
+    fun resolveCameraMovement(motion: String): CameraMovement {
+        val value = motion.lowercase(Locale.ROOT)
+        return when {
+            value.contains("تثبيت") -> CameraMovement.HOLD
+            value.contains("تتبّع") || value.contains("تتبع") || value.contains("انزلاق جانبي") ->
+                CameraMovement.TRACK_LEFT_TO_RIGHT
+            value.contains("متابعة") -> CameraMovement.FOLLOW
+            value.contains("كشف بطيء") -> CameraMovement.SLOW_REVEAL
+            value.contains("اقتراب") -> CameraMovement.SLOW_PUSH_IN
+            value.contains("اهتزاز") -> CameraMovement.RESTRAINED_HANDHELD
+            else -> CameraMovement.SLOW_DRIFT
+        }
+    }
+
+    /** Vertical composition anchor; null means the director supplied no safe instruction. */
+    internal fun compositionFocusY(composition: String, camera: String = ""): Float? {
+        val intent = "$composition $camera"
+        return when {
+            intent.contains("زاوية منخفضة") -> 0.58f
+            intent.contains("زاوية مرتفعة") -> 0.42f
+            intent.contains("مساحة فوق") || intent.contains("مساحة سلبية أعلى") -> 0.40f
+            else -> null
+        }
     }
 
     /** Merge adjacent story sections if an approved narration cannot fit one second per scene. */
@@ -240,39 +316,33 @@ object StoryDirectorEngine {
             ?: "الموقع الذي تصفه أحداث القصة، دون إضافة موقع جديد"
     }
 
-    private fun detectMood(text: String, horrorType: String): String {
-        val lower = text.lowercase(Locale.ROOT)
-        return when {
-            listOf("يطارد", "يجري", "هرب", "مطاردة", "يلحق").any { lower.contains(it) } -> "توتر ومطاردة متصاعدة"
-            listOf("همس", "صوت", "أنفاس", "ينادي", "طرق").any { lower.contains(it) } -> "رعب سمعي وترقب"
-            listOf("ظهر", "شبح", "ظل", "اختفى", "وجه").any { lower.contains(it) } -> "ظهور خارق وغموض"
-            else -> "رعب $horrorType بإيقاع مقلق"
-        }
+    private fun detectMood(text: String, horrorType: String): String = when (classifyEvent(text)) {
+        StoryEvent.CHASE -> "توتر ومطاردة متصاعدة"
+        StoryEvent.SOUND -> "رعب سمعي وترقب"
+        StoryEvent.REVEAL -> "ظهور خارق وغموض"
+        StoryEvent.SUSPENSE -> "رعب $horrorType بإيقاع مقلق"
     }
 
     private fun buildShots(sceneNumber: Int, text: String, sceneDuration: Int, ratio: String,
         style: String, horror: String, setting: String, mood: String, continuity: String): List<ShotPlan> {
-        val lower = text.lowercase(Locale.ROOT)
-        val chase = listOf("يطارد", "يجري", "هرب", "مطاردة", "يلحق", "ركض", "فرّ").any { keyword -> lower.contains(keyword) }
-        val sound = listOf("همس", "صوت", "أنفاس", "ينادي", "طرق", "خطوات", "صرير").any { keyword -> lower.contains(keyword) }
-        val reveal = listOf("ظهر", "انكشف", "وجد", "اكتشف", "رأى", "اختفى", "ظل", "وجه").any { keyword -> lower.contains(keyword) }
-        val templates = when {
-            chase -> listOf(
+        val event = classifyEvent(text)
+        val templates = when (event) {
+            StoryEvent.CHASE -> listOf(
                 Triple("لقطة تتبّع واسعة", "لقطة واسعة بعدسة 24mm مع تتبّع جانبي مضبوط", "أظهر اتجاه الحركة والمسافة والعوائق المذكورة في النص"),
                 Triple("لقطة حركة متوسطة", "لقطة متوسطة بعدسة 50mm من زاوية موازية للحركة", "حافظ على اتجاه الحركة واستمرارية موقع الشخصية"),
                 Triple("لقطة تفصيل أثناء المطاردة", "لقطة قريبة بعدسة 85mm مع اهتزاز محدود", "أبرز تفصيل الخطر المذكور دون إضافة مطارد أو حدث جديد")
             )
-            sound -> listOf(
+            StoryEvent.SOUND -> listOf(
                 Triple("لقطة تأسيسية صامتة", "لقطة واسعة بعدسة 24mm وكاميرا ثابتة", "اترك مساحة بصرية للمصدر الصوتي المذكور"),
                 Triple("لقطة ترقّب", "لقطة متوسطة بعدسة 50mm من خلف الشخصية عند وجودها بالنص", "وجّه الانتباه إلى اتجاه الصوت دون إظهار مصدر غير مؤكد"),
                 Triple("لقطة مصدر الصوت", "لقطة قريبة بعدسة 85mm", "اكشف المصدر فقط إذا كان محددًا في القصة وإلا أبقه خارج الكادر")
             )
-            reveal -> listOf(
+            StoryEvent.REVEAL -> listOf(
                 Triple("لقطة تأسيسية غامضة", "لقطة واسعة بعدسة 24mm مع حجب جزئي للكادر", "مهّد للمكان والعنصر المذكور دون كشف مبكر"),
                 Triple("لقطة اقتراب بطيء", "لقطة متوسطة بعدسة 50mm مع اقتراب بصري محدود", "وجّه النظر إلى موضع الظهور أو الاكتشاف المذكور"),
                 Triple("لقطة الكشف", "لقطة قريبة بعدسة 85mm بزاوية منخفضة عند ملاءمة النص", "أظهر التفصيل المذكور فقط مع الحفاظ على الغموض")
             )
-            else -> listOf(
+            StoryEvent.SUSPENSE -> listOf(
                 Triple("لقطة تأسيسية", "لقطة واسعة بعدسة 24mm من مستوى العين", "أظهر المكان والعزلة والمساحة السلبية حول الحدث"),
                 Triple("لقطة اقتراب", "لقطة متوسطة بعدسة 50mm وعمق مجال سينمائي", "قرّب الانتباه إلى الشخصية أو الحدث الأساسي المذكور"),
                 Triple("لقطة تفصيل", "لقطة قريبة بعدسة 85mm", "اكشف تفصيلًا مقلقًا موجودًا في النص دون اختراع حدث")
@@ -291,12 +361,12 @@ object StoryDirectorEngine {
                 else -> "ضوء محدود وموجّه يبرز التفصيل المرعب"
             }
             val motion = when {
-                chase && i == 0 -> "تتبّع جانبي بطيء يحافظ على اتجاه الحركة"
-                chase && i == 1 -> "حركة متابعة متوسطة وثابتة دون اهتزاز مبالغ"
-                sound && i == 0 -> "تثبيت الكاميرا وترك التوتر يتصاعد داخل الكادر"
-                sound && i == 2 -> "اقتراب دقيق من مصدر الصوت إن كان ظاهرًا في النص"
-                reveal && i == 0 -> "تثبيت مع حجب جزئي للمعلومة البصرية"
-                reveal && i == templates.lastIndex -> "كشف بطيء ومحدود للتفصيل المذكور"
+                event == StoryEvent.CHASE && i == 0 -> "تتبّع جانبي بطيء يحافظ على اتجاه الحركة"
+                event == StoryEvent.CHASE && i == 1 -> "حركة متابعة متوسطة وثابتة دون اهتزاز مبالغ"
+                event == StoryEvent.SOUND && i == 0 -> "تثبيت الكاميرا وترك التوتر يتصاعد داخل الكادر"
+                event == StoryEvent.SOUND && i == 2 -> "اقتراب دقيق من مصدر الصوت إن كان ظاهرًا في النص"
+                event == StoryEvent.REVEAL && i == 0 -> "تثبيت مع حجب جزئي للمعلومة البصرية"
+                event == StoryEvent.REVEAL && i == templates.lastIndex -> "كشف بطيء ومحدود للتفصيل المذكور"
                 i == 0 -> "حركة كاميرا بطيئة للداخل أو انزلاق جانبي هادئ"
                 i == 1 -> "اقتراب سينمائي بطيء مع اهتزاز طفيف جدًا عند التوتر"
                 else -> "تثبيت قصير ثم حركة دقيقة تكشف التفصيل"
