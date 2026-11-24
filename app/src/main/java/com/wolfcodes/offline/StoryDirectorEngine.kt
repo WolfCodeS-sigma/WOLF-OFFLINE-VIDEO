@@ -110,12 +110,20 @@ object StoryDirectorEngine {
     }
 
     /** Translate the director's words into a deterministic camera command, not a generic preset. */
-    fun resolveCameraMovement(motion: String, storyText: String = ""): CameraMovement {
-        val value = motion.lowercase(Locale.ROOT)
+    fun resolveCameraMovement(
+        motion: String,
+        storyText: String = "",
+        cameraText: String = ""
+    ): CameraMovement {
+        val motionValue = motion.lowercase(Locale.ROOT)
+        val cameraValue = cameraText.lowercase(Locale.ROOT)
+        val value = "$motionValue $cameraValue"
         val narrativeDirection = storyText.lowercase(Locale.ROOT)
         return when {
-            value.contains("تثبيت") && value.contains("ثم حركة") -> CameraMovement.SLOW_REVEAL
-            value.contains("تثبيت") -> CameraMovement.HOLD
+            cameraValue.contains("اهتزاز محدود") || cameraValue.contains("اهتزاز طفيف") ->
+                CameraMovement.RESTRAINED_HANDHELD
+            motionValue.contains("تثبيت") && motionValue.contains("ثم حركة") -> CameraMovement.SLOW_REVEAL
+            motionValue.contains("تثبيت") -> CameraMovement.HOLD
             value.contains("كشف بطيء") -> CameraMovement.SLOW_REVEAL
             value.contains("للداخل") || value.contains("اقتراب") -> CameraMovement.SLOW_PUSH_IN
             value.contains("تتبّع") || value.contains("تتبع") || value.contains("انزلاق جانبي") ->
