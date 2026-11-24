@@ -15,8 +15,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: wolf-stage-audit-${{ github.ref }}
-  cancel-in-progress: true
+  group: wolf-gradle-regression-global
+  queue: max
 
 jobs:
   android-audit:
@@ -42,6 +42,7 @@ jobs:
         with:
           gradle-version: "8.13"
           cache-provider: basic
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Build debug APK and run Android lint and JVM unit tests
         run: gradle --no-daemon :app:assembleDebug lintDebug testDebugUnitTest
@@ -82,6 +83,7 @@ jobs:
         with:
           gradle-version: "8.13"
           cache-provider: basic
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Run real Android media and checkpoint tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0

@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: wolf-gradle-regression-global
+  queue: max
+
 jobs:
   offline-quality:
     name: Android lint and JVM unit tests
@@ -35,6 +39,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
+          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       - name: Run Android lint and local unit tests only
         run: gradle --no-daemon lintDebug testDebugUnitTest

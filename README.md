@@ -35,6 +35,8 @@ Open the repository as an Android Gradle project in a compatible IDE, or use a G
 - `HorrorVideoExporter.kt`: separate Filament prototype path, launched only from the Debug-only UI control and not yet connected to the ordinary `OfflineProductionEngine` film pipeline. Its Filament dependencies are currently declared in the main app Gradle configuration; see the Stage 12 document for the Release packaging caveat.
 
 ## Verification policy
+- `docs/WOLF_CI_CONCURRENCY_POLICY_AR.md`: قواعد تنظيم GitHub Actions، ومنع إلغاء الاختبارات الجارية، وتسلسل عمليات البناء والتحقق.
+
 
 The continuous-integration workflow builds the Debug APK, runs Android lint and JVM unit tests, then runs the Android 12 emulator regression suite for media export, audio, checkpoints, and the bundled asset registry. Testing on the physical Realme 7 remains a separate final stage and must only be performed after the offline product has been completed and explicitly approved for that stage.
 
@@ -47,3 +49,5 @@ Project records, narration recordings, rendering, and exported media are stored 
 Rendered videos are exported to the device's Movies/WOLF CODE S media collection when the platform media provider is available.
 
 - `asset-intake/` and `tools/asset-intake/`: executable, fail-closed batch intake. Two CC0 environment HDRIs are acquired as candidates in WOLF-ASSET-BATCH-001; neither is reviewed/approved for production or included in the APK. Batch 000-baseline remains empty. See `asset-intake/README.md`.
+
+- `WolfMotionCodeLibrary.kt` and `WolfSceneContract.kt`: Stage 13 engine-neutral motion primitives and versioned scene contract (v1.2.0), with layer/camera motion tracks, API-safe rational PTS, bounded requests, output provenance, verified artifact hashes, and JVM regression coverage. The contract remains disconnected from the production render path until a later explicit adapter-integration stage. See `docs/WOLF_STAGE_13_MOTION_CODE_LIBRARY_SCENE_CONTRACT.md`.
