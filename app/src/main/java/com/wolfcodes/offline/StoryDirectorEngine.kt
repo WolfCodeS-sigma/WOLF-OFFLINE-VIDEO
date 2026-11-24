@@ -33,7 +33,9 @@ object StoryDirectorEngine {
         val mood: String,
         val continuityNotes: String,
         val continuityKey: Int,
-        val event: StoryEvent
+        val event: StoryEvent,
+        val visualStyle: String = "",
+        val horrorType: String = ""
     )
     data class ScenePlan(val number: Int, val sourceText: String, val setting: String, val mood: String,
         val continuityNotes: String, val durationSeconds: Int, val shots: List<ShotPlan>)
@@ -85,16 +87,25 @@ object StoryDirectorEngine {
     }
 
     /** Carry scene-level narrative continuity into the actual render path without drawing story text. */
-    fun sceneRenderContext(scene: ScenePlan): SceneRenderContext {
+    fun sceneRenderContext(
+        scene: ScenePlan,
+        visualStyle: String = "",
+        horrorType: String = ""
+    ): SceneRenderContext {
         val stableContinuity = scene.continuityNotes.trim().replace(Regex("\\s+"), " ")
-        val continuityKey = (scene.setting.trim().lowercase(Locale.ROOT) + "|" + stableContinuity).hashCode()
+        val continuityKey = (
+            scene.setting.trim().lowercase(Locale.ROOT) + "|" + stableContinuity + "|" +
+                visualStyle.trim() + "|" + horrorType.trim()
+            ).hashCode()
         return SceneRenderContext(
             sceneNumber = scene.number,
             setting = scene.setting,
             mood = scene.mood,
             continuityNotes = scene.continuityNotes,
             continuityKey = continuityKey,
-            event = classifyEvent(scene.sourceText)
+            event = classifyEvent(scene.sourceText),
+            visualStyle = visualStyle,
+            horrorType = horrorType
         )
     }
 
