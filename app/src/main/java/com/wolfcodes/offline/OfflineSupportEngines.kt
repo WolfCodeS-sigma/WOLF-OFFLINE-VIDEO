@@ -237,6 +237,10 @@ object OfflineMotionEngine {
         return when (movement) {
             StoryDirectorEngine.CameraMovement.HOLD ->
                 CameraFrame(zoom = 0f, offsetX = 0f, offsetY = 0f, rotationDegrees = 0f)
+            StoryDirectorEngine.CameraMovement.TRACK_LATERAL -> {
+                val direction = if (Math.floorMod(scene, 2) == 0) 1f else -1f
+                CameraFrame(0.006f * eased, direction * (-0.036f + 0.072f * eased), -0.004f * envelope, 0f)
+            }
             StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT ->
                 CameraFrame(0.006f * eased, -0.040f + 0.080f * eased, -0.004f * envelope, 0f)
             StoryDirectorEngine.CameraMovement.TRACK_RIGHT_TO_LEFT ->
