@@ -9,6 +9,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -21,6 +22,20 @@ import java.io.File
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
+    companion object {
+        const val FILAMENT_EXPORT_BUTTON_ID: Int = 0x574F4C46
+    }
+
+    @Volatile
+    var filamentPrototypeResultUri: Uri? = null
+
+    @Volatile
+    var filamentPrototypeReport: WolfFilmQualityInspector.Report? = null
+
+    @Volatile
+    var filamentPrototypeError: String? = null
+
+    private var filamentPrototypeRunning = false
     private val worker = Executors.newSingleThreadExecutor()
     private lateinit var titleField: EditText
     private lateinit var storyField: EditText
@@ -45,6 +60,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createScreen()
+        addFilamentPrototypeControl()
         refreshProjectList()
         refreshChapterStatus()
         refreshVoiceStatus()
@@ -149,6 +165,104 @@ class MainActivity : Activity() {
         projectListContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(projectListContainer)
         setContentView(scroll)
+    }
+
+    private fun addFilamentPrototypeControl() {
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) {
+            return
+        }
+
+        val content = findViewById<ViewGroup>(android.R.id.content)
+        val scroll = content.getChildAt(0) as? ScrollView ?: return
+        val page = scroll.getChildAt(0) as? LinearLayout ?: return
+
+        page.addView(label("اختبار مستقل لمحرك Google Filament"))
+        page.addView(button("اختبار Filament — تصدير فيديو 5 ثوانٍ").apply {
+            id = FILAMENT_EXPORT_BUTTON_ID
+            setOnClickListener { startFilamentPrototypeExport() }
+        })
+    }
+
+    private fun startFilamentPrototypeExport() {
+        if (filamentPrototypeRunning || producing) {
+            status.text = "هناك عملية إنتاج أخرى قيد التشغيل"
+            return
+        }
+
+        filamentPrototypeResultUri = null
+        filamentPrototypeReport = null
+        filamentPrototypeError = null
+        filamentPrototypeRunning = true
+        progress.visibility = View.VISIBLE
+        progress.progress = 0
+        status.text = "بدء اختبار Filament المستقل — لن يتغير مسار الإنتاج العادي"
+
+        worker.execute {
+            val outputFile = File(
+                cacheDir,
+                "wolf_filament_prototype_" + System.currentTimeMillis() + ".mp4"
+            )
+            try {
+                val exporter = HorrorVideoExporter(applicationContext)
+                exporter.exportToFile(
+                    outputFile = outputFile,
+                    durationSeconds = 5,
+                    width = 1280,
+                    height = 720,
+                    fps = 30,
+                    onProgress = { percent, message ->
+                        runOnUiThread {
+                            progress.progress = percent.coerceIn(0, 100)
+                            status.text = message
+                        }
+                    }
+                )
+
+                val report = WolfFilmQualityInspector.inspect(
+                    context = applicationContext,
+                    mediaReference = outputFile.absolutePath,
+                    expectedDurationSeconds = 5,
+                    requireAudio = false
+                )
+                check(report.passed) { report.summary }
+                check(report.videoWidth == 1280 && report.videoHeight == 720) {
+                    "أبعاد فيديو Filament الناتج غير مطابقة"
+                }
+                check(report.videoSamples >= 148L) {
+                    "عدد إطارات فيديو Filament أقل من 148 إطارًا: " + report.videoSamples
+                }
+                val actualDuration = report.durationSeconds
+                    ?: throw IllegalStateException("تعذر قراءة مدة فيديو Filament")
+                check(actualDuration in 4.8..5.2) {
+                    "مدة فيديو Filament الفعلية غير مطابقة: " + actualDuration
+                }
+
+                val savedUri = exporter.publishToMediaStore(outputFile)
+                runOnUiThread {
+                    filamentPrototypeReport = report
+                    filamentPrototypeResultUri = savedUri
+                    filamentPrototypeRunning = false
+                    progress.progress = 100
+                    progress.visibility = View.GONE
+                    status.text = "نجح اختبار Filament وحُفظ فيديو الخمس ثواني في Movies/WOLF CODE S"
+                    Toast.makeText(
+                        this,
+                        "تم حفظ فيديو اختبار Filament في المعرض",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    filamentPrototypeError =
+                        error.message ?: error.javaClass.simpleName
+                    filamentPrototypeRunning = false
+                    progress.visibility = View.GONE
+                    showError(error)
+                }
+            } finally {
+                outputFile.delete()
+            }
+        }
     }
 
     private fun field(hintText: String): EditText = EditText(this).apply {
@@ -610,6 +724,10 @@ class MainActivity : Activity() {
     }
 
     private fun produce() {
+        if (filamentPrototypeRunning) {
+            status.text = "انتظر انتهاء اختبار Filament المستقل أولًا"
+            return
+        }
         if (producing) {
             status.text = "يوجد إنتاج قيد التشغيل بالفعل"
             return

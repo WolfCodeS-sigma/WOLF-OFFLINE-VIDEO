@@ -29,7 +29,7 @@ import java.io.File
 class WolfStage01To07InstrumentedTest {
 
     @Test
-    fun thirtySecondFilmRetainsRuntimeWithSevenSecondAudioAndUserStillImage() {
+    fun approvedSevenSecondNarrationSetsFilmRuntimeAndRetainsUserStillImage() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val fixtureDirectory = File(context.cacheDir, "wolf-stage-01-07-device-tests").apply {
             if (!exists()) mkdirs()
@@ -85,23 +85,23 @@ class WolfStage01To07InstrumentedTest {
                 projectId = "wolf-stage-audit-${System.currentTimeMillis()}"
             )
 
-            assertEquals("The requested film duration must be authoritative", 30, result.durationSeconds)
+            assertEquals("The approved narration duration must define the film runtime", 7, result.durationSeconds)
             assertNotNull("The exporter did not return a saved media URI", result.mediaUri)
             exportedUri = Uri.parse(requireNotNull(result.mediaUri))
 
             val report = WolfFilmQualityInspector.inspect(
                 context = context,
                 mediaReference = requireNotNull(result.mediaUri),
-                expectedDurationSeconds = 30,
+                expectedDurationSeconds = 7,
                 requireAudio = true
             )
             assertTrue("Exported MP4 failed structural QA: ${report.summary}", report.passed)
-            assertTrue("Expected the full video frame sequence, got ${report.videoSamples}", report.videoSamples >= 350L)
+            assertTrue("Expected the full video frame sequence, got ${report.videoSamples}", report.videoSamples >= 80L)
             assertTrue("The final MP4 contains no readable audio samples", report.audioSamples > 0L)
             assertNotNull("The exported MP4 duration is missing", report.durationSeconds)
             assertTrue(
-                "The video stream did not retain a 30-second duration: ${report.durationSeconds}",
-                requireNotNull(report.durationSeconds) in 29.0..31.0
+                "The video stream did not retain the narration duration: ${report.durationSeconds}",
+                requireNotNull(report.durationSeconds) in 6.8..7.2
             )
 
             val timings = readLastSampleTimes(context, requireNotNull(exportedUri))
@@ -113,11 +113,11 @@ class WolfStage01To07InstrumentedTest {
             }
 
             assertTrue(
-                "Video ended before the requested 30-second timeline: ${video.lastPresentationTimeUs} us",
-                video.lastPresentationTimeUs in 29_500_000L..30_100_000L
+                "Video ended before the approved narration timeline: ${video.lastPresentationTimeUs} us",
+                video.lastPresentationTimeUs in 6_500_000L..7_100_000L
             )
             assertTrue(
-                "Audio fixture should end near seven seconds, not near the end of the film: ${audio.lastPresentationTimeUs} us",
+                "Audio and video should share the approved seven-second film timeline: ${audio.lastPresentationTimeUs} us",
                 audio.lastPresentationTimeUs in 6_500_000L..7_500_000L
             )
 
@@ -148,6 +148,78 @@ class WolfStage01To07InstrumentedTest {
             }
             narrationFixture.delete()
             imageFixture.delete()
+        }
+    }
+
+    @Test(timeout = 600_000L)
+    fun narrationLongerThanRequestedDurationExtendsFinalMp4Timeline() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val fixtureDirectory = File(context.cacheDir, "wolf-long-narration-device-test").apply {
+            if (!exists()) mkdirs()
+        }
+        val narrationFixture = File(fixtureDirectory, "long-narration.m4a")
+        var exportedUri: Uri? = null
+
+        try {
+            narrationFixture.delete()
+            WolfSoundFxEngine.renderAac(
+                scenes = listOf("صوت متواصل لاختبار قص التعليق عند نهاية الفيلم"),
+                durationSeconds = 7,
+                output = narrationFixture
+            )
+            assertTrue("The longer AAC narration fixture was not created", narrationFixture.isFile)
+            assertTrue("The longer AAC narration fixture is empty", narrationFixture.length() > 0L)
+
+            val result = OfflineProductionEngine.render(
+                context = context,
+                story = "في ممر مظلم سُمعت خطوات بعيدة ثم انطفأ الضوء.",
+                seconds = 5,
+                imageUris = emptyList(),
+                audioUri = Uri.fromFile(narrationFixture),
+                aspectRatio = "16:9",
+                generateSoundEffects = false,
+                includeWatermark = false,
+                includeIntro = false,
+                audioDurationIsAuthoritative = true,
+                audioDurationMs = 7_000L,
+                enableHorrorTypography = false,
+                projectId = "wolf-stage-long-voice-${System.currentTimeMillis()}"
+            )
+            assertEquals("The seven-second narration must extend the requested five-second film", 7, result.durationSeconds)
+            exportedUri = Uri.parse(requireNotNull(result.mediaUri))
+
+            val report = WolfFilmQualityInspector.inspect(
+                context = context,
+                mediaReference = requireNotNull(result.mediaUri),
+                expectedDurationSeconds = 7,
+                requireAudio = true
+            )
+            assertTrue("Long-narration MP4 failed structural QA: ${report.summary}", report.passed)
+            assertTrue("Expected the full five-second video frame sequence, got ${report.videoSamples}", report.videoSamples >= 80L)
+            assertTrue("The final MP4 contains no readable audio samples", report.audioSamples > 0L)
+            assertTrue(
+                "Video must extend to cover the complete approved narration: ${report.durationSeconds}",
+                requireNotNull(report.durationSeconds) in 6.8..7.2
+            )
+
+            val timings = readLastSampleTimes(context, requireNotNull(exportedUri))
+            val video = requireNotNull(timings["video/avc"]) { "The final MP4 has no H.264 video samples" }
+            val audio = requireNotNull(timings["audio/mp4a-latm"]) { "The final MP4 has no AAC audio samples" }
+            assertTrue(
+                "Video samples ended outside the seven-second narration timeline: ${video.lastPresentationTimeUs}",
+                video.lastPresentationTimeUs in 6_500_000L..7_100_000L
+            )
+            assertTrue(
+                "Narration samples should align with the seven-second film: ${audio.lastPresentationTimeUs}",
+                audio.lastPresentationTimeUs in 6_500_000L..7_500_000L
+            )
+        } finally {
+            exportedUri?.let { uri ->
+                if (uri.scheme == "content") {
+                    runCatching { context.contentResolver.delete(uri, null, null) }
+                }
+            }
+            narrationFixture.delete()
         }
     }
 
