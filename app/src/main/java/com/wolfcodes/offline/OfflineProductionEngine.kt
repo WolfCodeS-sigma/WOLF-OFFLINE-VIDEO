@@ -28,17 +28,15 @@ object OfflineProductionEngine {
     private const val VIDEO_BITRATE_BPS = 1_600_000L
     private const val CONSERVATIVE_AUDIO_BITRATE_BPS = 512_000L
     private const val EXPORT_SAFETY_MARGIN_BYTES = 128L * 1024L * 1024L
-    internal const val STORYBOARD_RENDER_REVISION = "storyboard-planner-v5-safe-user-image"
+    internal const val STORYBOARD_RENDER_REVISION = "storyboard-planner-v6-wolf-intro-motion-v1"
 
     /**
      * Keeps an optional intro inside the requested film runtime, including very short
      * durations passed by internal callers. The film must always retain at least one
      * second for its body timeline.
      */
-    internal fun introDurationSeconds(requestedTotal: Int, includeIntro: Boolean): Int {
-        val safeTotal = requestedTotal.coerceIn(1, 1800)
-        return if (includeIntro) minOf(3, (safeTotal - 1).coerceAtLeast(0)) else 0
-    }
+    internal fun introDurationSeconds(requestedTotal: Int, includeIntro: Boolean): Int =
+        WolfCinematicIdentity.introDurationSeconds(requestedTotal, includeIntro)
 
     /** Uses the original still unless a semantic segmentation result has been validated. */
     internal fun useSafeStillImageFallback(semanticSegmentationValidated: Boolean): Boolean =
@@ -182,7 +180,7 @@ object OfflineProductionEngine {
         val totalVideoFrames = ((filmDurationUs * fps + 999_999L) / 1_000_000L)
             .toInt().coerceAtLeast(1)
         val introSeconds = audioTimeline.introSeconds
-        val introFrames = introSeconds * fps
+        val introFrames = WolfCinematicIdentity.introFrameCount(introSeconds, fps)
         val bodySeconds = (totalVideoSeconds - introSeconds).coerceAtLeast(1)
         val bodyFrames = (totalVideoFrames - introFrames).coerceAtLeast(1)
         // The storyboard director is the single source of scene boundaries and shot intent.
@@ -736,7 +734,7 @@ object OfflineProductionEngine {
                     if(frame % (fps*2) == 0) WolfResourceGuard.ensureSafeToContinue(context)
                     drawIntro(
                         inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح مقدمة الذئب"),
-                        w,h,frame.toFloat()/max(1,introCount-1)
+                        w,h,WolfCinematicIntroRenderer.progressForFrame(frame, introCount)
                     )
                     val drained=drain(codec,muxer,info,started,track,false)
                     track=drained.first
@@ -1198,99 +1196,15 @@ object OfflineProductionEngine {
         }
     }
 
-    /** Three-second branded wolf signature, rendered locally with no external artwork. */
+    /** Draw one frame of the animated, locally rendered WOLF CODE S opening. */
     private fun drawIntro(surface: Surface, w: Int, h: Int, progress: Float) {
-        val canvas=surface.lockCanvas(null)
-        val paint=Paint(Paint.ANTI_ALIAS_FLAG)
+        val canvas = surface.lockCanvas(null)
         try {
-            canvas.drawColor(android.graphics.Color.rgb(3,2,5))
-            paint.shader=android.graphics.LinearGradient(
-                0f,0f,w.toFloat(),h.toFloat(),
-                android.graphics.Color.rgb(43,4,14),
-                android.graphics.Color.rgb(2,2,5),
-                android.graphics.Shader.TileMode.CLAMP
-            )
-            canvas.drawRect(0f,0f,w.toFloat(),h.toFloat(),paint)
-            paint.shader=null
-
-            val moonX=w*0.76f
-            val moonY=h*0.25f
-            val moonRadius=minOf(w,h)*0.14f
-            paint.shader=android.graphics.RadialGradient(
-                moonX,moonY,moonRadius*1.55f,
-                intArrayOf(
-                    android.graphics.Color.argb(90,190,8,28),
-                    android.graphics.Color.argb(45,110,3,18),
-                    android.graphics.Color.TRANSPARENT
-                ),
-                floatArrayOf(0f,0.66f,1f),
-                android.graphics.Shader.TileMode.CLAMP
-            )
-            canvas.drawCircle(moonX,moonY,moonRadius*1.55f,paint)
-            paint.shader=null
-            paint.color=android.graphics.Color.rgb(112,5,22)
-            canvas.drawCircle(moonX,moonY,moonRadius,paint)
-            paint.color=android.graphics.Color.argb(110,20,2,9)
-            canvas.drawCircle(moonX+moonRadius*0.22f,moonY-moonRadius*0.16f,moonRadius*0.78f,paint)
-
-            val scale=minOf(w,h)*0.42f
-            val cx=w*0.5f
-            val cy=h*0.43f
-            val wolf=Path().apply {
-                moveTo(cx-scale*0.47f,cy+scale*0.44f)
-                lineTo(cx-scale*0.53f,cy-scale*0.34f)
-                lineTo(cx-scale*0.22f,cy-scale*0.18f)
-                lineTo(cx,cy-scale*0.55f)
-                lineTo(cx+scale*0.22f,cy-scale*0.18f)
-                lineTo(cx+scale*0.53f,cy-scale*0.34f)
-                lineTo(cx+scale*0.47f,cy+scale*0.44f)
-                lineTo(cx+scale*0.18f,cy+scale*0.66f)
-                lineTo(cx,cy+scale*0.78f)
-                lineTo(cx-scale*0.18f,cy+scale*0.66f)
-                close()
-            }
-            paint.color=android.graphics.Color.rgb(3,2,4)
-            paint.setShadowLayer(scale*0.08f,0f,0f,android.graphics.Color.RED)
-            canvas.drawPath(wolf,paint)
-            paint.clearShadowLayer()
-            paint.color=android.graphics.Color.rgb(255,25,43)
-            paint.setShadowLayer(scale*0.045f,0f,0f,android.graphics.Color.RED)
-            canvas.drawOval(
-                RectF(cx-scale*0.23f,cy+scale*0.08f,cx-scale*0.10f,cy+scale*0.145f),paint
-            )
-            canvas.drawOval(
-                RectF(cx+scale*0.10f,cy+scale*0.08f,cx+scale*0.23f,cy+scale*0.145f),paint
-            )
-            paint.clearShadowLayer()
-
-            paint.textAlign=Paint.Align.CENTER
-            paint.typeface=android.graphics.Typeface.create("serif",android.graphics.Typeface.BOLD)
-            paint.textSize=(h*0.062f).coerceIn(30f,72f)
-            paint.color=android.graphics.Color.WHITE
-            paint.setShadowLayer(12f,0f,0f,android.graphics.Color.RED)
-            canvas.drawText("WOLF CODE S",cx,h*0.82f,paint)
-            paint.clearShadowLayer()
-            paint.typeface=android.graphics.Typeface.DEFAULT_BOLD
-            paint.textSize=(h*0.027f).coerceIn(16f,30f)
-            paint.color=android.graphics.Color.rgb(235,42,57)
-            canvas.drawText("شفرة الذئب S",cx,h*0.875f,paint)
-            paint.typeface=android.graphics.Typeface.DEFAULT
-            paint.textSize=(h*0.019f).coerceIn(12f,21f)
-            paint.color=android.graphics.Color.LTGRAY
-            canvas.drawText("رعب الظل المفقود",cx,h*0.92f,paint)
-
-            val fade=when {
-                progress<0.10f -> (progress/0.10f*255f).toInt()
-                progress>0.92f -> ((1f-progress)/0.08f*255f).toInt()
-                else -> 255
-            }.coerceIn(0,255)
-            paint.color=android.graphics.Color.argb(255-fade,0,0,0)
-            canvas.drawRect(0f,0f,w.toFloat(),h.toFloat(),paint)
+            WolfCinematicIntroRenderer.draw(canvas, w, h, progress)
         } finally {
             surface.unlockCanvasAndPost(canvas)
         }
     }
-
     private fun muxAudio(
         context: Context,
         videoFile: File,
