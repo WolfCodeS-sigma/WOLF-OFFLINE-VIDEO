@@ -191,7 +191,22 @@ object WolfSceneArtEngine {
         } else {
             null
         }
+        // These Paint instances are shared across scene renders. A previous
+        // environment may have left a translucent color (for example the desert
+        // foreground dune at alpha 72). Reset the complete fill/line state before
+        // applying this scene's style so gradients are not unintentionally faded.
+        environmentFillPaint.shader = null
+        environmentFillPaint.color = Color.WHITE
+        environmentFillPaint.alpha = 255
+        environmentFillPaint.style = Paint.Style.FILL
         environmentFillPaint.colorFilter = colorFilter
+
+        environmentLinePaint.shader = null
+        environmentLinePaint.color = Color.WHITE
+        environmentLinePaint.alpha = 255
+        environmentLinePaint.style = Paint.Style.STROKE
+        environmentLinePaint.strokeCap = Paint.Cap.ROUND
+        environmentLinePaint.strokeJoin = Paint.Join.ROUND
         environmentLinePaint.colorFilter = colorFilter
         try {
             when {
@@ -213,8 +228,22 @@ object WolfSceneArtEngine {
                     normalized.contains("farm") || normalized.contains("field") -> drawRural(canvas, width, height, scene, progress)
             }
         } finally {
-            // Paint objects are shared by this renderer; never leak a shot's visual style.
+            // Restore neutral state even when an environment renderer throws.
+            // The next shot must never inherit another environment's alpha, shader,
+            // color filter, or paint style.
+            environmentFillPaint.shader = null
+            environmentFillPaint.color = Color.WHITE
+            environmentFillPaint.alpha = 255
+            environmentFillPaint.style = Paint.Style.FILL
             environmentFillPaint.colorFilter = null
+
+            environmentLinePaint.shader = null
+            environmentLinePaint.color = Color.WHITE
+            environmentLinePaint.alpha = 255
+            environmentLinePaint.style = Paint.Style.STROKE
+            environmentLinePaint.strokeCap = Paint.Cap.ROUND
+            environmentLinePaint.strokeJoin = Paint.Join.ROUND
+            environmentLinePaint.strokeWidth = 1f
             environmentLinePaint.colorFilter = null
         }
     }
