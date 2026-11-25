@@ -37,6 +37,9 @@ test "$(adb shell cmd connectivity airplane-mode | tr -d '\r')" = "enabled"
 test "$(adb shell settings get global airplane_mode_on | tr -d '\r')" = "1"
 test "$(adb shell settings get global wifi_on | tr -d '\r')" = "0"
 
+# Exercise the actual scene dispatch and AVC/MP4 encoder path while the emulator is offline.
+gradle --no-daemon :app:connectedDebugAndroidTest
+
 adb shell am force-stop com.wolfcodes.offline
 adb shell am start -W -n com.wolfcodes.offline/.MainActivity
 
