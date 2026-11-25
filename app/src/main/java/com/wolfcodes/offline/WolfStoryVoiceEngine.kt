@@ -356,22 +356,27 @@ object WolfStoryVoiceStore {
         value.isNotBlank() && value.length <= 80 && value.matches(Regex("[A-Za-z0-9-]+"))
 }
 
-internal class WolfSilenceDetector(
-    private val amplitudeThreshold: Int = 650,
-    private val quietWindowMs: Long = 5000L
+internal class WolfVoiceActivityTracker(
+    private val amplitudeThreshold: Int = 650
 ) {
     private var speechDetected = false
-    private var lastVoiceAtMs = 0L
 
-    fun sample(amplitude: Int, elapsedMs: Long): Boolean {
-        if (amplitude >= amplitudeThreshold) {
-            speechDetected = true
-            lastVoiceAtMs = elapsedMs
-        }
-        return speechDetected && elapsedMs - lastVoiceAtMs >= quietWindowMs
+    fun sample(amplitude: Int): Boolean {
+        if (amplitude >= amplitudeThreshold) speechDetected = true
+        return speechDetected
     }
+}
 
-    fun hasDetectedSpeech(): Boolean = speechDetected
+/** Only the hard recording-duration limit may stop a take without user action. */
+internal object WolfVoiceRecordingPolicy {
+    const val MIN_RECORDING_DURATION_MS = 1_000L
+    const val MAX_RECORDING_DURATION_MS = 1_800_000L
+
+    fun shouldAutomaticallyStop(elapsedMs: Long): Boolean =
+        elapsedMs >= MAX_RECORDING_DURATION_MS
+
+    fun isMeasuredDurationValid(durationMs: Long): Boolean =
+        durationMs in MIN_RECORDING_DURATION_MS..MAX_RECORDING_DURATION_MS
 }
 
 class WolfVoiceRecorder(context: Context, private val listener: Listener) {
@@ -388,7 +393,7 @@ class WolfVoiceRecorder(context: Context, private val listener: Listener) {
     private var temporaryFile: File? = null
     private var startedAtMs = 0L
     private var stopping = false
-    private var detector = WolfSilenceDetector()
+    private var activityTracker = WolfVoiceActivityTracker()
 
     val isRecording: Boolean get() = recorder != null && !stopping
 
@@ -398,12 +403,12 @@ class WolfVoiceRecorder(context: Context, private val listener: Listener) {
             if (stopping) return
             val elapsed = (SystemClock.elapsedRealtime() - startedAtMs).coerceAtLeast(0L)
             val amplitude = runCatching { active.maxAmplitude }.getOrDefault(0)
-            val quietTailReached = detector.sample(amplitude, elapsed)
-            listener.onProgress(elapsed, detector.hasDetectedSpeech())
-            when {
-                quietTailReached -> finish(true)
-                elapsed >= MAX_RECORDING_MS -> finish(true)
-                else -> handler.postDelayed(this, POLL_INTERVAL_MS)
+            val speechDetected = activityTracker.sample(amplitude)
+            listener.onProgress(elapsed, speechDetected)
+            if (WolfVoiceRecordingPolicy.shouldAutomaticallyStop(elapsed)) {
+                finish(true)
+            } else {
+                handler.postDelayed(this, POLL_INTERVAL_MS)
             }
         }
     }
@@ -432,7 +437,7 @@ class WolfVoiceRecorder(context: Context, private val listener: Listener) {
             recorder = created
             startedAtMs = SystemClock.elapsedRealtime()
             stopping = false
-            detector = WolfSilenceDetector()
+            activityTracker = WolfVoiceActivityTracker()
             handler.postDelayed(poller, POLL_INTERVAL_MS)
             listener.onProgress(0L, false)
             true
@@ -481,7 +486,7 @@ class WolfVoiceRecorder(context: Context, private val listener: Listener) {
         temporaryFile = null
         stopping = false
 
-        if (stopError != null || duration < MIN_RECORDING_MS ||
+        if (stopError != null || duration < WolfVoiceRecordingPolicy.MIN_RECORDING_DURATION_MS ||
             temporary == null || !temporary.isFile || temporary.length() <= MIN_FILE_BYTES || target == null) {
             temporary?.delete()
             listener.onError(stopError?.message ?: "التسجيل قصير جدًا أو لم ينتج ملفًا صوتيًا صالحًا. أعد المحاولة.")
@@ -494,7 +499,7 @@ class WolfVoiceRecorder(context: Context, private val listener: Listener) {
                 throw IllegalStateException("ملف التسجيل النهائي غير صالح")
             }
             val measuredDuration = readAudioDurationMs(target).takeIf {
-                it in MIN_RECORDING_MS..MAX_RECORDING_MS
+                WolfVoiceRecordingPolicy.isMeasuredDurationValid(it)
             } ?: duration
             listener.onSaved(target, measuredDuration, automaticStop)
         }.onFailure { error ->
@@ -522,8 +527,6 @@ class WolfVoiceRecorder(context: Context, private val listener: Listener) {
 
     companion object {
         private const val POLL_INTERVAL_MS = 400L
-        private const val MIN_RECORDING_MS = 1000L
         private const val MIN_FILE_BYTES = 1024L
-        private const val MAX_RECORDING_MS = 1_800_000L
     }
 }

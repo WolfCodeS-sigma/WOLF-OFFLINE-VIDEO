@@ -2,6 +2,7 @@ package com.wolfcodes.offline
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.Dialog
 import android.os.Bundle
 import android.Manifest
 import android.content.pm.PackageManager
@@ -9,6 +10,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.view.Gravity
 import android.view.View
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -36,6 +38,8 @@ class MainActivity : Activity() {
     private var workingProject: WolfProject? = null
     private var voiceRecorder: WolfVoiceRecorder? = null
     private var voicePlayer: MediaPlayer? = null
+    private var teleprompterDialog: Dialog? = null
+    private var teleprompterProgress: TextView? = null
     private var voiceUri: String? = null
     private var selectedAspectRatio: String = "9:16"
     private val selectedImageUris = mutableListOf<String>()
@@ -497,13 +501,19 @@ class MainActivity : Activity() {
     private fun startVoiceRecorder(project: WolfProject, destination: File) {
         storyField.isEnabled = false
         voiceRecorder = WolfVoiceRecorder(this, object : WolfVoiceRecorder.Listener {
+            @Suppress("UNUSED_PARAMETER")
             override fun onProgress(elapsedMs: Long, speechDetected: Boolean) {
-                runOnUiThread { status.text = "تسجيل الراوي: " + (elapsedMs / 1000) + " ثانية" }
+                runOnUiThread {
+                    val message = "التسجيل مستمر — " + (elapsedMs / 1000) + " ثانية"
+                    status.text = message
+                    teleprompterProgress?.text = message
+                }
             }
 
             override fun onSaved(file: File, durationMs: Long, automaticStop: Boolean) {
                 voiceMergePending = true
                 runOnUiThread {
+                    dismissTeleprompter()
                     storyField.isEnabled = false
                     status.text = "تم حفظ المقطع؛ جارٍ دمجه مع المقاطع السابقة..."
                 }
@@ -539,6 +549,7 @@ class MainActivity : Activity() {
 
             override fun onError(message: String) {
                 runOnUiThread {
+                    dismissTeleprompter()
                     storyField.isEnabled = true
                     showError(IllegalStateException(message))
                     refreshVoiceStatus()
@@ -550,7 +561,145 @@ class MainActivity : Activity() {
             status.text = "تعذر بدء التسجيل الصوتي"
         } else {
             status.text = "بدأ تسجيل الراوي"
+            showTeleprompter(project.story)
         }
+    }
+
+    /**
+     * Shows the complete approved story while the microphone records.
+     * Scrolling is deliberately manual: no speech recognition, auto-scroll, or
+     * word highlighting is claimed by this fallback mode.
+     */
+    private fun showTeleprompter(story: String) {
+        dismissTeleprompter()
+        val density = resources.displayMetrics.density
+        fun dp(value: Int): Int = (value * density + 0.5f).toInt()
+
+        val dialog = Dialog(this)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(18), dp(20), dp(18))
+            setBackgroundColor(0xFF07070D.toInt())
+        }
+
+        root.addView(TextView(this).apply {
+            text = "اقرأ القصة أثناء التسجيل"
+            textSize = 23f
+            gravity = Gravity.CENTER
+            setTextColor(0xFFD3223C.toInt())
+            setPadding(0, dp(8), 0, dp(10))
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+
+        root.addView(TextView(this).apply {
+            text = "مرّر النص يدويًا أثناء القراءة. لا يوجد تمرير تلقائي أو تلوين للكلمات."
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setTextColor(0xFFB8B8C2.toInt())
+            setPadding(dp(4), 0, dp(4), dp(12))
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+
+        val scriptScroll = ScrollView(this).apply {
+            isFillViewport = true
+            isVerticalScrollBarEnabled = true
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+        }
+        val scriptText = TextView(this).apply {
+            text = story
+            textSize = 23f
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG_RTL
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            gravity = Gravity.START
+            setTextColor(0xFFF3F3F6.toInt())
+            setLineSpacing(dp(9).toFloat(), 1.18f)
+            setPadding(dp(8), dp(22), dp(8), dp(30))
+        }
+        scriptScroll.addView(
+            scriptText,
+            android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        )
+        root.addView(
+            scriptScroll,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        )
+
+        teleprompterProgress = TextView(this).apply {
+            text = "التسجيل مستمر — 0 ثانية"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(0xFFB8B8C2.toInt())
+            setPadding(0, dp(10), 0, dp(8))
+        }
+        root.addView(
+            teleprompterProgress,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+
+        root.addView(Button(this).apply {
+            text = "إيقاف التسجيل وحفظ الجزء"
+            isAllCaps = false
+            textSize = 17f
+            setTextColor(0xFFFFFFFF.toInt())
+            setBackgroundColor(0xFF850D22.toInt())
+            setPadding(dp(8), dp(10), dp(8), dp(10))
+            setOnClickListener {
+                val activeRecorder = voiceRecorder
+                if (activeRecorder?.isRecording == true) {
+                    isEnabled = false
+                    text = "جارٍ إيقاف التسجيل وحفظه..."
+                    teleprompterProgress?.text = "انتهت القراءة؛ جارٍ حفظ التسجيل..."
+                    activeRecorder.stopByUser()
+                } else {
+                    dismissTeleprompter()
+                }
+            }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+
+        dialog.setContentView(root)
+        dialog.setCancelable(false)
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.setOnDismissListener {
+            dialog.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            if (teleprompterDialog === dialog) {
+                teleprompterDialog = null
+                teleprompterProgress = null
+            }
+        }
+        teleprompterDialog = dialog
+        dialog.show()
+        dialog.window?.apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0xFF07070D.toInt()))
+            setLayout(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT
+            )
+            addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    private fun dismissTeleprompter() {
+        val activeDialog = teleprompterDialog
+        teleprompterDialog = null
+        teleprompterProgress = null
+        if (activeDialog?.isShowing == true) activeDialog.dismiss()
     }
 
     private fun approveVoiceTake() {
@@ -988,6 +1137,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        dismissTeleprompter()
         voiceRecorder?.cancel()
         stopVoicePreview()
         worker.shutdown()
