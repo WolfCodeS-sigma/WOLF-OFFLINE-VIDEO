@@ -398,6 +398,24 @@ object WolfSceneArtEngine {
         canvas: Canvas, width: Float, height: Float, scene: Int, progress: Float, continuityPhase: Float
     ) {
         val groundY = height * 0.78f
+
+        // A soft, backlit mist layer separates the distant treeline from the near-black sky.
+        // It is environmental depth only and contains no structures or story subjects.
+        environmentFillPaint.shader = RadialGradient(
+            width * 0.50f,
+            height * 0.52f,
+            width * 0.86f,
+            intArrayOf(
+                Color.argb(118, 64, 78, 82),
+                Color.argb(52, 36, 49, 53),
+                Color.TRANSPARENT
+            ),
+            floatArrayOf(0f, 0.56f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRect(0f, 0f, width, groundY, environmentFillPaint)
+        environmentFillPaint.shader = null
+
         val ground = Path().apply {
             moveTo(0f, groundY)
             cubicTo(width * 0.32f, groundY - height * 0.055f, width * 0.66f, groundY + height * 0.025f, width, groundY - height * 0.035f)
@@ -425,7 +443,7 @@ object WolfSceneArtEngine {
             trunk.cubicTo(x + lean, height * 0.68f, x - lean * 0.55f, top + height * 0.17f, x + lean * 0.30f, top)
             trunk.cubicTo(x + width * 0.014f, top + height * 0.19f, x + lean, height * 0.68f, x + width * 0.013f, height * 0.86f)
             trunk.close()
-            environmentFillPaint.color = Color.argb(145, 2, 7, 8)
+            environmentFillPaint.color = Color.argb(224, 1, 3, 5)
             canvas.drawPath(trunk, environmentFillPaint)
         }
     }

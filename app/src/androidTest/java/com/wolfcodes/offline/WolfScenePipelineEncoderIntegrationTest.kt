@@ -156,6 +156,7 @@ class WolfScenePipelineEncoderIntegrationTest {
     fun imageFreeBeachSceneEncodesThroughTheProductionMp4Pipeline() {
         val context = targetContext()
         val output = File(context.cacheDir, "wolf-stage-06-c-beach-${System.nanoTime()}.mp4")
+        val normalized = File(context.cacheDir, "wolf-stage-06-c-beach-normalized-${System.nanoTime()}.mp4")
         val backendFrames = mutableListOf<WolfSceneRenderPipeline.Backend>()
         try {
             OfflineProductionEngine.encode(
@@ -190,9 +191,12 @@ class WolfScenePipelineEncoderIntegrationTest {
             )
             assertEquals(TEST_FRAME_COUNT, backendFrames.size)
             assertTrue(backendFrames.all { it == WolfSceneRenderPipeline.Backend.PROCEDURAL })
-            assertEncodedVideo(output)
+            // Match the production post-encode PTS normalization path used by the encoder tests.
+            OfflineProductionEngine.normalizeVideoTimestamps(output, normalized, TEST_FPS)
+            assertEncodedVideo(normalized)
         } finally {
             output.delete()
+            normalized.delete()
         }
     }
 
@@ -240,9 +244,17 @@ class WolfScenePipelineEncoderIntegrationTest {
             assertTrue("Desert render must contain a separate dune/ground plane", colorDistance(desertSky, desertGround) > 22)
 
             val forestSky = forest.getPixel((forest.width * 0.50f).toInt(), (forest.height * 0.20f).toInt())
-            val forestTreeLine = forest.getPixel((forest.width * 0.50f).toInt(), (forest.height * 0.58f).toInt())
+            val treeLineY = (forest.height * 0.58f).toInt()
+            val treeLineLuminance = (0 until forest.width step 2).map { x ->
+                val pixel = forest.getPixel(x, treeLineY)
+                (Color.red(pixel) + Color.green(pixel) + Color.blue(pixel)) / 3
+            }
+            val treeLineContrast = treeLineLuminance.maxOrNull()!! - treeLineLuminance.minOrNull()!!
             val forestGround = forest.getPixel((forest.width * 0.50f).toInt(), (forest.height * 0.91f).toInt())
-            assertTrue("Forest render must contain a separate tree-line silhouette", colorDistance(forestSky, forestTreeLine) > 18)
+            assertTrue(
+                "Forest render must show contrast between tree silhouettes and backlit mist",
+                treeLineContrast > 18
+            )
             assertTrue("Forest render must distinguish ground from the sky", colorDistance(forestSky, forestGround) > 18)
         } finally {
             desert.recycle()
