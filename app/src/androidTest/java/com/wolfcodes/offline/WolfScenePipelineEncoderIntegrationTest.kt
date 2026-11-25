@@ -119,6 +119,40 @@ class WolfScenePipelineEncoderIntegrationTest {
     }
 
     @Test
+    fun imageFreeBeachSceneKeepsTheSelectedMonochromeStyle() {
+        val bitmap = Bitmap.createBitmap(TEST_WIDTH, TEST_HEIGHT, Bitmap.Config.ARGB_8888)
+        val caption = "على الشاطئ المهجور تتراجع الأمواج تحت ضباب كثيف وصوت غامض يقترب"
+        val plan = WolfProceduralSceneProductionEngine.plan(caption, 0)
+        val context = StoryDirectorEngine.SceneRenderContext(
+            sceneNumber = 1,
+            setting = "شاطئ أو ساحل",
+            mood = "رعب سمعي وترقب",
+            continuityNotes = "شاطئ مهجور ثابت مع أفق بحري",
+            continuityKey = 604,
+            event = StoryDirectorEngine.StoryEvent.SUSPENSE,
+            visualStyle = "أبيض وأسود",
+            horrorType = "رعب نفسي"
+        )
+        try {
+            WolfProceduralSceneProductionEngine.render(
+                canvas = Canvas(bitmap),
+                width = TEST_WIDTH,
+                height = TEST_HEIGHT,
+                plan = plan,
+                shotIndex = 0,
+                progress = 0.42f,
+                sceneRenderContext = context
+            )
+            val sample = bitmap.getPixel((bitmap.width * 0.18f).toInt(), (bitmap.height * 0.60f).toInt())
+            assertTrue("Monochrome sea scene must keep neutral RGB channels",
+                kotlin.math.abs(Color.red(sample) - Color.green(sample)) <= 5 &&
+                    kotlin.math.abs(Color.green(sample) - Color.blue(sample)) <= 5)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    @Test
     fun imageFreeBeachSceneEncodesThroughTheProductionMp4Pipeline() {
         val context = targetContext()
         val output = File(context.cacheDir, "wolf-stage-06-c-beach-${System.nanoTime()}.mp4")

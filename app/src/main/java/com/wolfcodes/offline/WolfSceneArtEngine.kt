@@ -2,6 +2,8 @@ package com.wolfcodes.offline
 
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
@@ -122,7 +124,7 @@ object WolfSceneArtEngine {
 
         // Draw location-specific landscape planes before the common horror haze.
         // No people, ghosts, creatures, furniture, buildings or unlicensed assets are generated.
-        drawEnvironment(canvas, w, h, setting, scene, t, atmosphere.continuityPhase)
+        drawEnvironment(canvas, w, h, setting, scene, t, atmosphere.continuityPhase, visualStyle)
 
         // Smoke-like curves provide atmosphere only; they are not scene objects.
         for (layer in 0..4) {
@@ -177,26 +179,43 @@ object WolfSceneArtEngine {
         setting: String,
         scene: Int,
         progress: Float,
-        continuityPhase: Float
+        continuityPhase: Float,
+        visualStyle: String
     ) {
         val normalized = setting.lowercase(java.util.Locale.ROOT)
-        when {
-            normalized.contains("شاطئ") || normalized.contains("ساحل") ||
-                normalized.contains("beach") || normalized.contains("shore") ||
-                normalized.contains("coast") -> drawBeach(canvas, width, height, scene, progress, continuityPhase)
-            normalized.contains("بحر") || normalized.contains("محيط") ||
-                normalized.contains("sea") || normalized.contains("ocean") ||
-                normalized.contains("water") -> drawOpenSea(canvas, width, height, scene, progress, continuityPhase)
-            normalized.contains("صحراء") || normalized.contains("رمال") ||
-                normalized.contains("كثبان") || normalized.contains("desert") ||
-                normalized.contains("dunes") -> drawDesert(canvas, width, height, scene, progress, continuityPhase)
-            normalized.contains("غابة") || normalized.contains("forest") ||
-                normalized.contains("woods") -> drawForest(canvas, width, height, scene, progress, continuityPhase)
-            normalized.contains("طريق") || normalized.contains("شارع") ||
-                normalized.contains("road") || normalized.contains("street") -> drawRoad(canvas, width, height, scene, progress)
-            normalized.contains("ريف") || normalized.contains("مزرعة") ||
-                normalized.contains("حقل") || normalized.contains("rural") ||
-                normalized.contains("farm") || normalized.contains("field") -> drawRural(canvas, width, height, scene, progress)
+        val style = visualStyle.lowercase(java.util.Locale.ROOT)
+        val monochrome = style.contains("أبيض وأسود") || style.contains("أحادي") ||
+            style.contains("نوير") || style.contains("black and white") || style.contains("monochrome")
+        val colorFilter = if (monochrome) {
+            ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
+        } else {
+            null
+        }
+        environmentFillPaint.colorFilter = colorFilter
+        environmentLinePaint.colorFilter = colorFilter
+        try {
+            when {
+                normalized.contains("شاطئ") || normalized.contains("ساحل") ||
+                    normalized.contains("beach") || normalized.contains("shore") ||
+                    normalized.contains("coast") -> drawBeach(canvas, width, height, scene, progress, continuityPhase)
+                normalized.contains("بحر") || normalized.contains("محيط") ||
+                    normalized.contains("sea") || normalized.contains("ocean") ||
+                    normalized.contains("water") -> drawOpenSea(canvas, width, height, scene, progress, continuityPhase)
+                normalized.contains("صحراء") || normalized.contains("رمال") ||
+                    normalized.contains("كثبان") || normalized.contains("desert") ||
+                    normalized.contains("dunes") -> drawDesert(canvas, width, height, scene, progress, continuityPhase)
+                normalized.contains("غابة") || normalized.contains("forest") ||
+                    normalized.contains("woods") -> drawForest(canvas, width, height, scene, progress, continuityPhase)
+                normalized.contains("طريق") || normalized.contains("شارع") ||
+                    normalized.contains("road") || normalized.contains("street") -> drawRoad(canvas, width, height, scene, progress)
+                normalized.contains("ريف") || normalized.contains("مزرعة") ||
+                    normalized.contains("حقل") || normalized.contains("rural") ||
+                    normalized.contains("farm") || normalized.contains("field") -> drawRural(canvas, width, height, scene, progress)
+            }
+        } finally {
+            // Paint objects are shared by this renderer; never leak a shot's visual style.
+            environmentFillPaint.colorFilter = null
+            environmentLinePaint.colorFilter = null
         }
     }
 
@@ -304,6 +323,7 @@ object WolfSceneArtEngine {
     ) {
         val phase = progress * 6.2831853f + scene * 0.47f + continuityPhase
         environmentLinePaint.strokeWidth = maxOf(1f, height * 0.0015f)
+        val path = Path()
         for (row in 0 until rows) {
             val fraction = (row + 1f) / (rows + 1f)
             val y = top + (bottom - top) * fraction
@@ -311,10 +331,9 @@ object WolfSceneArtEngine {
             val center = width * (0.50f + drift * 0.035f)
             val span = width * (0.09f + (row % 4) * 0.035f)
             val wave = height * (0.0018f + (row % 3) * 0.0009f)
-            val path = Path().apply {
-                moveTo(center - span, y)
-                cubicTo(center - span * 0.42f, y - wave, center + span * 0.30f, y + wave, center + span, y - wave * 0.12f)
-            }
+            path.reset()
+            path.moveTo(center - span, y)
+            path.cubicTo(center - span * 0.42f, y - wave, center + span * 0.30f, y + wave, center + span, y - wave * 0.12f)
             environmentLinePaint.color = Color.argb(22 + (row % 5) * 5, 151, 177, 185)
             canvas.drawPath(path, environmentLinePaint)
         }
@@ -395,17 +414,17 @@ object WolfSceneArtEngine {
         environmentFillPaint.shader = null
 
         val sway = kotlin.math.sin((progress * 2.0 * Math.PI + scene * 0.6 + continuityPhase).toDouble()).toFloat()
+        val trunk = Path()
         for (index in 0..12) {
             val seed = scene * 19 + index * 13
             val x = width * (index / 12f)
             val top = height * (0.34f + ((seed % 5) * 0.027f))
             val lean = sway * width * (0.004f + (index % 3) * 0.001f)
-            val trunk = Path().apply {
-                moveTo(x - width * 0.012f, height * 0.86f)
-                cubicTo(x + lean, height * 0.68f, x - lean * 0.55f, top + height * 0.17f, x + lean * 0.30f, top)
-                cubicTo(x + width * 0.014f, top + height * 0.19f, x + lean, height * 0.68f, x + width * 0.013f, height * 0.86f)
-                close()
-            }
+            trunk.reset()
+            trunk.moveTo(x - width * 0.012f, height * 0.86f)
+            trunk.cubicTo(x + lean, height * 0.68f, x - lean * 0.55f, top + height * 0.17f, x + lean * 0.30f, top)
+            trunk.cubicTo(x + width * 0.014f, top + height * 0.19f, x + lean, height * 0.68f, x + width * 0.013f, height * 0.86f)
+            trunk.close()
             environmentFillPaint.color = Color.argb(145, 2, 7, 8)
             canvas.drawPath(trunk, environmentFillPaint)
         }
@@ -458,13 +477,13 @@ object WolfSceneArtEngine {
         val fieldPhase = progress * 0.22f + scene * 0.4f
         environmentLinePaint.color = Color.argb(26, 137, 151, 132)
         environmentLinePaint.strokeWidth = maxOf(1f, height * 0.0016f)
+        val fieldLine = Path()
         for (row in 0..7) {
             val y = height * (0.78f + row * 0.027f)
             val drift = kotlin.math.sin((fieldPhase + row).toDouble()).toFloat() * width * 0.015f
-            val fieldLine = Path().apply {
-                moveTo(-width * 0.06f, y + drift)
-                cubicTo(width * 0.26f, y - height * 0.01f, width * 0.66f, y + height * 0.012f, width * 1.06f, y - drift)
-            }
+            fieldLine.reset()
+            fieldLine.moveTo(-width * 0.06f, y + drift)
+            fieldLine.cubicTo(width * 0.26f, y - height * 0.01f, width * 0.66f, y + height * 0.012f, width * 1.06f, y - drift)
             canvas.drawPath(fieldLine, environmentLinePaint)
         }
     }
