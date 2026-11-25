@@ -83,7 +83,9 @@ class WolfTeleprompterAndroidTest {
                 assertNotNull("The manual stop action must remain available during quiet time", stop)
                 assertTrue("The recording must not auto-stop during a short quiet interval", stop!!.isEnabled)
                 val progress = findWindowView(WolfUiTestTags.TELEPROMPTER_PROGRESS) as TextView
-                assertTrue("The Teleprompter must show elapsed recording time", progress.text.contains("ثانية"))
+                val elapsedSeconds = Regex("التسجيل مستمر — (\\d+) ثانية")
+                    .find(progress.text.toString())?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                assertTrue("The Teleprompter must show at least one elapsed second", elapsedSeconds >= 1)
             }
 
             stopRecording(scenario)
