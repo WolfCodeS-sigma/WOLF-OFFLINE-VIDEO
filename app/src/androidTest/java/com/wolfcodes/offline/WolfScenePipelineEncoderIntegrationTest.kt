@@ -183,6 +183,10 @@ class WolfScenePipelineEncoderIntegrationTest {
                 "The final black transition must separate the intro from the first horror scene",
                 countDifferentSamples(closing, firstStory) > 12
             )
+            assertTrue(
+                "The final encoded intro frame must be black before scene one",
+                meanSampledLuminance(closing) <= 8.0
+            )
         } finally {
             openingFrame?.recycle()
             middleFrame?.recycle()
@@ -451,6 +455,29 @@ class WolfScenePipelineEncoderIntegrationTest {
     }
 
     @Test
+    fun environmentPaintStateDoesNotLeakFromDesertIntoBeach() {
+        // The desert draws its foreground dune with alpha 72. The next scene must
+        // start with opaque gradient paints rather than inheriting that alpha.
+        val desert = renderImageFreeScene(
+            "طارد ظل أسود الحارس عبر كثبان الصحراء المهجورة وسط غبار الليل"
+        )
+        val beach = renderImageFreeScene(
+            "على الشاطئ المهجور تتراجع الأمواج تحت ضباب كثيف وصوت غامض يقترب"
+        )
+        try {
+            val sky = beach.getPixel((beach.width * 0.18f).toInt(), (beach.height * 0.18f).toInt())
+            val sea = beach.getPixel((beach.width * 0.18f).toInt(), (beach.height * 0.60f).toInt())
+            assertTrue(
+                "Beach sky/sea contrast must survive a preceding desert render: sky=$sky sea=$sea",
+                colorDistance(sky, sea) > 24
+            )
+        } finally {
+            desert.recycle()
+            beach.recycle()
+        }
+    }
+
+    @Test
     fun imageFreeOpenSeaFrameContainsHorizonAndLayeredWater() {
         val bitmap = renderImageFreeScene(
             "في البحر المفتوح ظهرت أضواء بعيدة تحت ضباب بارد ثم صعد ظل غريق من الماء واختفى"
@@ -609,6 +636,19 @@ class WolfScenePipelineEncoderIntegrationTest {
         for (y in 8 until first.height step 8) {
             for (x in 8 until first.width step 8) {
                 total += colorDistance(first.getPixel(x, y), second.getPixel(x, y))
+                samples++
+            }
+        }
+        return total.toDouble() / samples.coerceAtLeast(1L).toDouble()
+    }
+
+    private fun meanSampledLuminance(bitmap: Bitmap): Double {
+        var total = 0L
+        var samples = 0L
+        for (y in 8 until bitmap.height step 8) {
+            for (x in 8 until bitmap.width step 8) {
+                val pixel = bitmap.getPixel(x, y)
+                total += (Color.red(pixel) + Color.green(pixel) + Color.blue(pixel)) / 3
                 samples++
             }
         }
