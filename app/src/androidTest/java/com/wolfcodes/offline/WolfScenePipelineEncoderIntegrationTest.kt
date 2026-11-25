@@ -121,6 +121,80 @@ class WolfScenePipelineEncoderIntegrationTest {
 
 
     @Test
+    fun animatedWolfIntroChangesAcrossThreeSecondsAndTransitionsIntoHorrorFilm() {
+        val context = targetContext()
+        val output = File(context.cacheDir, "wolf-stage-06-e-intro-${System.nanoTime()}.mp4")
+        val normalized = File(context.cacheDir, "wolf-stage-06-e-intro-normalized-${System.nanoTime()}.mp4")
+        var openingFrame: Bitmap? = null
+        var middleFrame: Bitmap? = null
+        var signatureFrame: Bitmap? = null
+        var closingFrame: Bitmap? = null
+        var firstStoryFrame: Bitmap? = null
+        val introSeconds = WolfCinematicIdentity.INTRO_DURATION_SECONDS
+        val introFrameCount = WolfCinematicIdentity.introFrameCount(introSeconds, TEST_FPS)
+
+        try {
+            OfflineProductionEngine.encode(
+                context = context,
+                file = output,
+                scenes = listOf("طارد ظل أسود الحارس داخل ممر المستشفى المهجور حتى اختفى خلف الباب الحديدي"),
+                w = TEST_WIDTH,
+                h = TEST_HEIGHT,
+                fps = TEST_FPS,
+                framesPerScene = listOf(TEST_FRAME_COUNT),
+                sceneImageUris = listOf(listOf<Uri?>(null, null, null)),
+                includeWatermark = false,
+                typographyCues = listOf(null),
+                introSeconds = introSeconds,
+                onSceneProgress = null,
+                bitRate = 600_000,
+                shotFrameBudgets = listOf(listOf(4, 4, 4)),
+                shotPlansPerScene = listOf(testShotPlans()),
+                sceneRenderContexts = listOf(testSceneContext())
+            )
+
+            OfflineProductionEngine.normalizeVideoTimestamps(output, normalized, TEST_FPS)
+            assertEncodedVideo(
+                normalized,
+                minimumSamples = introFrameCount + TEST_FRAME_COUNT,
+                minimumLastPtsUs = introSeconds * 1_000_000L + 750_000L
+            )
+
+            val opening = frameAt(normalized, 500_000L)
+            openingFrame = opening
+            val middle = frameAt(normalized, 1_500_000L)
+            middleFrame = middle
+            val signature = frameAt(normalized, 2_750_000L)
+            signatureFrame = signature
+            val closing = frameAt(normalized, 2_950_000L)
+            closingFrame = closing
+            val firstStory = frameAt(normalized, 3_250_000L)
+            firstStoryFrame = firstStory
+
+            assertTrue(
+                "The wolf mark must visibly animate during the opening",
+                countDifferentSamples(opening, middle) > 12
+            )
+            assertTrue(
+                "The animated identity must continue changing through the signature reveal",
+                countDifferentSamples(middle, signature) > 12
+            )
+            assertTrue(
+                "The final black transition must separate the intro from the first horror scene",
+                countDifferentSamples(closing, firstStory) > 12
+            )
+        } finally {
+            openingFrame?.recycle()
+            middleFrame?.recycle()
+            signatureFrame?.recycle()
+            closingFrame?.recycle()
+            firstStoryFrame?.recycle()
+            output.delete()
+            normalized.delete()
+        }
+    }
+
+    @Test
     fun storyDirectorTrackingMotionChangesFramesInTheEncodedProductionPath() {
         val context = targetContext()
         val stillOutput = File(context.cacheDir, "wolf-stage-06-d-camera-hold-${System.nanoTime()}.mp4")
@@ -583,7 +657,11 @@ class WolfScenePipelineEncoderIntegrationTest {
         horrorType = "رعب نفسي"
     )
 
-    private fun assertEncodedVideo(file: File) {
+    private fun assertEncodedVideo(
+        file: File,
+        minimumSamples: Int = TEST_FRAME_COUNT,
+        minimumLastPtsUs: Long = 750_000L
+    ) {
         assertTrue("MP4 output was not created", file.isFile && file.length() > 0L)
         val extractor = MediaExtractor()
         try {
@@ -610,10 +688,10 @@ class WolfScenePipelineEncoderIntegrationTest {
                 sampleCount++
                 if (!extractor.advance()) break
             }
-            assertTrue("Expected at least $TEST_FRAME_COUNT encoded samples, got $sampleCount",
-                sampleCount >= TEST_FRAME_COUNT)
+            assertTrue("Expected at least $minimumSamples encoded samples, got $sampleCount",
+                sampleCount >= minimumSamples)
             assertTrue("Encoded video timeline is shorter than expected: $previousPtsUs",
-                previousPtsUs >= 750_000L)
+                previousPtsUs >= minimumLastPtsUs)
         } finally {
             extractor.release()
         }
