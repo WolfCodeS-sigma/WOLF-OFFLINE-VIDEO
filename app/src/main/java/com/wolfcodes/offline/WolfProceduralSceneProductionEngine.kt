@@ -149,6 +149,20 @@ object WolfProceduralSceneProductionEngine {
         } finally {
             canvas.restoreToCount(saved)
         }
+
+        // Keep the procedural renderer complete for standalone pipeline callers.
+        // The MP4 encoder skips its shared image-only overlay pass for this backend.
+        WolfProceduralMotionEngine.renderDepthAware(
+            canvas = canvas,
+            width = width,
+            height = height,
+            caption = caption,
+            sceneIndex = sourceSceneIndex,
+            shotIndex = safeShot,
+            progress = plannedProgress,
+            storyEvent = sceneRenderContext?.event,
+            continuityKey = sceneRenderContext?.continuityKey ?: 0
+        )
     }
 
     private fun settingFor(environment: Environment): String = when (environment) {
