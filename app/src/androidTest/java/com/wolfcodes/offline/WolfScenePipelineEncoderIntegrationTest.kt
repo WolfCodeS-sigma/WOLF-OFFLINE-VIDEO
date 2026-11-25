@@ -25,7 +25,7 @@ class WolfScenePipelineEncoderIntegrationTest {
 
     @Test
     fun testNoImageSceneUsesProceduralPipelineAndProducesMp4Frames() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val context = targetContext()
         val output = File(context.cacheDir, "wolf-stage-06-b-procedural-${System.nanoTime()}.mp4")
         val normalized = File(context.cacheDir, "wolf-stage-06-b-procedural-normalized-${System.nanoTime()}.mp4")
         val backendFrames = mutableListOf<WolfSceneRenderPipeline.Backend>()
@@ -63,7 +63,7 @@ class WolfScenePipelineEncoderIntegrationTest {
 
     @Test
     fun testSelectedUserImageStaysOnUploadedPipelineThroughEncoder() {
-        val context = instrumentation.targetContext
+        val context = targetContext()
         val output = File(context.cacheDir, "wolf-stage-06-b-uploaded-${System.nanoTime()}.mp4")
         val normalized = File(context.cacheDir, "wolf-stage-06-b-uploaded-normalized-${System.nanoTime()}.mp4")
         val imageFile = File(context.cacheDir, "wolf-stage-06-b-image-${System.nanoTime()}.png")
@@ -116,6 +116,13 @@ class WolfScenePipelineEncoderIntegrationTest {
             imageFile.delete()
         }
     }
+
+    /**
+     * Resolve the application context through the AndroidX instrumentation API.
+     * Keep both encoder scenarios on the same canonical context source.
+     */
+    private fun targetContext() =
+        InstrumentationRegistry.getInstrumentation().targetContext
 
     private fun testShotPlans(): List<StoryDirectorEngine.ShotPlan> =
         (0 until 3).map { index ->
