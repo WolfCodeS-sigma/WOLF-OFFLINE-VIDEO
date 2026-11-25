@@ -47,7 +47,10 @@ adb install -r "$APK"
 
 # Resolve the exported MAIN/LAUNCHER component from PackageManager instead of
 # assuming that the launcher class is named .MainActivity.
-LAUNCHER_COMPONENT="$(adb shell cmd package resolve-activity --brief "$APP_ID" |
+LAUNCHER_COMPONENT="$(adb shell cmd package resolve-activity --brief \
+  -a android.intent.action.MAIN \
+  -c android.intent.category.LAUNCHER \
+  -p "$APP_ID" |
   tr -d '\r' |
   awk '/^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$]+$/ { print; exit }')"
 if [[ -z "$LAUNCHER_COMPONENT" ]]; then
