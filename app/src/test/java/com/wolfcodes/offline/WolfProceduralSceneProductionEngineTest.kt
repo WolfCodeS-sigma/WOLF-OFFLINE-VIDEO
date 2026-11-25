@@ -99,6 +99,7 @@ class WolfProceduralSceneProductionEngineTest {
             WolfProceduralSceneProductionEngine.shotComposition(2))
     }
 
+    // Distinguish the dominant interior location from a door/window that anchors the event.
     @Test
     fun roomWinsWhenDoorIsOnlyAnIncidentalDetail() {
         assertEquals(
