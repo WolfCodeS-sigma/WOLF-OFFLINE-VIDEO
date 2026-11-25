@@ -45,23 +45,14 @@ gradle --no-daemon :app:connectedDebugAndroidTest
 APP_ID="com.wolfcodes.offline"
 adb install -r "$APK"
 
-# Resolve the exported MAIN/LAUNCHER component from PackageManager instead of
-# assuming that the launcher class is named .MainActivity.
-LAUNCHER_COMPONENT="$(adb shell cmd package resolve-activity --brief \
+# Launch through the implicit Android MAIN/LAUNCHER intent. PackageManager
+# resolves the manifest-declared launcher activity for this package, so the
+# smoke test does not duplicate or guess a Java/Kotlin Activity class name.
+adb shell am force-stop "$APP_ID"
+adb shell am start -W \
   -a android.intent.action.MAIN \
   -c android.intent.category.LAUNCHER \
-  -p "$APP_ID" |
-  tr -d '\r' |
-  awk '/^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$]+$/ { print; exit }')"
-if [[ -z "$LAUNCHER_COMPONENT" ]]; then
-  echo "Unable to resolve the installed app's MAIN/LAUNCHER activity for $APP_ID" >&2
-  adb shell dumpsys package "$APP_ID" >&2 || true
-  exit 1
-fi
-echo "Resolved launcher component: $LAUNCHER_COMPONENT"
-
-adb shell am force-stop "$APP_ID"
-adb shell am start -W -n "$LAUNCHER_COMPONENT"
+  "$APP_ID"
 
 for attempt in $(seq 1 30); do
   if adb shell pidof com.wolfcodes.offline >/dev/null 2>&1; then
