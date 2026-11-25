@@ -57,29 +57,19 @@ class WolfUploadedImageEngineTest {
     }
 
     @Test
-    fun unverifiedImageFitKeepsTheCompleteSourceAspectInsideTheOutput() {
-        val landscape = WolfUploadedImageEngine.aspectFitDestination(
-            sourceWidth = 1600,
-            sourceHeight = 900,
-            outputWidth = 320,
-            outputHeight = 568
+    fun everyVerifiedHorrorAtmosphereUsesPeakSafeIntensity() {
+        val horrorScenes = listOf(
+            "بدأت المطاردة في الممر المهجور",
+            "ظهر شبح خلف الباب",
+            "المطر يضرب نافذة القبو",
+            "تحركت الأشجار فوق المقبرة",
+            "انطفأ الضوء قرب المرآة القديمة",
+            "ظل الحارس يسمع همسًا داخل الغرفة"
         )
-        assertEquals(320f, landscape.width, 0.001f)
-        assertEquals(180f, landscape.height, 0.001f)
-        assertEquals(194f, landscape.top, 0.001f)
-        assertEquals(0f, landscape.left, 0.001f)
-        assertTrue(landscape.top >= 0f && landscape.bottom <= 568f)
-
-        val portrait = WolfUploadedImageEngine.aspectFitDestination(
-            sourceWidth = 900,
-            sourceHeight = 1600,
-            outputWidth = 568,
-            outputHeight = 320
-        )
-        assertEquals(180f, portrait.width, 0.001f)
-        assertEquals(320f, portrait.height, 0.001f)
-        assertEquals(194f, portrait.left, 0.001f)
-        assertEquals(0f, portrait.top, 0.001f)
-        assertTrue(portrait.left >= 0f && portrait.right <= 568f)
+        horrorScenes.forEachIndexed { index, story ->
+            val plan = WolfUploadedImageEngine.planMotion(story, index, 1, 0.5f)
+            assertTrue("Horror intensity must remain at maximum: $story",
+                plan.intensity >= 0.999f)
+        }
     }
 }

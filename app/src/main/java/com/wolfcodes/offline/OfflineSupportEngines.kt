@@ -33,6 +33,9 @@ object OfflineLookEngine {
 }
 
 object OfflineMotionEngine {
+    /** Full strength is the default for WOLF horror sequences; individual shots stay bounded. */
+    const val MAX_HORROR_INTENSITY = 1.0f
+
     enum class Movement { SUSPENSE, REVEAL, CHASE }
 
     data class MotionProfile(
@@ -143,10 +146,13 @@ object OfflineMotionEngine {
         scene: Int,
         caption: String,
         shotIndex: Int,
-        movement: StoryDirectorEngine.CameraMovement? = null
+        movement: StoryDirectorEngine.CameraMovement? = null,
+        horrorIntensity: Float = MAX_HORROR_INTENSITY
     ): CameraFrame {
         val t = progress.coerceIn(0f, 1f)
-        if (movement != null) return cameraFrameForMovement(t, scene, movement)
+        if (movement != null) {
+            return applyHorrorIntensity(cameraFrameForMovement(t, scene, movement), horrorIntensity)
+        }
         val eased = t * t * (3f - 2f * t)
         val wave = sin(t * (2f * PI) + scene * 0.61).toFloat()
         val envelope = sin(PI * t).toFloat().coerceAtLeast(0f)
@@ -217,11 +223,28 @@ object OfflineMotionEngine {
             }
         }
 
+        return applyHorrorIntensity(
+            CameraFrame(
+                zoom = zoom.coerceIn(-0.012f, 0.090f),
+                offsetX = panX.coerceIn(-0.12f, 0.12f),
+                offsetY = panY.coerceIn(-0.10f, 0.10f),
+                rotationDegrees = rotation.coerceIn(-0.65f, 0.65f)
+            ),
+            horrorIntensity
+        )
+    }
+
+    private fun applyHorrorIntensity(frame: CameraFrame, requested: Float): CameraFrame {
+        val intensity = if (requested.isFinite()) {
+            requested.coerceIn(0f, MAX_HORROR_INTENSITY)
+        } else {
+            0f
+        }
         return CameraFrame(
-            zoom = zoom.coerceIn(-0.012f, 0.090f),
-            offsetX = panX.coerceIn(-0.12f, 0.12f),
-            offsetY = panY.coerceIn(-0.10f, 0.10f),
-            rotationDegrees = rotation.coerceIn(-0.65f, 0.65f)
+            zoom = frame.zoom * intensity,
+            offsetX = frame.offsetX * intensity,
+            offsetY = frame.offsetY * intensity,
+            rotationDegrees = frame.rotationDegrees * intensity
         )
     }
 
@@ -235,40 +258,41 @@ object OfflineMotionEngine {
         val wave = sin(t * (2.0 * PI) + scene * 0.61).toFloat()
         val envelope = sin(PI * t).toFloat().coerceAtLeast(0f)
         return when (movement) {
+            // HOLD remains perfectly still: the absence of movement is an intentional fear beat.
             StoryDirectorEngine.CameraMovement.HOLD ->
                 CameraFrame(zoom = 0f, offsetX = 0f, offsetY = 0f, rotationDegrees = 0f)
             StoryDirectorEngine.CameraMovement.TRACK_LATERAL -> {
                 val direction = if (Math.floorMod(scene, 2) == 0) 1f else -1f
-                CameraFrame(0.006f * eased, direction * (-0.036f + 0.072f * eased), -0.004f * envelope, 0f)
+                CameraFrame(0.014f * eased, direction * (-0.060f + 0.120f * eased), -0.007f * envelope, 0f)
             }
             StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT ->
-                CameraFrame(0.006f * eased, -0.040f + 0.080f * eased, -0.004f * envelope, 0f)
+                CameraFrame(0.014f * eased, -0.065f + 0.130f * eased, -0.007f * envelope, 0f)
             StoryDirectorEngine.CameraMovement.TRACK_RIGHT_TO_LEFT ->
-                CameraFrame(0.006f * eased, 0.040f - 0.080f * eased, 0.004f * envelope, 0f)
+                CameraFrame(0.014f * eased, 0.065f - 0.130f * eased, 0.007f * envelope, 0f)
             StoryDirectorEngine.CameraMovement.FOLLOW ->
-                CameraFrame(0.014f * eased, -0.028f + 0.056f * eased, 0.006f * wave * envelope, 0f)
+                CameraFrame(0.030f * eased, -0.045f + 0.090f * eased, 0.012f * wave * envelope, 0f)
             StoryDirectorEngine.CameraMovement.SLOW_PUSH_IN ->
-                CameraFrame(0.036f * eased, 0f, 0.003f * wave * envelope, 0f)
+                CameraFrame(0.065f * eased, 0f, 0.006f * wave * envelope, 0f)
             StoryDirectorEngine.CameraMovement.SLOW_REVEAL -> {
-                val reveal = ((t - 0.42f) / 0.58f).coerceIn(0f, 1f)
+                val reveal = ((t - 0.36f) / 0.64f).coerceIn(0f, 1f)
                 val revealEase = reveal * reveal * (3f - 2f * reveal)
-                CameraFrame(0.028f * revealEase, 0.012f * revealEase, -0.018f * revealEase, 0f)
+                CameraFrame(0.060f * revealEase, 0.026f * revealEase, -0.032f * revealEase, 0f)
             }
             StoryDirectorEngine.CameraMovement.RESTRAINED_HANDHELD ->
                 CameraFrame(
-                    zoom = 0.010f * eased,
-                    offsetX = sin(t * (10.0 * PI) + scene).toFloat() * 0.008f * envelope,
-                    offsetY = sin(t * (8.0 * PI) + scene * 0.4).toFloat() * 0.006f * envelope,
-                    rotationDegrees = sin(t * (8.0 * PI) + scene).toFloat() * 0.16f * envelope
+                    zoom = 0.022f * eased,
+                    offsetX = sin(t * (10.0 * PI) + scene).toFloat() * 0.018f * envelope,
+                    offsetY = sin(t * (8.0 * PI) + scene * 0.4).toFloat() * 0.013f * envelope,
+                    rotationDegrees = sin(t * (8.0 * PI) + scene).toFloat() * 0.42f * envelope
                 )
             StoryDirectorEngine.CameraMovement.SLOW_DRIFT ->
-                CameraFrame(0.014f * eased, -0.015f + 0.030f * eased, 0.006f * wave * envelope, 0f)
+                CameraFrame(0.032f * eased, -0.030f + 0.060f * eased, 0.012f * wave * envelope, 0f)
         }.let { frame ->
             frame.copy(
-                zoom = frame.zoom.coerceIn(-0.012f, 0.045f),
-                offsetX = frame.offsetX.coerceIn(-0.06f, 0.06f),
-                offsetY = frame.offsetY.coerceIn(-0.04f, 0.04f),
-                rotationDegrees = frame.rotationDegrees.coerceIn(-0.20f, 0.20f)
+                zoom = frame.zoom.coerceIn(-0.015f, 0.075f),
+                offsetX = frame.offsetX.coerceIn(-0.075f, 0.075f),
+                offsetY = frame.offsetY.coerceIn(-0.055f, 0.055f),
+                rotationDegrees = frame.rotationDegrees.coerceIn(-0.55f, 0.55f)
             )
         }
     }

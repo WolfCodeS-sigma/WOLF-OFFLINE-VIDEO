@@ -147,7 +147,8 @@ object WolfProceduralSceneProductionEngine {
         val horizontalOffset = compositionFocusX?.let { (it - 0.5f) * width * 0.08f } ?: 0f
         val verticalOffset = compositionFocusY?.let { (it - 0.5f) * height * 0.06f } ?: 0f
         val sceneCamera = OfflineMotionEngine.cameraFrame(
-            plannedProgress, sourceSceneIndex, caption, safeShot, cameraMovement
+            plannedProgress, sourceSceneIndex, caption, safeShot, cameraMovement,
+            OfflineMotionEngine.MAX_HORROR_INTENSITY
         )
         val sceneScale = (1f + sceneCamera.zoom).coerceIn(0.98f, 1.08f)
         val setting = sceneRenderContext?.setting?.takeIf { it.isNotBlank() }

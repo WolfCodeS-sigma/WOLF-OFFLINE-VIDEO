@@ -152,13 +152,8 @@ object WolfUploadedImageEngine {
             }
         }
         val progressPulse = 0.96f + 0.04f * sin((durationProgress.coerceIn(0f, 1f) * PI).toDouble()).toFloat()
-        val intensity = when (atmosphere) {
-            Atmosphere.CHASE -> 1.0f
-            Atmosphere.GHOST, Atmosphere.DOOR, Atmosphere.MIRROR -> 0.78f
-            Atmosphere.RAIN, Atmosphere.CORRIDOR -> 0.62f
-            Atmosphere.FOREST, Atmosphere.CEMETERY -> 0.48f
-            Atmosphere.QUIET -> 0.28f
-        }
+        // All approved horror story beats use peak atmosphere; unverified photos never reach this pass.
+        val intensity = 1.0f
         val focusX = when (move) {
             CameraMove.LEFT_TRACK -> 0.40f
             CameraMove.RIGHT_TRACK -> 0.60f
