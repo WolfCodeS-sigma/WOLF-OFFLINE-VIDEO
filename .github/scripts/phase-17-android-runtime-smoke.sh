@@ -40,8 +40,25 @@ test "$(adb shell settings get global wifi_on | tr -d '\r')" = "0"
 # Exercise the actual scene dispatch and AVC/MP4 encoder path while the emulator is offline.
 gradle --no-daemon :app:connectedDebugAndroidTest
 
-adb shell am force-stop com.wolfcodes.offline
-adb shell am start -W -n com.wolfcodes.offline/.MainActivity
+# connectedDebugAndroidTest manages the tested package lifecycle. Reinstall the
+# production debug APK explicitly before the independent application-launch smoke test.
+APP_ID="com.wolfcodes.offline"
+adb install -r "$APK"
+
+# Resolve the exported MAIN/LAUNCHER component from PackageManager instead of
+# assuming that the launcher class is named .MainActivity.
+LAUNCHER_COMPONENT="$(adb shell cmd package resolve-activity --brief "$APP_ID" |
+  tr -d '\r' |
+  awk '/^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$]+$/ { print; exit }')"
+if [[ -z "$LAUNCHER_COMPONENT" ]]; then
+  echo "Unable to resolve the installed app's MAIN/LAUNCHER activity for $APP_ID" >&2
+  adb shell dumpsys package "$APP_ID" >&2 || true
+  exit 1
+fi
+echo "Resolved launcher component: $LAUNCHER_COMPONENT"
+
+adb shell am force-stop "$APP_ID"
+adb shell am start -W -n "$LAUNCHER_COMPONENT"
 
 for attempt in $(seq 1 30); do
   if adb shell pidof com.wolfcodes.offline >/dev/null 2>&1; then
