@@ -180,7 +180,7 @@ class WolfTeleprompterAndroidTest {
             assertEquals(expectedStory, script!!.text.toString())
             assertEquals(View.TEXT_DIRECTION_FIRST_STRONG_RTL, script.textDirection)
             assertEquals(View.TEXT_ALIGNMENT_VIEW_START, script.textAlignment)
-            assertTrue("The story must be laid out from the RTL start edge", script.gravity and Gravity.START == Gravity.START)
+            assertEquals("The story must be laid out from the RTL start edge", Gravity.START, script.gravity)
 
             val scroll = findWindowView(WolfUiTestTags.TELEPROMPTER_SCROLL) as? ScrollView
             assertNotNull("The story must use a scrollable manual reading surface", scroll)
