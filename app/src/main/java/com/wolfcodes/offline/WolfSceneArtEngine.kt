@@ -425,7 +425,7 @@ object WolfSceneArtEngine {
         }
         environmentFillPaint.shader = LinearGradient(
             0f, groundY, 0f, height,
-            intArrayOf(opaqueRgb(8, 18, 17), opaqueRgb(3, 8, 10)),
+            intArrayOf(opaqueRgb(7, 13, 12), opaqueRgb(0, 1, 2)),
             null, Shader.TileMode.CLAMP
         )
         canvas.drawPath(ground, environmentFillPaint)
