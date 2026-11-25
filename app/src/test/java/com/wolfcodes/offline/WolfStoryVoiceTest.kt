@@ -8,9 +8,9 @@ import org.junit.Test
 class WolfStoryVoiceTest {
     private fun session() = WolfStoryVoiceSession(
         projectId = "project-1",
-        sourceStory = "قصة المصدر",
-        draftStory = "قصة المصدر",
-        finalStory = "قصة المصدر",
+        sourceStory = "في القبو المهجور سمع الحارس ثلاث طرقات من خلف الجدار.",
+        draftStory = "في القبو المهجور سمع الحارس ثلاث طرقات من خلف الجدار.",
+        finalStory = "في القبو المهجور سمع الحارس ثلاث طرقات من خلف الجدار.",
         scriptApproved = false,
         voiceFilePath = null,
         audioDurationMs = 0L,
@@ -22,20 +22,20 @@ class WolfStoryVoiceTest {
 
     @Test
     fun approvingScriptDoesNotCreateOrModifyVoiceRecording() {
-        val approved = WolfStoryVoiceStateMachine.approveScript(session(), "النص النهائي المعتمد", 2L)
+        val approved = WolfStoryVoiceStateMachine.approveScript(session(), "النص النهائي: ظهر ظل خلف باب القبو.", 2L)
         assertTrue(approved.scriptApproved)
-        assertEquals("قصة المصدر", approved.sourceStory)
-        assertEquals("النص النهائي المعتمد", approved.finalStory)
+        assertEquals("في القبو المهجور سمع الحارس ثلاث طرقات من خلف الجدار.", approved.sourceStory)
+        assertEquals("النص النهائي: ظهر ظل خلف باب القبو.", approved.finalStory)
         assertEquals(null, approved.voiceFilePath)
         assertFalse(approved.voiceApproved)
     }
 
     @Test
     fun editingFinalScriptInvalidatesPreviousVoiceApproval() {
-        val script = WolfStoryVoiceStateMachine.approveScript(session(), "النص الأول", 2L)
+        val script = WolfStoryVoiceStateMachine.approveScript(session(), "النص الأول: طرقات متتابعة خلف جدار السرداب.", 2L)
         val take = WolfStoryVoiceStateMachine.saveRecording(script, "/private/voice.m4a", 12000L, 3L)
         val approved = WolfStoryVoiceStateMachine.approveRecording(take, true, 4096L, 4L)
-        val edited = WolfStoryVoiceStateMachine.edit(approved, "مسودة جديدة", "نص نهائي مختلف", 5L)
+        val edited = WolfStoryVoiceStateMachine.edit(approved, "مسودة جديدة عن كيان يراقب الحارس من فتحة التهوية.", "نص نهائي مختلف: انفتح باب المشرحة رغم إغلاقه.", 5L)
         assertFalse(edited.scriptApproved)
         assertFalse(edited.voiceApproved)
         assertEquals(null, edited.voiceFilePath)
@@ -44,17 +44,17 @@ class WolfStoryVoiceTest {
 
     @Test
     fun projectStoryChangeAlwaysInvalidatesApprovedTakeEvenWhenSessionTextAlreadyMatches() {
-        val script = WolfStoryVoiceStateMachine.approveScript(session(), "النص الجديد", 2L)
+        val script = WolfStoryVoiceStateMachine.approveScript(session(), "سمع الحارس همسًا خلف باب المشرحة.", 2L)
         val take = WolfStoryVoiceStateMachine.saveRecording(script, "/private/old-take.m4a", 12000L, 3L)
         val approved = WolfStoryVoiceStateMachine.approveRecording(take, true, 4096L, 4L)
 
         // Simulates a project record whose story changed independently while the voice
         // session already contains the new text. Invalidation must not rely on text diff.
         val invalidated = WolfStoryVoiceStateMachine.invalidateForStoryChange(
-            approved, "النص الجديد", 5L
+            approved, "سمع الحارس همسًا خلف باب المشرحة.", 5L
         )
 
-        assertEquals("النص الجديد", invalidated.finalStory)
+        assertEquals("سمع الحارس همسًا خلف باب المشرحة.", invalidated.finalStory)
         assertFalse(invalidated.scriptApproved)
         assertFalse(invalidated.voiceApproved)
         assertEquals(null, invalidated.voiceFilePath)
@@ -63,7 +63,7 @@ class WolfStoryVoiceTest {
 
     @Test
     fun approvingTextCannotReattachTakeRecordedForAnotherStoryRevision() {
-        val approvedScript = WolfStoryVoiceStateMachine.approveScript(session(), "القصة القديمة", 2L)
+        val approvedScript = WolfStoryVoiceStateMachine.approveScript(session(), "القصة القديمة عن ظل داخل سرداب المستشفى.", 2L)
         val take = WolfStoryVoiceStateMachine.saveRecording(
             approvedScript, "/private/old-take.m4a", 12000L, 3L
         )
@@ -71,9 +71,9 @@ class WolfStoryVoiceTest {
 
         // Reproduce a stale persisted session where text was changed without clearing
         // the recording metadata. The take fingerprint must still prevent re-approval.
-        val staleSession = approvedTake.copy(finalStory = "القصة الجديدة")
+        val staleSession = approvedTake.copy(finalStory = "القصة الجديدة عن كيان خلف باب المشرحة.")
         val reapprovedText = WolfStoryVoiceStateMachine.approveScript(
-            staleSession, "القصة الجديدة", 5L
+            staleSession, "القصة الجديدة عن كيان خلف باب المشرحة.", 5L
         )
 
         assertTrue(reapprovedText.scriptApproved)
@@ -90,11 +90,11 @@ class WolfStoryVoiceTest {
 
     @Test
     fun userCanApproveAndRepeatAnAudioTakeWithoutChangingStory() {
-        val script = WolfStoryVoiceStateMachine.approveScript(session(), "قصة ثابتة", 2L)
+        val script = WolfStoryVoiceStateMachine.approveScript(session(), "قصة رعب ثابتة: خطوات تقترب من باب القبو.", 2L)
         val take = WolfStoryVoiceStateMachine.saveRecording(script, "/private/voice.m4a", 25000L, 3L)
         val approved = WolfStoryVoiceStateMachine.approveRecording(take, true, 8192L, 4L)
         val repeated = WolfStoryVoiceStateMachine.requestRepeat(approved, 5L)
-        assertEquals("قصة ثابتة", repeated.finalStory)
+        assertEquals("قصة رعب ثابتة: خطوات تقترب من باب القبو.", repeated.finalStory)
         assertTrue(repeated.scriptApproved)
         assertFalse(repeated.voiceApproved)
         assertEquals(null, repeated.voiceFilePath)
@@ -103,7 +103,7 @@ class WolfStoryVoiceTest {
 
     @Test
     fun startingAnotherNarrationSegmentInvalidatesApprovalButKeepsPreviousTakeUntilMerge() {
-        val approvedScript = WolfStoryVoiceStateMachine.approveScript(session(), "قصة ثابتة", 2L)
+        val approvedScript = WolfStoryVoiceStateMachine.approveScript(session(), "قصة رعب ثابتة: خطوات تقترب من باب القبو.", 2L)
         val take = WolfStoryVoiceStateMachine.saveRecording(
             approvedScript, "/private/voiceover.m4a", 12000L, 3L
         )

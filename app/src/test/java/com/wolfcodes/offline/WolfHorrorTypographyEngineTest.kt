@@ -19,9 +19,9 @@ class WolfHorrorTypographyEngineTest {
     }
 
     @Test
-    fun neutralSceneDoesNotReceiveUnfoundedPhrase() {
+    fun unsupportedHorrorCueDoesNotReceiveUnfoundedPhrase() {
         val cues = WolfHorrorTypographyEngine.plan(
-            listOf("جلست الأسرة لتناول العشاء في هدوء."), listOf(120)
+            listOf("القبو الرطب يضيق في سكون ثقيل، وتغلق العتمة آخر منفذ للضوء."), listOf(120)
         )
 
         assertNull(cues.single())
