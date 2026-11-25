@@ -19,7 +19,14 @@ object WolfProceduralSceneProductionEngine {
         DOOR,
         CEMETERY,
         ROOM,
-        HAUNTED_HOUSE
+        HAUNTED_HOUSE,
+        BEACH,
+        SEA,
+        DESERT,
+        ROAD,
+        RURAL,
+        MEDICAL_FACILITY,
+        EDUCATIONAL
     }
 
     data class ShotComposition(
@@ -51,6 +58,13 @@ object WolfProceduralSceneProductionEngine {
             Environment.CEMETERY -> "مقبرة"
             Environment.ROOM -> "غرفة"
             Environment.HAUNTED_HOUSE -> "منزل مهجور"
+            Environment.BEACH -> "شاطئ"
+            Environment.SEA -> "بحر مفتوح"
+            Environment.DESERT -> "صحراء"
+            Environment.ROAD -> "طريق"
+            Environment.RURAL -> "منطقة ريفية"
+            Environment.MEDICAL_FACILITY -> "مكان طبي"
+            Environment.EDUCATIONAL -> "مبنى تعليمي"
         }
         return ScenePlan(
             sceneIndex = sceneIndex,
@@ -67,8 +81,23 @@ object WolfProceduralSceneProductionEngine {
         return when {
             has("مقبرة", "مقابر", "قبر", "قبور", "cemetery", "graveyard", "grave") ->
                 Environment.CEMETERY
+            // Resolve coast before sand so beach sand is not classified as a desert.
+            has("شاطئ", "الشاطئ", "ساحل", "الساحل", "beach", "shore", "coast", "seashore") ->
+                Environment.BEACH
+            has("بحر", "البحر", "محيط", "المحيط", "أمواج", "موج", "sea", "ocean", "waves", "open water") ->
+                Environment.SEA
+            has("صحراء", "الصحراء", "كثبان", "كثيب", "رمال", "desert", "dunes", "sand") ->
+                Environment.DESERT
             has("غابة", "غابه", "أشجار", "شجرة", "غصن", "أغصان", "forest", "woods", "trees") ->
                 Environment.FOREST
+            has("مستشفى", "عيادة", "مشرحة", "hospital", "clinic", "morgue") ->
+                Environment.MEDICAL_FACILITY
+            has("مدرسة", "فصل", "جامعة", "school", "classroom", "university") ->
+                Environment.EDUCATIONAL
+            has("طريق", "شارع", "سيارة", "road", "street", "highway") ->
+                Environment.ROAD
+            has("مزرعة", "حقل", "قرية", "farm", "field", "village", "rural") ->
+                Environment.RURAL
             has("ممر", "طرقة", "الممر", "hallway", "corridor") -> Environment.CORRIDOR
             has("نافذة", "شباك", "زجاج", "window") -> Environment.WINDOW
             has("باب", "أبواب", "مدخل", "door", "entrance") -> Environment.DOOR
@@ -173,5 +202,12 @@ object WolfProceduralSceneProductionEngine {
         Environment.CEMETERY -> "مقابر"
         Environment.ROOM -> "مكان داخلي"
         Environment.HAUNTED_HOUSE -> "منزل مهجور"
+        Environment.BEACH -> "شاطئ أو ساحل"
+        Environment.SEA -> "بحر مفتوح"
+        Environment.DESERT -> "صحراء"
+        Environment.ROAD -> "طريق أو شارع"
+        Environment.RURAL -> "منطقة ريفية"
+        Environment.MEDICAL_FACILITY -> "مكان طبي"
+        Environment.EDUCATIONAL -> "مبنى تعليمي"
     }
 }

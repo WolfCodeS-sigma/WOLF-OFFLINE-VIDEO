@@ -335,21 +335,23 @@ object StoryDirectorEngine {
     }
 
     private fun detectSetting(text: String): String {
+        val normalized = text.lowercase(Locale.ROOT)
+        // Resolve specific outdoor locations before generic buildings.
         val options = listOf(
-            listOf("منزل", "بيت", "شقة", "غرفة") to "مكان داخلي سكني",
-            listOf("مستشفى", "عيادة", "مشرحة") to "مكان طبي",
-            listOf("غابة", "أشجار") to "غابة كثيفة",
-            listOf("شاطئ", "ساحل") to "شاطئ أو ساحل",
-            listOf("بحر", "محيط", "أمواج") to "بحر مفتوح",
-            listOf("صحراء", "رمال", "كثبان") to "صحراء",
-            listOf("ممر", "ردهة", "سرداب", "قبو") to "ممر أو قبو داخلي",
-            listOf("نافذة", "شرفة") to "بجانب نافذة أو شرفة",
-            listOf("شارع", "طريق", "سيارة") to "طريق أو شارع",
-            listOf("مدرسة", "فصل", "جامعة") to "مبنى تعليمي",
-            listOf("قبر", "مقابر", "مقبرة") to "مقابر",
-            listOf("مزرعة", "حقل", "قرية") to "منطقة ريفية"
+            listOf("مقابر", "مقبرة", "قبر", "قبور", "cemetery", "graveyard") to "مقابر",
+            listOf("شاطئ", "الشاطئ", "ساحل", "الساحل", "beach", "shore", "coast", "seashore") to "شاطئ أو ساحل",
+            listOf("بحر", "البحر", "محيط", "المحيط", "أمواج", "موج", "sea", "ocean", "waves", "open water") to "بحر مفتوح",
+            listOf("صحراء", "الصحراء", "كثبان", "كثيب", "رمال", "desert", "dunes", "sand") to "صحراء",
+            listOf("غابة", "غابه", "أشجار", "شجرة", "forest", "woods", "trees") to "غابة كثيفة",
+            listOf("شارع", "طريق", "سيارة", "road", "street", "highway") to "طريق أو شارع",
+            listOf("مزرعة", "حقل", "قرية", "farm", "field", "village", "rural") to "منطقة ريفية",
+            listOf("مستشفى", "عيادة", "مشرحة", "hospital", "clinic", "morgue") to "مكان طبي",
+            listOf("مدرسة", "فصل", "جامعة", "school", "classroom", "university") to "مبنى تعليمي",
+            listOf("ممر", "ردهة", "سرداب", "قبو", "hallway", "corridor", "basement") to "ممر أو قبو داخلي",
+            listOf("نافذة", "شرفة", "window", "balcony") to "بجانب نافذة أو شرفة",
+            listOf("منزل", "بيت", "شقة", "غرفة", "house", "home", "room", "bedroom") to "مكان داخلي سكني"
         )
-        return options.firstOrNull { entry -> entry.first.any { text.contains(it) } }?.second
+        return options.firstOrNull { entry -> entry.first.any(normalized::contains) }?.second
             ?: "الموقع الذي تصفه أحداث القصة، دون إضافة موقع جديد"
     }
 
