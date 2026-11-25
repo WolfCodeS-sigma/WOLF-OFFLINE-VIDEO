@@ -2,27 +2,52 @@
 
 ## Production ownership
 
-`OfflineProductionEngine` uses `WolfSceneRenderPipeline` as the single backend dispatch boundary for each shot. StoryDirector remains the owner of shot timing and visual intent. The pipeline does not rewrite the story plan.
+`StoryDirectorEngine` remains the owner of story interpretation, scene boundaries, shot timing and visual intent. It supplies the `SceneRenderContext` and `ShotPlan` consumed by the render path; the render pipeline does not rewrite the approved story plan.
+
+The actual MP4 production route is:
+
+```text
+OfflineProductionEngine.render
+  -> encode / encodeChaptered
+     -> encode (MediaCodec input Surface + MediaMuxer)
+        -> per shot: WolfSceneRenderPipeline.prepare
+           -> per frame: WolfSceneRenderPipeline.renderPreparedShot
+              -> no selected image: WolfProceduralSceneProductionEngine.render
+              -> selected image: existing uploaded-image frame renderer
+        -> MediaCodec drain
+        -> MediaMuxer MP4 samples
+```
+
+`WolfSceneRenderPipeline` is the backend dispatch boundary used by the production encoder, not merely an isolated utility. A `PreparedShot` is prepared once for each shot and retained across that shot's frames. The selected backend is fixed for the shot and cannot be silently replaced after a rendering failure.
 
 ## Backend selection
 
-- No user image selected: choose the environment-only procedural backend.
-- Valid user image selected: keep the uploaded-image backend even when depth analysis is unavailable.
-- The current heuristic segmenter is not semantic AI. It is not allowed to enable parallax; `semanticValidationPassed` defaults to false and `safeForParallax` remains false.
-- A selected image that cannot be decoded is an explicit export error, not permission to substitute another scene.
+- No user image is assigned to the current shot: prepare a deterministic environment plan and dispatch its frames to `WolfProceduralSceneProductionEngine`.
+- A user image is assigned and decoded: keep the uploaded-image backend. The existing aspect-match/crop and image-frame renderer remain in use, preserving current output treatment.
+- A selected image that cannot be decoded is an explicit export error before rendering. A selected-image frame that returns `SAFE_FRAME` also aborts export; it never falls through to procedural artwork.
+- Depth-aware image composition remains gated by `safeForParallax` and semantic validation. With the current heuristic segmenter unavailable for semantic validation, the uploaded image remains a still; this change does not enable heuristic Parallax.
+- The scene context and shot plan are carried into the procedural renderer so its environment treatment and camera framing use the same StoryDirector intent that previously reached the direct `OfflineProductionEngine` drawing branch.
 
-## Runtime failure policy
+## Runtime and ownership policy
 
-- A decoded user image without validated depth layers is drawn as the original aspect-matched still, with no camera zoom, pan, parallax, or procedural subject overlay.
-- A safe-frame result or actual failure to draw the selected image aborts export with a clear error. The shot does not switch to a generated scene.
-- The no-image procedural route draws only the environment atmosphere and environmental motion. It does not generate people, ghosts, creatures, buildings, doors, furniture, or props from primitive geometry.
-- Fallback diagnostics are best-effort and must not change the selected visual source.
-- The caller retains ownership of the decoded source bitmap; prepared segmentation layers are released by the shot lifecycle.
+- A decoded user image without validated depth layers remains the aspect-matched source still. No generated scene replaces it.
+- The procedural route renders environment atmosphere only. It does not synthesize people, ghosts, creatures, buildings, doors, furniture or props from primitive geometry.
+- `WolfProceduralMotionEngine` remains part of the selected rendering route: it runs after the procedural background is drawn, or as the shared image-route overlay. Planned lighting, typography and optional watermark remain downstream of backend selection.
+- The caller owns the decoded source bitmap. The shot lifecycle releases only prepared segmentation layers, then recycles the decoded bitmap after all frames of the shot are encoded.
+- Fallback diagnostics are best-effort and do not change the selected visual source.
 
-## Regression coverage
+## Regression and encoder integration coverage
 
-JVM tests cover no-image procedural dispatch, retention of a decoded user image when depth analysis is unavailable, and export failure instead of procedural substitution after a selected-image render failure. Image depth tests assert that the heuristic segmenter does not claim semantic readiness.
+JVM tests continue to cover dispatch selection, uploaded-image retention, and failure instead of switching a failed selected image to procedural art.
+
+`WolfScenePipelineEncoderIntegrationTest` adds device-side coverage through the actual `OfflineProductionEngine.encode` method. On an Android emulator it exercises:
+1. A shot with no uploaded image, asserting procedural backend selection for encoded frames.
+2. A shot with a decoded user image, asserting uploaded-image backend selection for encoded frames.
+
+Both tests inspect the resulting MP4 using `MediaExtractor` and verify the video track dimensions, encoded sample count, and increasing presentation timestamps. The Android 12 offline runtime workflow runs `connectedDebugAndroidTest` while airplane mode and Wi-Fi-off checks are already active, then continues its existing app launch smoke check.
 
 ## Verification boundary
 
-The workflow checks the offline contract, Android lint, and JVM unit tests. It does not prove successful export or visual quality on a physical Android device.
+The pull-request CI must pass the offline runtime contract, Android lint, JVM unit tests, Android instrumentation/encoder tests, and the existing Android 12 offline launch smoke test before this item can be considered verified.
+
+These checks do not constitute a physical-phone test, signed release build, visual acceptance of every environment, or completion of Phase 6-C through 6-G. The current environment catalogue still does not include a dedicated beach/sea production environment; that work remains in 6-C. No old branch or historical PR is merged as part of 6-B.

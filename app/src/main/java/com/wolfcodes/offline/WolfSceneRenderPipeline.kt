@@ -106,7 +106,9 @@ object WolfSceneRenderPipeline {
         }
 
         val prepared = try {
-            WolfUploadedImageEngine.prepare(source)
+            WolfUploadedImageEngine.prepare(source) { failure ->
+                reportFallback(onFallback, failure.javaClass.simpleName)
+            }
         } catch (failure: OutOfMemoryError) {
             reportFallback(onFallback, "OutOfMemoryError")
             WolfUploadedImageEngine.PreparedImage(source, null, 0f, "OutOfMemoryError")

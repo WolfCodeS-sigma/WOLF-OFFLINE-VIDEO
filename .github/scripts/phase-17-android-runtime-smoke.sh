@@ -37,8 +37,30 @@ test "$(adb shell cmd connectivity airplane-mode | tr -d '\r')" = "enabled"
 test "$(adb shell settings get global airplane_mode_on | tr -d '\r')" = "1"
 test "$(adb shell settings get global wifi_on | tr -d '\r')" = "0"
 
-adb shell am force-stop com.wolfcodes.offline
-adb shell am start -W -n com.wolfcodes.offline/.MainActivity
+# Exercise the actual scene dispatch and AVC/MP4 encoder path while the emulator is offline.
+gradle --no-daemon :app:connectedDebugAndroidTest
+
+# connectedDebugAndroidTest manages the tested package lifecycle. Reinstall the
+# production debug APK explicitly before the independent application-launch smoke test.
+APP_ID="com.wolfcodes.offline"
+adb install -r "$APK"
+
+# Verify the production package remains installed after instrumentation and
+# launch the exact exported launcher component declared by the merged APK manifest.
+INSTALLED_APK_PATHS="$(adb shell pm path "$APP_ID" | tr -d '\r')"
+if [[ -z "$INSTALLED_APK_PATHS" ]]; then
+  echo "Production APK is not installed after instrumentation: $APP_ID" >&2
+  adb shell dumpsys package "$APP_ID" >&2 || true
+  exit 1
+fi
+echo "Installed production package paths:"
+printf '%s\n' "$INSTALLED_APK_PATHS"
+
+adb shell dumpsys package "$APP_ID" |
+  grep -A 8 -B 3 "com.wolfcodes.offline.MainActivity" || true
+
+adb shell am force-stop "$APP_ID"
+adb shell am start -W -n "$APP_ID/com.wolfcodes.offline.MainActivity"
 
 for attempt in $(seq 1 30); do
   if adb shell pidof com.wolfcodes.offline >/dev/null 2>&1; then
