@@ -37,7 +37,7 @@ object WolfSceneArtEngine {
             setting.contains("مكان طبي") ->
                 intArrayOf(opaqueRgb(2, 7, 14), opaqueRgb(8, 17, 27), opaqueRgb(3, 7, 13), opaqueRgb(132, 158, 180))
             setting.contains("غابة") ->
-                intArrayOf(opaqueRgb(2, 7, 8), opaqueRgb(7, 15, 17), opaqueRgb(2, 7, 10), opaqueRgb(112, 146, 148))
+                intArrayOf(opaqueRgb(8, 17, 20), opaqueRgb(22, 34, 39), opaqueRgb(1, 4, 6), opaqueRgb(112, 146, 148))
             setting.contains("شاطئ") || setting.contains("بحر") ->
                 intArrayOf(opaqueRgb(2, 7, 15), opaqueRgb(5, 17, 27), opaqueRgb(2, 8, 14), opaqueRgb(116, 151, 172))
             setting.contains("مقابر") ->
