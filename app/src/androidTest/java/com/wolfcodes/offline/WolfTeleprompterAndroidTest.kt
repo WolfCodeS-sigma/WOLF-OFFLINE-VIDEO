@@ -87,7 +87,7 @@ class WolfTeleprompterAndroidTest {
             }
 
             stopRecording(scenario)
-            awaitMainStatus(scenario) { it.contains("تم حفظ الجزء 1") }
+            awaitMainStatus(scenario) { it.contains("يوجد تسجيل من 1 أجزاء") }
 
             val firstSession = requireNotNull(WolfStoryVoiceStore.read(context, project.id))
             val firstDurationMs = firstSession.audioDurationMs
@@ -106,6 +106,7 @@ class WolfTeleprompterAndroidTest {
                 assertNotNull("The saved narration project must remain in the project list", openProject)
                 openProject!!.performClick()
             }
+            awaitMainStatus(scenario) { it.contains("يوجد تسجيل من 1 أجزاء") }
 
             startRecording(scenario)
             awaitTeleprompter(scenario)
@@ -117,7 +118,7 @@ class WolfTeleprompterAndroidTest {
 
             SystemClock.sleep(1_700L)
             stopRecording(scenario)
-            awaitMainStatus(scenario) { it.contains("تم حفظ الجزء 2") }
+            awaitMainStatus(scenario) { it.contains("يوجد تسجيل من 2 أجزاء") }
 
             val finalSession = requireNotNull(WolfStoryVoiceStore.read(context, project.id))
             val mergedFile = requireNotNull(finalSession.voiceFilePath).let(::File)
