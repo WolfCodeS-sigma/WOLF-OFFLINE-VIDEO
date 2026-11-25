@@ -160,7 +160,7 @@ object WolfProceduralSceneProductionEngine {
             sceneIndex = sourceSceneIndex,
             shotIndex = safeShot,
             progress = plannedProgress,
-            storyEvent = sceneRenderContext?.event,
+            storyEvent = sceneRenderContext?.event ?: StoryDirectorEngine.classifyEvent(caption),
             continuityKey = sceneRenderContext?.continuityKey ?: 0
         )
     }
