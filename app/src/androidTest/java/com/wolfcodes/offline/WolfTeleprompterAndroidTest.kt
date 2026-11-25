@@ -155,7 +155,10 @@ class WolfTeleprompterAndroidTest {
         while (SystemClock.elapsedRealtime() < deadline) {
             var present = false
             scenario.onActivity {
-                present = findWindowView(WolfUiTestTags.TELEPROMPTER_STOP) is Button
+                val stop = findWindowView(WolfUiTestTags.TELEPROMPTER_STOP)
+                val scroll = findWindowView(WolfUiTestTags.TELEPROMPTER_SCROLL) as? ScrollView
+                present = stop is Button && scroll != null &&
+                    scroll.height > 0 && scroll.canScrollVertically(1)
             }
             if (present) return
             SystemClock.sleep(100L)
