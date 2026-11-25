@@ -124,22 +124,21 @@ class WolfStoryVoiceTest {
     }
 
     @Test
-    fun silenceDetectorWaitsUntilSpeechWasActuallyHeard() {
-        val detector = WolfSilenceDetector(amplitudeThreshold = 500, quietWindowMs = 2000L)
-        assertFalse(detector.sample(0, 2000L))
-        assertFalse(detector.sample(100, 4000L))
-        assertFalse(detector.sample(700, 5000L))
-        assertFalse(detector.sample(100, 6500L))
-        assertTrue(detector.sample(100, 7000L))
+    fun silenceDoesNotAutomaticallyStopTheTakeBeforeTheHardDurationLimit() {
+        assertFalse(WolfVoiceRecordingPolicy.shouldAutomaticallyStop(5_000L))
+        assertFalse(WolfVoiceRecordingPolicy.shouldAutomaticallyStop(1_799_999L))
+        assertTrue(
+            WolfVoiceRecordingPolicy.shouldAutomaticallyStop(
+                WolfVoiceRecordingPolicy.MAX_RECORDING_DURATION_MS
+            )
+        )
     }
 
     @Test
-    fun freshVoiceActivityResetsSilenceCountdown() {
-        val detector = WolfSilenceDetector(amplitudeThreshold = 500, quietWindowMs = 2000L)
-        assertFalse(detector.sample(900, 1000L))
-        assertFalse(detector.sample(100, 2500L))
-        assertFalse(detector.sample(900, 3000L))
-        assertFalse(detector.sample(100, 4500L))
-        assertTrue(detector.sample(100, 5000L))
+    fun voiceActivityRemainsDetectedAcrossManualReadingPauses() {
+        val tracker = WolfVoiceActivityTracker(amplitudeThreshold = 500)
+        assertFalse(tracker.sample(100))
+        assertTrue(tracker.sample(700))
+        assertTrue(tracker.sample(100))
     }
 }
