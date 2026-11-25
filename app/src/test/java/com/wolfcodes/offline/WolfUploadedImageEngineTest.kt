@@ -61,9 +61,9 @@ class WolfUploadedImageEngineTest {
 
     @Test
     fun shotMotionPlanIsDeterministicAndBounded() {
-        val first = WolfUploadedImageEngine.planMotion("باب المشرحة القديم يصدر صريرًا بينما يظهر ظل خلفه", 4, 1, 0.35f)
-        val repeated = WolfUploadedImageEngine.planMotion("باب المشرحة القديم يصدر صريرًا بينما يظهر ظل خلفه", 4, 1, 0.35f)
-        val otherShot = WolfUploadedImageEngine.planMotion("باب المشرحة القديم يصدر صريرًا بينما يظهر ظل خلفه", 4, 2, 0.85f)
+        val first = WolfUploadedImageEngine.planMotion("باب المشرحة القديم يصدر صريرًا بينما يطرق شيء من الداخل", 4, 1, 0.35f)
+        val repeated = WolfUploadedImageEngine.planMotion("باب المشرحة القديم يصدر صريرًا بينما يطرق شيء من الداخل", 4, 1, 0.35f)
+        val otherShot = WolfUploadedImageEngine.planMotion("باب المشرحة القديم يصدر صريرًا بينما يطرق شيء من الداخل", 4, 2, 0.85f)
         assertEquals(first, repeated)
         assertTrue(first.intensity in 0f..1f)
         assertTrue(first.focusX in 0f..1f)

@@ -10,7 +10,7 @@ class WolfProceduralSceneProductionEngineTest {
     @Test
     fun environmentPlannerRecognizesArabicAndEnglishSceneCues() {
         assertEquals(WolfProceduralSceneProductionEngine.Environment.FOREST,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("تكسرت أغصان الأشجار فوق المقبرة المهجورة بينما زحف ظل بين الجذوع"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("تكسرت أغصان الأشجار في الغابة المهجورة بينما زحف ظل بين الجذوع"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.CORRIDOR,
             WolfProceduralSceneProductionEngine.classifyEnvironment("A shadow moved down the corridor"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.WINDOW,
@@ -32,7 +32,7 @@ class WolfProceduralSceneProductionEngineTest {
         assertEquals(WolfProceduralSceneProductionEngine.Environment.SEA,
             WolfProceduralSceneProductionEngine.classifyEnvironment("The abandoned ocean was covered by fog"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.DESERT,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("ظهر كيان أسود فوق كثبان الصحراء يطارد الحارس نحو المقبرة"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("ظهر كيان أسود فوق كثبان الصحراء يطارد الحارس نحو أطلال مهجورة"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.ROAD,
             WolfProceduralSceneProductionEngine.classifyEnvironment("A lonely road disappeared into the fog as something followed the headlights"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.RURAL,
