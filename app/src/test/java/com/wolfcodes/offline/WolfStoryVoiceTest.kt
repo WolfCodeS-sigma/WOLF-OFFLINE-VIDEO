@@ -135,6 +135,30 @@ class WolfStoryVoiceTest {
     }
 
     @Test
+    fun measuredAudioDurationUsesTheSameMinimumAndMaximumRecordingBounds() {
+        assertFalse(
+            WolfVoiceRecordingPolicy.isMeasuredDurationValid(
+                WolfVoiceRecordingPolicy.MIN_RECORDING_DURATION_MS - 1L
+            )
+        )
+        assertTrue(
+            WolfVoiceRecordingPolicy.isMeasuredDurationValid(
+                WolfVoiceRecordingPolicy.MIN_RECORDING_DURATION_MS
+            )
+        )
+        assertTrue(
+            WolfVoiceRecordingPolicy.isMeasuredDurationValid(
+                WolfVoiceRecordingPolicy.MAX_RECORDING_DURATION_MS
+            )
+        )
+        assertFalse(
+            WolfVoiceRecordingPolicy.isMeasuredDurationValid(
+                WolfVoiceRecordingPolicy.MAX_RECORDING_DURATION_MS + 1L
+            )
+        )
+    }
+
+    @Test
     fun voiceActivityRemainsDetectedAcrossManualReadingPauses() {
         val tracker = WolfVoiceActivityTracker(amplitudeThreshold = 500)
         assertFalse(tracker.sample(100))
