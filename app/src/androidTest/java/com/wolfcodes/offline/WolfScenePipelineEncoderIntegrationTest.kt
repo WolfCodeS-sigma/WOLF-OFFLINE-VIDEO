@@ -6,7 +6,10 @@ import android.graphics.Paint
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
-import android.test.InstrumentationTestCase
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Test
+import org.junit.runner.RunWith
 import java.io.File
 
 /**
@@ -15,10 +18,12 @@ import java.io.File
  *
  * These tests intentionally run on the Android 12 emulator while airplane mode is on.
  */
-class WolfScenePipelineEncoderIntegrationTest : InstrumentationTestCase() {
+@RunWith(AndroidJUnit4::class)
+class WolfScenePipelineEncoderIntegrationTest {
 
+    @Test
     fun testNoImageSceneUsesProceduralPipelineAndProducesMp4Frames() {
-        val context = instrumentation.targetContext
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
         val output = File(context.cacheDir, "wolf-stage-06-b-procedural-${System.nanoTime()}.mp4")
         val normalized = File(context.cacheDir, "wolf-stage-06-b-procedural-normalized-${System.nanoTime()}.mp4")
         val backendFrames = mutableListOf<WolfSceneRenderPipeline.Backend>()
@@ -54,6 +59,7 @@ class WolfScenePipelineEncoderIntegrationTest : InstrumentationTestCase() {
         }
     }
 
+    @Test
     fun testSelectedUserImageStaysOnUploadedPipelineThroughEncoder() {
         val context = instrumentation.targetContext
         val output = File(context.cacheDir, "wolf-stage-06-b-uploaded-${System.nanoTime()}.mp4")
