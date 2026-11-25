@@ -1400,7 +1400,7 @@ object OfflineProductionEngine {
     }
 
     /** Copies the encoded video while assigning deterministic presentation timestamps. */
-    private fun normalizeVideoTimestamps(inputFile: File, outputFile: File, fps: Int) {
+    internal fun normalizeVideoTimestamps(inputFile: File, outputFile: File, fps: Int) {
         val extractor=MediaExtractor()
         var muxer: MediaMuxer?=null
         var muxerStarted=false
