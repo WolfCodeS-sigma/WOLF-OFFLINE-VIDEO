@@ -45,14 +45,22 @@ gradle --no-daemon :app:connectedDebugAndroidTest
 APP_ID="com.wolfcodes.offline"
 adb install -r "$APK"
 
-# Launch through the implicit Android MAIN/LAUNCHER intent. PackageManager
-# resolves the manifest-declared launcher activity for this package, so the
-# smoke test does not duplicate or guess a Java/Kotlin Activity class name.
+# Verify the production package remains installed after instrumentation and
+# launch the exact exported launcher component declared by the merged APK manifest.
+INSTALLED_APK_PATHS="$(adb shell pm path "$APP_ID" | tr -d '\r')"
+if [[ -z "$INSTALLED_APK_PATHS" ]]; then
+  echo "Production APK is not installed after instrumentation: $APP_ID" >&2
+  adb shell dumpsys package "$APP_ID" >&2 || true
+  exit 1
+fi
+echo "Installed production package paths:"
+printf '%s\n' "$INSTALLED_APK_PATHS"
+
+adb shell dumpsys package "$APP_ID" |
+  grep -A 8 -B 3 "com.wolfcodes.offline.MainActivity" || true
+
 adb shell am force-stop "$APP_ID"
-adb shell am start -W \
-  -a android.intent.action.MAIN \
-  -c android.intent.category.LAUNCHER \
-  "$APP_ID"
+adb shell am start -W -n "$APP_ID/com.wolfcodes.offline.MainActivity"
 
 for attempt in $(seq 1 30); do
   if adb shell pidof com.wolfcodes.offline >/dev/null 2>&1; then
