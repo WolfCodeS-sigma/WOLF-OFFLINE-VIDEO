@@ -51,3 +51,14 @@ Both tests inspect the resulting MP4 using `MediaExtractor` and verify the video
 The pull-request CI must pass the offline runtime contract, Android lint, JVM unit tests, Android instrumentation/encoder tests, and the existing Android 12 offline launch smoke test before this item can be considered verified.
 
 These checks do not constitute a physical-phone test, signed release build, visual acceptance of every environment, or completion of Phase 6-C through 6-G. The current environment catalogue still does not include a dedicated beach/sea production environment; that work remains in 6-C. No old branch or historical PR is merged as part of 6-B.
+
+
+## Stage 06-C — image-free environment completion
+
+The no-image procedural renderer now distinguishes the outdoor locations already described by StoryDirector rather than routing all unknown captions to the haunted-house default. Added classifications cover BEACH, SEA, DESERT, ROAD, RURAL, MEDICAL_FACILITY, and EDUCATIONAL. Beach is resolved before generic sand/desert cues, and StoryDirector and the procedural classifier use aligned Arabic/English location cues.
+
+Beach frames now contain separate sky, sea, curved shoreline, wet-sand transition, dry-sand region, foam edge, horizon mist, and deterministic wave bands. Open-sea frames contain a visible horizon, layered water surface, ripples, and localized horizon mist without adding a beach. Desert, forest, road, and rural captions receive distinct environment planes. Existing horror atmosphere, lighting, typography, and watermark remain downstream and are not replaced.
+
+These renderers are deterministic Canvas-based 2D environmental illustrations; they are not photorealistic 3D environments or a substitute for a licensed cinematic asset library. No person, ghost, creature, furniture, door, building, or unlicensed external asset is generated. User-image rendering, semantic-depth gating, and Parallax behavior are unchanged.
+
+Android instrumentation checks the actual procedural pipeline raster output for separate beach sky/sea/wet-shore/sand regions, an open-sea horizon/depth, and distinct desert/forest planes. A beach/no-image instrumentation case also runs through `OfflineProductionEngine.encode` and `MediaCodec/MediaMuxer`, asserting that every encoded frame remains on the procedural backend and that the resulting MP4 has valid video samples and monotonic presentation timestamps.

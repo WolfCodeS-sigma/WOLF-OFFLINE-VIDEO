@@ -26,6 +26,44 @@ class WolfProceduralSceneProductionEngineTest {
     }
 
     @Test
+    fun environmentPlannerRecognizesAdditionalImageFreeLandscapes() {
+        assertEquals(WolfProceduralSceneProductionEngine.Environment.BEACH,
+            WolfProceduralSceneProductionEngine.classifyEnvironment("على الشاطئ المهجور تتراجع الأمواج"))
+        assertEquals(WolfProceduralSceneProductionEngine.Environment.SEA,
+            WolfProceduralSceneProductionEngine.classifyEnvironment("The abandoned ocean was covered by fog"))
+        assertEquals(WolfProceduralSceneProductionEngine.Environment.DESERT,
+            WolfProceduralSceneProductionEngine.classifyEnvironment("تحركت الرياح فوق كثبان الصحراء"))
+        assertEquals(WolfProceduralSceneProductionEngine.Environment.ROAD,
+            WolfProceduralSceneProductionEngine.classifyEnvironment("A lonely road disappeared into the fog"))
+        assertEquals(WolfProceduralSceneProductionEngine.Environment.RURAL,
+            WolfProceduralSceneProductionEngine.classifyEnvironment("كانت القرية المهجورة محاطة بحقول مظلمة"))
+    }
+
+    @Test
+    fun storyDirectorAndProceduralPlannerAgreeOnBeachAndSeaLocations() {
+        val beachPlan = StoryDirectorEngine.analyze(
+            story = "على الشاطئ المهجور كانت الأمواج تتراجع بينما يقترب صوت غامض من الضباب.",
+            durationSeconds = 3,
+            aspectRatio = "16:9",
+            visualStyle = "واقعي مظلم",
+            horrorType = "رعب نفسي"
+        )
+        val seaPlan = StoryDirectorEngine.analyze(
+            story = "في البحر المفتوح ظهرت أضواء بعيدة تحت سطح الماء ثم اختفت.",
+            durationSeconds = 3,
+            aspectRatio = "16:9",
+            visualStyle = "واقعي مظلم",
+            horrorType = "رعب خارق"
+        )
+        assertEquals("شاطئ أو ساحل", beachPlan.scenes.single().setting)
+        assertEquals("بحر مفتوح", seaPlan.scenes.single().setting)
+        assertEquals(WolfProceduralSceneProductionEngine.Environment.BEACH,
+            WolfProceduralSceneProductionEngine.classifyEnvironment(beachPlan.scenes.single().sourceText))
+        assertEquals(WolfProceduralSceneProductionEngine.Environment.SEA,
+            WolfProceduralSceneProductionEngine.classifyEnvironment(seaPlan.scenes.single().sourceText))
+    }
+
+    @Test
     fun plannerIsDeterministicAndDoesNotCreateSubjectGeometry() {
         val caption = "ظهر شبح خلف الباب فجأة"
         val first = WolfProceduralSceneProductionEngine.plan(caption, 4)

@@ -2,6 +2,7 @@ package com.wolfcodes.offline
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -116,6 +117,135 @@ class WolfScenePipelineEncoderIntegrationTest {
             imageFile.delete()
         }
     }
+
+    @Test
+    fun imageFreeBeachSceneEncodesThroughTheProductionMp4Pipeline() {
+        val context = targetContext()
+        val output = File(context.cacheDir, "wolf-stage-06-c-beach-${System.nanoTime()}.mp4")
+        val backendFrames = mutableListOf<WolfSceneRenderPipeline.Backend>()
+        try {
+            OfflineProductionEngine.encode(
+                context = context,
+                file = output,
+                scenes = listOf("على الشاطئ المهجور تتراجع الأمواج تحت ضباب كثيف وصوت غامض يقترب"),
+                w = TEST_WIDTH,
+                h = TEST_HEIGHT,
+                fps = TEST_FPS,
+                framesPerScene = listOf(TEST_FRAME_COUNT),
+                sceneImageUris = listOf(listOf<Uri?>(null, null, null)),
+                includeWatermark = false,
+                typographyCues = listOf(null),
+                introSeconds = 0,
+                onSceneProgress = null,
+                bitRate = 600_000,
+                shotFrameBudgets = listOf(listOf(4, 4, 4)),
+                shotPlansPerScene = listOf(testShotPlans()),
+                sceneRenderContexts = listOf(
+                    StoryDirectorEngine.SceneRenderContext(
+                        sceneNumber = 1,
+                        setting = "شاطئ أو ساحل",
+                        mood = "رعب سمعي وترقب",
+                        continuityNotes = "شاطئ مهجور ثابت مع أفق بحري",
+                        continuityKey = 603,
+                        event = StoryDirectorEngine.StoryEvent.SUSPENSE,
+                        visualStyle = "رعب سينمائي مظلم",
+                        horrorType = "رعب نفسي"
+                    )
+                ),
+                onRenderBackend = { backendFrames += it }
+            )
+            assertEquals(TEST_FRAME_COUNT, backendFrames.size)
+            assertTrue(backendFrames.all { it == WolfSceneRenderPipeline.Backend.PROCEDURAL })
+            assertEncodedVideo(output)
+        } finally {
+            output.delete()
+        }
+    }
+
+    @Test
+    fun imageFreeBeachFrameSeparatesSkyWaterWetShoreAndSand() {
+        val bitmap = renderImageFreeScene(
+            "على الشاطئ المهجور تتراجع الأمواج تحت ضباب كثيف وصوت غامض يقترب"
+        )
+        try {
+            val sky = bitmap.getPixel((bitmap.width * 0.18f).toInt(), (bitmap.height * 0.18f).toInt())
+            val sea = bitmap.getPixel((bitmap.width * 0.18f).toInt(), (bitmap.height * 0.60f).toInt())
+            val wetShore = bitmap.getPixel((bitmap.width * 0.18f).toInt(), (bitmap.height * 0.83f).toInt())
+            val sand = bitmap.getPixel((bitmap.width * 0.18f).toInt(), (bitmap.height * 0.96f).toInt())
+            assertTrue("Beach render must separate sky from sea", colorDistance(sky, sea) > 24)
+            assertTrue("Beach render must separate sea from wet shore", colorDistance(sea, wetShore) > 18)
+            assertTrue("Beach render must separate wet and dry sand", colorDistance(wetShore, sand) > 8)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    @Test
+    fun imageFreeOpenSeaFrameContainsHorizonAndLayeredWater() {
+        val bitmap = renderImageFreeScene(
+            "في البحر المفتوح ظهرت أضواء بعيدة تحت ضباب بارد ثم اختفت"
+        )
+        try {
+            val sky = bitmap.getPixel((bitmap.width * 0.12f).toInt(), (bitmap.height * 0.20f).toInt())
+            val horizonWater = bitmap.getPixel((bitmap.width * 0.12f).toInt(), (bitmap.height * 0.47f).toInt())
+            val deepWater = bitmap.getPixel((bitmap.width * 0.12f).toInt(), (bitmap.height * 0.86f).toInt())
+            assertTrue("Open-sea rendering must show a distinct horizon/water boundary", colorDistance(sky, horizonWater) > 20)
+            assertTrue("Open-sea rendering must contain depth variation below the horizon", colorDistance(horizonWater, deepWater) > 12)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    @Test
+    fun imageFreeDesertAndForestFramesAreNotAtmosphereOnly() {
+        val desert = renderImageFreeScene("عبرت الرياح كثبان الصحراء المهجورة وسط غبار الليل")
+        val forest = renderImageFreeScene("في الغابة المظلمة تحركت الأشجار مع ضباب كثيف وخطوات بعيدة")
+        try {
+            val desertSky = desert.getPixel((desert.width * 0.14f).toInt(), (desert.height * 0.18f).toInt())
+            val desertGround = desert.getPixel((desert.width * 0.14f).toInt(), (desert.height * 0.88f).toInt())
+            assertTrue("Desert render must contain a separate dune/ground plane", colorDistance(desertSky, desertGround) > 22)
+
+            val forestSky = forest.getPixel((forest.width * 0.50f).toInt(), (forest.height * 0.20f).toInt())
+            val forestTreeLine = forest.getPixel((forest.width * 0.50f).toInt(), (forest.height * 0.58f).toInt())
+            val forestGround = forest.getPixel((forest.width * 0.50f).toInt(), (forest.height * 0.91f).toInt())
+            assertTrue("Forest render must contain a separate tree-line silhouette", colorDistance(forestSky, forestTreeLine) > 18)
+            assertTrue("Forest render must distinguish ground from the sky", colorDistance(forestSky, forestGround) > 18)
+        } finally {
+            desert.recycle()
+            forest.recycle()
+        }
+    }
+
+    private fun renderImageFreeScene(caption: String): Bitmap {
+        val bitmap = Bitmap.createBitmap(TEST_WIDTH, TEST_HEIGHT, Bitmap.Config.ARGB_8888)
+        val prepared = WolfSceneRenderPipeline.prepare(caption, 0, null)
+        try {
+            assertEquals(
+                WolfSceneRenderPipeline.Backend.PROCEDURAL,
+                WolfSceneRenderPipeline.render(
+                    canvas = Canvas(bitmap),
+                    width = TEST_WIDTH,
+                    height = TEST_HEIGHT,
+                    shotIndex = 0,
+                    progress = 0.42f,
+                    caption = caption,
+                    sceneIndex = 0,
+                    preparedShot = prepared
+                )
+            )
+            return bitmap
+        } catch (failure: Throwable) {
+            bitmap.recycle()
+            throw failure
+        } finally {
+            prepared.recycle()
+        }
+    }
+
+    private fun colorDistance(first: Int, second: Int): Int =
+        kotlin.math.abs(Color.red(first) - Color.red(second)) +
+            kotlin.math.abs(Color.green(first) - Color.green(second)) +
+            kotlin.math.abs(Color.blue(first) - Color.blue(second))
 
     /**
      * Resolve the application context through the AndroidX instrumentation API.
