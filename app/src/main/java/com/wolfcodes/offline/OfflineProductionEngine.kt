@@ -903,7 +903,7 @@ object OfflineProductionEngine {
                         height = h,
                         plan = preparedShot.requireProceduralPlan(),
                         shotIndex = safeShotIndex,
-                        progress = plannedProgress,
+                        progress = t,
                         sceneRenderContext = sceneRenderContext,
                         shotPlan = shotPlan
                     )
