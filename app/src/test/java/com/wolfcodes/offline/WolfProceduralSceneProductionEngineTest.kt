@@ -100,6 +100,50 @@ class WolfProceduralSceneProductionEngineTest {
     }
 
     @Test
+    fun roomWinsWhenDoorIsOnlyAnIncidentalDetail() {
+        assertEquals(
+            WolfProceduralSceneProductionEngine.Environment.ROOM,
+            WolfProceduralSceneProductionEngine.classifyEnvironment(
+                "A shadow crossed the abandoned bedroom while the door creaked"
+            )
+        )
+    }
+
+    @Test
+    fun windowWinsWhenItIsTheFocalPointInsideARoom() {
+        assertEquals(
+            WolfProceduralSceneProductionEngine.Environment.WINDOW,
+            WolfProceduralSceneProductionEngine.classifyEnvironment(
+                "داخل غرفة قديمة وقفت امرأة خلف النافذة ثم ظهر شبح"
+            )
+        )
+    }
+
+    @Test
+    fun windowWinsWhenNoRoomIsMentioned() {
+        assertEquals(
+            WolfProceduralSceneProductionEngine.Environment.WINDOW,
+            WolfProceduralSceneProductionEngine.classifyEnvironment("ظهر وجه خلف النافذة")
+        )
+    }
+
+    @Test
+    fun doorWinsWhenItOpensByItself() {
+        assertEquals(
+            WolfProceduralSceneProductionEngine.Environment.DOOR,
+            WolfProceduralSceneProductionEngine.classifyEnvironment("الباب يفتح وحده")
+        )
+    }
+
+    @Test
+    fun doorWinsWhenTheHorrorSubjectAppearsBehindIt() {
+        assertEquals(
+            WolfProceduralSceneProductionEngine.Environment.DOOR,
+            WolfProceduralSceneProductionEngine.classifyEnvironment("ظهر شبح خلف الباب فجأة")
+        )
+    }
+
+    @Test
     fun plannerPreservesStoryContextWithoutPretendingToRenderItsSubjects() {
         val caption = "داخل غرفة قديمة وقفت امرأة خلف النافذة ثم ظهر شبح"
         val plan = WolfProceduralSceneProductionEngine.plan(caption, 2)
