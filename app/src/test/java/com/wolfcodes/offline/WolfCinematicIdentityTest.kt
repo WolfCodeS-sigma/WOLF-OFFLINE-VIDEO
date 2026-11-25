@@ -22,6 +22,20 @@ class WolfCinematicIdentityTest {
     }
 
     @Test
+    fun disablingIntroKeepsApprovedNarrationAtTheFilmTimelineOrigin() {
+        val timeline = WolfCinematicAudioTimeline.create(
+            requestedDurationSeconds = 30,
+            includeIntro = false,
+            authoritativeNarrationDurationMs = 7_000L
+        )
+
+        assertEquals(0, timeline.introSeconds)
+        assertEquals(0L, timeline.narrationOffsetUs)
+        assertEquals(30, timeline.totalVideoSeconds)
+        assertEquals(7_000_000L, timeline.narrationLimitUs)
+    }
+
+    @Test
     fun introFrameBudgetMatchesNarrationOffsetAndFilmTimeline() {
         val timeline = WolfCinematicAudioTimeline.create(
             requestedDurationSeconds = 30,
