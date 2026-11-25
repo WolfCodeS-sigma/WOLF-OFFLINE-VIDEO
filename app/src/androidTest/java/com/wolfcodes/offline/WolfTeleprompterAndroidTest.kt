@@ -92,9 +92,10 @@ class WolfTeleprompterAndroidTest {
             val firstSession = requireNotNull(WolfStoryVoiceStore.read(context, project.id))
             val firstDurationMs = firstSession.audioDurationMs
             val firstTake = requireNotNull(firstSession.voiceFilePath).let(::File)
+            val firstMergedLength = firstTake.length()
             assertEquals(1, WolfVoiceSegmentStore.segmentCount(context, project.id))
             assertTrue(firstDurationMs >= WolfVoiceRecordingPolicy.MIN_RECORDING_DURATION_MS)
-            assertTrue(firstTake.isFile && firstTake.length() > 1024L)
+            assertTrue(firstTake.isFile && firstMergedLength > 1024L)
             assertAacTrackHasIncreasingSamples(firstTake)
 
             // Recreate the Activity and reopen the persisted project before recording
@@ -129,7 +130,7 @@ class WolfTeleprompterAndroidTest {
                 finalSession.recordingStoryHash
             )
             assertFalse("A saved recording remains unapproved until the user reviews it", finalSession.voiceApproved)
-            assertTrue(mergedFile.isFile && mergedFile.length() > firstTake.length())
+            assertTrue(mergedFile.isFile && mergedFile.length() > firstMergedLength)
             assertAacTrackHasIncreasingSamples(mergedFile)
         } finally {
             scenario.close()
@@ -166,6 +167,7 @@ class WolfTeleprompterAndroidTest {
         scenario: ActivityScenario<MainActivity>,
         expectedStory: String
     ) {
+        var manualScrollY = 0
         scenario.onActivity {
             val script = findWindowView(WolfUiTestTags.TELEPROMPTER_SCRIPT) as? TextView
             assertNotNull("The complete approved story must be visible in the Teleprompter", script)
@@ -180,12 +182,18 @@ class WolfTeleprompterAndroidTest {
             assertTrue("The long horror script must be vertically scrollable", scroll.canScrollVertically(1))
             scroll.scrollTo(0, 220)
             assertTrue("The user must be able to move the story manually", scroll.scrollY > 0)
-            val manualScrollY = scroll.scrollY
+            manualScrollY = scroll.scrollY
 
             val progress = findWindowView(WolfUiTestTags.TELEPROMPTER_PROGRESS) as? TextView
             assertNotNull(progress)
             assertTrue(progress!!.text.contains("التسجيل مستمر"))
-            SystemClock.sleep(600L)
+        }
+
+        // Wait away from the UI thread; recording progress callbacks must continue
+        // while the manually chosen script position remains fixed.
+        SystemClock.sleep(600L)
+        scenario.onActivity {
+            val scroll = findWindowView(WolfUiTestTags.TELEPROMPTER_SCROLL) as ScrollView
             assertEquals("The script must not auto-scroll while recording", manualScrollY, scroll.scrollY)
         }
     }
