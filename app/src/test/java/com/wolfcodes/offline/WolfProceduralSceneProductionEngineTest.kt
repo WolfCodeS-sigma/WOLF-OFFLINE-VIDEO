@@ -18,9 +18,9 @@ class WolfProceduralSceneProductionEngineTest {
         assertEquals(WolfProceduralSceneProductionEngine.Environment.DOOR,
             WolfProceduralSceneProductionEngine.classifyEnvironment("الباب يفتح وحده"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.ROOM,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("The bedroom was empty"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("A shadow crossed the abandoned bedroom while the door creaked"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.CEMETERY,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("The graveyard was silent"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("A shadow moved between the graveyard tombstones after midnight"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.HAUNTED_HOUSE,
             WolfProceduralSceneProductionEngine.classifyEnvironment("سمعت خطوات غامضة في الخارج"))
     }
@@ -34,7 +34,7 @@ class WolfProceduralSceneProductionEngineTest {
         assertEquals(WolfProceduralSceneProductionEngine.Environment.DESERT,
             WolfProceduralSceneProductionEngine.classifyEnvironment("تحركت الرياح فوق كثبان الصحراء"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.ROAD,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("A lonely road disappeared into the fog"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("A lonely road disappeared into the fog as something followed the headlights"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.RURAL,
             WolfProceduralSceneProductionEngine.classifyEnvironment("كانت القرية المهجورة محاطة بحقول مظلمة"))
     }

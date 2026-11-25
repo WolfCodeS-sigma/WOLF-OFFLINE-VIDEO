@@ -32,12 +32,12 @@ class WolfOfflineStoryAiEngineTest {
         val brief = brief(500)
         val plan = WolfOfflineStoryAiEngine.parsePlan("""{"chapter_titles":["النداء"],"continuity_summary":"البداية"}""", brief)
         val first = WolfOfflineStoryAiEngine.newSession(brief, plan)
-        val next = WolfOfflineStoryAiEngine.withChapter(first, "هذا فصل تجريبي طويل بما يكفي للاختبار. ".repeat(10))
+        val next = WolfOfflineStoryAiEngine.withChapter(first, "في الفصل الأول سمع الحارس طرقات من داخل القبو، ثم رأى ظلًا يتحرك على الجدار. ".repeat(10))
         assertEquals(1, next.chapters.size)
         assertTrue(next.isComplete)
         assertFalse(next.approved)
         assertTrue(next.continuitySummary.contains("هذا فصل تجريبي"))
-        assertFalse(runCatching { WolfOfflineStoryAiEngine.withChapter(next, "فصل آخر ".repeat(20)) }.isSuccess)
+        assertFalse(runCatching { WolfOfflineStoryAiEngine.withChapter(next, "ظهر كيان غامض خلف باب المشرحة. ".repeat(20)) }.isSuccess)
     }
 
     @Test fun sessionCheckpointRoundTrips() {
@@ -46,7 +46,7 @@ class WolfOfflineStoryAiEngineTest {
             val brief = brief(500)
             val plan = WolfOfflineStoryAiEngine.parsePlan("""{"chapter_titles":["البيت"],"continuity_summary":"ملخص البداية"}""", brief)
             val session = WolfOfflineStoryAiEngine.withChapter(
-                WolfOfflineStoryAiEngine.newSession(brief, plan), "الفصل الأول يبدأ بحدث غريب. ".repeat(12)
+                WolfOfflineStoryAiEngine.newSession(brief, plan), "بدأ الفصل الأول بطرقات متتابعة من داخل القبو، ثم انطفأ المصباح. ".repeat(12)
             )
             WolfOfflineStoryAiEngine.saveSession(root, session)
             val restored = WolfOfflineStoryAiEngine.loadLatestSession(root)
@@ -66,9 +66,9 @@ class WolfOfflineStoryAiEngineTest {
             )
             val generated = WolfOfflineStoryAiEngine.withChapter(
                 WolfOfflineStoryAiEngine.newSession(brief, plan),
-                "الفصل الأصلي الذي كتبه النموذج. ".repeat(8)
+                "في الفصل الأصلي عاد الحارس إلى القبو ووجد الباب مفتوحًا رغم أنه أغلقه بنفسه. ".repeat(8)
             )
-            val reviewedText = "النص النهائي بعد مراجعة المستخدم وتعديلاته. ".repeat(20)
+            val reviewedText = "النص النهائي: سمع الحارس همسًا خلف باب القبو، ثم شاهد ظلًا يعبر الجدار. ".repeat(20)
             val approved = generated.copy(finalText = reviewedText, approved = true)
             WolfOfflineStoryAiEngine.saveSession(root, approved)
 
@@ -89,9 +89,9 @@ class WolfOfflineStoryAiEngineTest {
             )
             val generated = WolfOfflineStoryAiEngine.withChapter(
                 WolfOfflineStoryAiEngine.newSession(brief, plan),
-                "الفصل الأصلي الذي كتبه النموذج. ".repeat(8)
+                "في الفصل الأصلي عاد الحارس إلى القبو ووجد الباب مفتوحًا رغم أنه أغلقه بنفسه. ".repeat(8)
             )
-            val draftText = "نسخة المستخدم المعدلة التي لم يعتمدها بعد. ".repeat(20)
+            val draftText = "مسودة الرعب التي عدلها المستخدم: تكررت الطرقات خلف الباب مع كل انطفاء للمصباح. ".repeat(20)
             WolfOfflineStoryAiEngine.saveSession(root, generated.copy(finalText = draftText, approved = false))
             val restored = WolfOfflineStoryAiEngine.loadLatestSession(root)
             assertNotNull(restored)
