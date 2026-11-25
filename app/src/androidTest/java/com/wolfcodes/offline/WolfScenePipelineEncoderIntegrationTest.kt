@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -35,7 +36,7 @@ class WolfScenePipelineEncoderIntegrationTest {
             OfflineProductionEngine.encode(
                 context = context,
                 file = output,
-                scenes = listOf("تحركت أشجار الغابة مع صوت خطوات بعيدة"),
+                scenes = listOf("ظهر ظل يلاحق الحارس بين أشجار الغابة المهجورة مع خطوات تقترب"),
                 w = TEST_WIDTH,
                 h = TEST_HEIGHT,
                 fps = TEST_FPS,
@@ -89,7 +90,7 @@ class WolfScenePipelineEncoderIntegrationTest {
             OfflineProductionEngine.encode(
                 context = context,
                 file = output,
-                scenes = listOf("ظل ثابت في الغابة خلف الأشجار"),
+                scenes = listOf("ظل أسود يراقب الحارس من بين أشجار المقبرة المهجورة"),
                 w = TEST_WIDTH,
                 h = TEST_HEIGHT,
                 fps = TEST_FPS,
@@ -111,6 +112,163 @@ class WolfScenePipelineEncoderIntegrationTest {
             OfflineProductionEngine.normalizeVideoTimestamps(output, normalized, TEST_FPS)
             assertEncodedVideo(normalized)
         } finally {
+            source.recycle()
+            output.delete()
+            normalized.delete()
+            imageFile.delete()
+        }
+    }
+
+
+    @Test
+    fun storyDirectorTrackingMotionChangesFramesInTheEncodedProductionPath() {
+        val context = targetContext()
+        val stillOutput = File(context.cacheDir, "wolf-stage-06-d-camera-hold-${System.nanoTime()}.mp4")
+        val stillNormalized = File(context.cacheDir, "wolf-stage-06-d-camera-hold-normalized-${System.nanoTime()}.mp4")
+        val movingOutput = File(context.cacheDir, "wolf-stage-06-d-camera-track-${System.nanoTime()}.mp4")
+        val movingNormalized = File(context.cacheDir, "wolf-stage-06-d-camera-track-normalized-${System.nanoTime()}.mp4")
+        var stillFrame: Bitmap? = null
+        var movingFrame: Bitmap? = null
+        try {
+            encodeCameraIntentVideo(
+                context, stillOutput,
+                motion = "تثبيت الكاميرا",
+                camera = "لقطة واسعة بعدسة 24mm وكاميرا ثابتة"
+            )
+            encodeCameraIntentVideo(
+                context, movingOutput,
+                motion = "تتبّع جانبي بطيء يحافظ على اتجاه الحركة",
+                camera = "لقطة واسعة بعدسة 24mm مع تتبّع جانبي مضبوط"
+            )
+            OfflineProductionEngine.normalizeVideoTimestamps(stillOutput, stillNormalized, TEST_FPS)
+            OfflineProductionEngine.normalizeVideoTimestamps(movingOutput, movingNormalized, TEST_FPS)
+            assertEncodedVideo(stillNormalized)
+            assertEncodedVideo(movingNormalized)
+
+            // Same deterministic horror scene and same presentation time; only the
+            // StoryDirector camera command differs.
+            val still = frameAt(stillNormalized, 750_000L)
+            stillFrame = still
+            val moving = frameAt(movingNormalized, 750_000L)
+            movingFrame = moving
+            assertTrue(
+                "StoryDirector tracking must alter visible pixels in the real encoded MP4",
+                countDifferentSamples(still, moving) > 12
+            )
+        } finally {
+            stillFrame?.recycle()
+            movingFrame?.recycle()
+            stillOutput.delete()
+            stillNormalized.delete()
+            movingOutput.delete()
+            movingNormalized.delete()
+        }
+    }
+
+    @Test
+    fun unverifiedUserPhotoKeepsAllEdgesAndStaysMotionlessInTheEncodedMp4() {
+        val context = targetContext()
+        val output = File(context.cacheDir, "wolf-stage-06-d-photo-${System.nanoTime()}.mp4")
+        val normalized = File(context.cacheDir, "wolf-stage-06-d-photo-normalized-${System.nanoTime()}.mp4")
+        val imageFile = File(context.cacheDir, "wolf-stage-06-d-photo-${System.nanoTime()}.png")
+        val source = Bitmap.createBitmap(90, 160, Bitmap.Config.ARGB_8888)
+        var earlyFrame: Bitmap? = null
+        var lateFrame: Bitmap? = null
+        var expectedFrame: Bitmap? = null
+        val backendFrames = mutableListOf<WolfSceneRenderPipeline.Backend>()
+        try {
+            val markerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+            Canvas(source).apply {
+                drawColor(Color.rgb(35, 42, 52))
+                markerPaint.color = Color.rgb(235, 38, 42)
+                drawRect(0f, 0f, 12f, 12f, markerPaint)
+                markerPaint.color = Color.rgb(35, 220, 72)
+                drawRect(78f, 0f, 90f, 12f, markerPaint)
+                markerPaint.color = Color.rgb(42, 82, 232)
+                drawRect(0f, 148f, 12f, 160f, markerPaint)
+                markerPaint.color = Color.rgb(235, 220, 36)
+                drawRect(78f, 148f, 90f, 160f, markerPaint)
+            }
+            val expected = Bitmap.createBitmap(TEST_WIDTH, TEST_HEIGHT, Bitmap.Config.ARGB_8888)
+            expectedFrame = expected
+            WolfUploadedImageEngine.drawOriginalStill(Canvas(expected), TEST_WIDTH, TEST_HEIGHT, source)
+            imageFile.outputStream().use { stream ->
+                assertTrue(source.compress(Bitmap.CompressFormat.PNG, 100, stream))
+            }
+            val imageUri = Uri.fromFile(imageFile)
+            val cameraShot = StoryDirectorEngine.ShotPlan(
+                number = 1,
+                type = "لقطة تتبّع",
+                camera = "لقطة واسعة بعدسة 24mm مع تتبّع جانبي مضبوط",
+                composition = "حافظ على اتجاه الحركة نحو اليمين",
+                lighting = "",
+                motion = "تتبّع جانبي بطيء يحافظ على اتجاه الحركة",
+                durationSeconds = 1,
+                prompt = "عينة اختبار رعب خيالي غير قرآني"
+            )
+            OfflineProductionEngine.encode(
+                context = context,
+                file = output,
+                scenes = listOf("تحرك ظل غامض نحو اليمين داخل ممر مستشفى مهجور"),
+                w = TEST_WIDTH,
+                h = TEST_HEIGHT,
+                fps = TEST_FPS,
+                framesPerScene = listOf(TEST_FRAME_COUNT),
+                sceneImageUris = listOf(listOf(imageUri, null, null)),
+                includeWatermark = true,
+                typographyCues = listOf(
+                    WolfHorrorTypographyEngine.Cue(
+                        text = "لا تفتح الباب",
+                        startFrame = 0,
+                        endFrameExclusive = TEST_FRAME_COUNT,
+                        placement = WolfHorrorTypographyEngine.Placement.UPPER_LEFT,
+                        motion = WolfHorrorTypographyEngine.Motion.WHISPER_FADE
+                    )
+                ),
+                introSeconds = 0,
+                onSceneProgress = null,
+                bitRate = 600_000,
+                shotFrameBudgets = listOf(listOf(TEST_FRAME_COUNT)),
+                shotPlansPerScene = listOf(listOf(cameraShot)),
+                sceneRenderContexts = listOf(
+                    StoryDirectorEngine.SceneRenderContext(
+                        sceneNumber = 1,
+                        setting = "ممر مستشفى مهجور",
+                        mood = "ترقب وخوف",
+                        continuityNotes = "الممر نفسه والباب في نهاية الكادر",
+                        continuityKey = 604,
+                        event = StoryDirectorEngine.StoryEvent.SUSPENSE,
+                        visualStyle = "رعب سينمائي مظلم",
+                        horrorType = "رعب نفسي"
+                    )
+                ),
+                onRenderBackend = { backendFrames += it }
+            )
+            assertEquals(TEST_FRAME_COUNT, backendFrames.size)
+            assertTrue(backendFrames.all { it == WolfSceneRenderPipeline.Backend.UPLOADED_IMAGE })
+            OfflineProductionEngine.normalizeVideoTimestamps(output, normalized, TEST_FPS)
+            assertEncodedVideo(normalized)
+
+            val early = frameAt(normalized, 250_000L)
+            earlyFrame = early
+            val late = frameAt(normalized, 750_000L)
+            lateFrame = late
+            assertColorNear(early, 20, 20, Color.rgb(235, 38, 42), "top-left source edge")
+            assertColorNear(early, 300, 20, Color.rgb(35, 220, 72), "top-right source edge")
+            assertColorNear(early, 20, 548, Color.rgb(42, 82, 232), "bottom-left source edge")
+            assertColorNear(early, 300, 548, Color.rgb(235, 220, 36), "bottom-right source edge")
+            assertTrue(
+                "Typography and watermark must not alter an unverified original photo",
+                meanSampledColorDistance(early, expected) < 12.0
+            )
+            assertTrue(
+                "An unverified user photo must not receive camera, parallax or atmospheric motion",
+                meanSampledColorDistance(early, late) < 8.0
+            )
+        } finally {
+            earlyFrame?.recycle()
+            lateFrame?.recycle()
+            expectedFrame?.recycle()
             source.recycle()
             output.delete()
             normalized.delete()
@@ -236,8 +394,8 @@ class WolfScenePipelineEncoderIntegrationTest {
 
     @Test
     fun imageFreeDesertAndForestFramesAreNotAtmosphereOnly() {
-        val desert = renderImageFreeScene("عبرت الرياح كثبان الصحراء المهجورة وسط غبار الليل")
-        val forest = renderImageFreeScene("في الغابة المظلمة تحركت الأشجار مع ضباب كثيف وخطوات بعيدة")
+        val desert = renderImageFreeScene("طارد ظل أسود الحارس عبر كثبان الصحراء المهجورة وسط غبار الليل")
+        val forest = renderImageFreeScene("في الغابة المظلمة تبع ظل بلا وجه الحارس بين الأشجار وسط ضباب كثيف وخطوات بعيدة")
         try {
             val desertSky = desert.getPixel((desert.width * 0.14f).toInt(), (desert.height * 0.18f).toInt())
             val desertGround = desert.getPixel((desert.width * 0.14f).toInt(), (desert.height * 0.88f).toInt())
@@ -297,6 +455,106 @@ class WolfScenePipelineEncoderIntegrationTest {
      * Resolve the application context through the AndroidX instrumentation API.
      * Keep both encoder scenarios on the same canonical context source.
      */
+
+    private fun encodeCameraIntentVideo(
+        context: android.content.Context,
+        file: File,
+        motion: String,
+        camera: String
+    ) {
+        val caption = "تحرك الظل نحو اليمين داخل ممر المستشفى المهجور ثم اختفى خلف الباب"
+        val shot = StoryDirectorEngine.ShotPlan(
+            number = 1,
+            type = "لقطة كاميرا",
+            camera = camera,
+            composition = "اتجاه الحركة نحو اليمين مع الحفاظ على استمرارية الممر",
+            lighting = "",
+            motion = motion,
+            durationSeconds = 1,
+            prompt = "عينة رعب خيالي غير قرآني لاختبار حركة الكاميرا"
+        )
+        OfflineProductionEngine.encode(
+            context = context,
+            file = file,
+            scenes = listOf(caption),
+            w = TEST_WIDTH,
+            h = TEST_HEIGHT,
+            fps = TEST_FPS,
+            framesPerScene = listOf(TEST_FRAME_COUNT),
+            sceneImageUris = listOf(listOf<Uri?>(null, null, null)),
+            includeWatermark = false,
+            typographyCues = listOf(null),
+            introSeconds = 0,
+            onSceneProgress = null,
+            bitRate = 600_000,
+            shotFrameBudgets = listOf(listOf(TEST_FRAME_COUNT)),
+            shotPlansPerScene = listOf(listOf(shot)),
+            sceneRenderContexts = listOf(
+                StoryDirectorEngine.SceneRenderContext(
+                    sceneNumber = 1,
+                    setting = "ممر مستشفى مهجور",
+                    mood = "ترقب وخوف",
+                    continuityNotes = "ممر واحد وباب ثابت في نهاية المسار",
+                    continuityKey = 604,
+                    event = StoryDirectorEngine.StoryEvent.CHASE,
+                    visualStyle = "رعب سينمائي مظلم",
+                    horrorType = "رعب نفسي"
+                )
+            )
+        )
+    }
+
+    private fun frameAt(file: File, timeUs: Long): Bitmap {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(file.absolutePath)
+            retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+                ?: throw AssertionError("Could not decode an MP4 frame at $timeUs us")
+        } finally {
+            retriever.release()
+        }
+    }
+
+    private fun countDifferentSamples(first: Bitmap, second: Bitmap): Int {
+        assertEquals(first.width, second.width)
+        assertEquals(first.height, second.height)
+        var different = 0
+        for (y in 8 until first.height step 3) {
+            for (x in 8 until first.width step 3) {
+                if (colorDistance(first.getPixel(x, y), second.getPixel(x, y)) > 24) different++
+            }
+        }
+        return different
+    }
+
+    private fun meanSampledColorDistance(first: Bitmap, second: Bitmap): Double {
+        assertEquals(first.width, second.width)
+        assertEquals(first.height, second.height)
+        var total = 0L
+        var samples = 0L
+        for (y in 8 until first.height step 8) {
+            for (x in 8 until first.width step 8) {
+                total += colorDistance(first.getPixel(x, y), second.getPixel(x, y))
+                samples++
+            }
+        }
+        return total.toDouble() / samples.coerceAtLeast(1L).toDouble()
+    }
+
+    private fun assertColorNear(
+        bitmap: Bitmap,
+        x: Int,
+        y: Int,
+        expected: Int,
+        label: String
+    ) {
+        val actual = bitmap.getPixel(x, y)
+        assertTrue(
+            "$label was cropped or changed: expected=$expected actual=$actual",
+            colorDistance(actual, expected) < 150
+        )
+    }
+
     private fun targetContext() =
         InstrumentationRegistry.getInstrumentation().targetContext
 
@@ -310,7 +568,7 @@ class WolfScenePipelineEncoderIntegrationTest {
                 lighting = "إضاءة ليلية محدودة",
                 motion = "تثبيت",
                 durationSeconds = 1,
-                prompt = "اختبار مسار الرندر الموحد"
+                prompt = "عينة رعب خيالي لاختبار مسار الرندر الموحد"
             )
         }
 
@@ -318,7 +576,7 @@ class WolfScenePipelineEncoderIntegrationTest {
         sceneNumber = 1,
         setting = "غابة",
         mood = "توتر",
-        continuityNotes = "بيئة غابة ثابتة للاختبار",
+        continuityNotes = "غابة مقبرة مهجورة ثابتة للاختبار",
         continuityKey = 106,
         event = StoryDirectorEngine.StoryEvent.SUSPENSE,
         visualStyle = "رعب سينمائي مظلم",

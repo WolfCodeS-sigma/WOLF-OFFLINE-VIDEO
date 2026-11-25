@@ -15,7 +15,7 @@ class StoryPipelineTest {
 
     @Test
     fun longStoryKeepsAllParagraphsWithinTwelveScenes() {
-        val story = (1..20).joinToString("\n\n") { "الفقرة رقم $it تصف حدثًا جديدًا في القصة." }
+        val story = (1..20).joinToString("\n\n") { "الفقرة رقم $it تصف ظلًا يطارد الحارس داخل المنزل المهجور." }
         val offline = OfflineStoryEngine.split(story)
         val director = StoryDirectorEngine.analyze(story, 60, "9:16", "سينمائي", "رعب نفسي")
         assertEquals(12, offline.size)
@@ -27,7 +27,7 @@ class StoryPipelineTest {
 
     @Test
     fun directorExtendsDurationToGiveEverySceneAtLeastThreeSeconds() {
-        val story = (1..8).joinToString("\n\n") { "مشهد رقم $it." }
+        val story = (1..8).joinToString("\n\n") { "في المشهد رقم $it ظهرت آثار أقدام مبللة خلف باب القبو." }
         val plan = StoryDirectorEngine.analyze(story, 5, "9:16", "سينمائي", "رعب نفسي")
         assertTrue(plan.totalDurationSeconds >= plan.scenes.size * 3)
         assertEquals(plan.totalDurationSeconds, plan.scenes.sumOf { it.durationSeconds })
@@ -35,7 +35,7 @@ class StoryPipelineTest {
 
     @Test
     fun approvedNarrationKeepsItsDurationInsteadOfEnforcingThreeSecondsPerScene() {
-        val story = (1..12).joinToString("\n\n") { "مشهد رقم " + it + "." }
+        val story = (1..12).joinToString("\n\n") { "مشهد رعب رقم " + it + " حيث يتحرك ظل خلف باب القبو." }
         val plan = StoryDirectorEngine.analyze(
             story, 25, "9:16", "سينمائي", "رعب نفسي",
             audioDrivenDuration = true,
@@ -48,7 +48,7 @@ class StoryPipelineTest {
 
     @Test
     fun narrationSceneBudgetMergesSectionsWithoutDroppingStoryText() {
-        val scenes = (1..8).map { "فقرة رقم " + it }
+        val scenes = (1..8).map { "فقرة رعب رقم " + it + " تصف طرقات متتابعة خلف باب القبو." }
         val fitted = StoryDirectorEngine.fitSceneTextsToDuration(scenes, 3)
         assertEquals(3, fitted.size)
         for (number in 1..8) assertTrue(fitted.any { it.contains("فقرة رقم " + number) })
@@ -124,7 +124,7 @@ class StoryPipelineTest {
         assertEquals(2, WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION)
 
         val legacy = WolfLongFilmEngine.fingerprint(
-            story = "قصة اختبار",
+            story = "قصة رعب اختبار",
             framesPerScene = listOf(120, 120),
             fps = 12,
             width = 720,
@@ -134,7 +134,7 @@ class StoryPipelineTest {
             mediaInputs = "depth-segmentation-v1#storyboard-planner-v2"
         )
         val current = WolfLongFilmEngine.fingerprint(
-            story = "قصة اختبار",
+            story = "قصة رعب اختبار",
             framesPerScene = listOf(120, 120),
             fps = 12,
             width = 720,
@@ -153,7 +153,7 @@ class StoryPipelineTest {
         val bodySeconds = requestedFilmSeconds - introSeconds
         val bodyFrames = bodySeconds * 12
         val sceneTexts = StoryDirectorEngine.fitSceneTextsToDuration(
-            (1..11).map { "مشهد رقم $it" }, bodySeconds
+            (1..11).map { "ظل غامض يظهر في الممر رقم $it" }, bodySeconds
         )
         val frames = OfflineMotionEngine.allocateFrames(sceneTexts, bodyFrames, 1)
 
@@ -307,7 +307,7 @@ class StoryPipelineTest {
         assertEquals(
             "شاطئ أو ساحل",
             StoryDirectorEngine.analyze(
-                "وصلت إلى شاطئ البحر ليلًا.", 10, "9:16", "سينمائي", "رعب نفسي"
+                "وصلت إلى الشاطئ المهجور ليلًا وسمعت همسًا يصعد من الماء.", 10, "9:16", "سينمائي", "رعب نفسي"
             ).scenes.first().setting
         )
         assertEquals(
@@ -319,7 +319,7 @@ class StoryPipelineTest {
     @Test
     fun storyboardCameraIntentChangesTheActualCameraTransform() {
         val still = OfflineMotionEngine.cameraFrame(
-            0.9f, 0, "قصة اختبار", 0, StoryDirectorEngine.CameraMovement.HOLD
+            0.9f, 0, "قصة رعب اختبار", 0, StoryDirectorEngine.CameraMovement.HOLD
         )
         assertEquals(0f, still.zoom, 0.0001f)
         assertEquals(0f, still.offsetX, 0.0001f)
@@ -330,18 +330,18 @@ class StoryPipelineTest {
         )
         assertEquals(
             StoryDirectorEngine.CameraMovement.TRACK_RIGHT_TO_LEFT,
-            StoryDirectorEngine.resolveCameraMovement("تتبّع جانبي", "تحركت الشخصية نحو اليسار")
+            StoryDirectorEngine.resolveCameraMovement("تتبّع جانبي", "اندفع الحارس هاربًا من ظلّ يزحف خلفه نحو اليسار")
         )
         assertEquals(
             StoryDirectorEngine.CameraMovement.RESTRAINED_HANDHELD,
             StoryDirectorEngine.resolveCameraMovement(
                 "تثبيت قصير ثم حركة دقيقة",
-                "تتحرك الشخصية داخل الممر",
+                "يطاردها شبح بلا وجه داخل الممر",
                 "لقطة قريبة بعدسة 85mm مع اهتزاز محدود"
             )
         )
         val chasePlan = StoryDirectorEngine.analyze(
-            "هربت الشخصية عبر الممر وواصلت الركض.", 18, "9:16", "سينمائي", "رعب نفسي"
+            "هرب الحارس عبر الممر بينما يطارده شبح بلا وجه.", 18, "9:16", "سينمائي", "رعب نفسي"
         )
         assertEquals(
             StoryDirectorEngine.StoryEvent.CHASE,

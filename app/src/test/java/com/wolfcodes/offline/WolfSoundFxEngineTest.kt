@@ -28,8 +28,8 @@ class WolfSoundFxEngineTest {
     }
 
     @Test
-    fun quietSceneReceivesOnlyLowIntensityWindBed() {
-        val plan = WolfSoundFxEngine.classifyScene("كانت الغرفة فارغة والنافذة مغلقة")
+    fun isolatedHorrorSilenceReceivesOnlyLowIntensityWindBed() {
+        val plan = WolfSoundFxEngine.classifyScene("ظل القبو الجنائزي غارقًا في السكون ولم يسمع الحارس أي حدث")
         assertTrue(plan.cues == setOf(WolfSoundFxEngine.Cue.WIND))
         assertTrue(plan.intensity < 0.5)
     }
@@ -37,7 +37,7 @@ class WolfSoundFxEngineTest {
     @Test
     fun separatesSoundPlansForDifferentScenes() {
         val plans = WolfSoundFxEngine.classifyScenes(
-            listOf("غرفة ساكنة", "طرق متكرر على الباب", "مخلوق يطلق زئيرًا")
+            listOf("حجرة جنائزية مظلمة بلا حدث مسموع", "طرق متكرر على الباب", "مخلوق يطلق زئيرًا")
         )
         assertTrue(plans[0].cues == setOf(WolfSoundFxEngine.Cue.WIND))
         assertTrue(WolfSoundFxEngine.Cue.KNOCK in plans[1].cues)
@@ -53,8 +53,8 @@ class WolfSoundFxEngineTest {
     }
 
     @Test
-    fun quietScenesDoNotReceiveUnrequestedEventEffects() {
-        val plan = WolfSoundFxEngine.buildScenePlan("كانت الغرفة فارغة والنافذة مغلقة", 9)
+    fun isolatedHorrorSilenceDoesNotReceiveUnrequestedEventEffects() {
+        val plan = WolfSoundFxEngine.buildScenePlan("ظل القبو الجنائزي غارقًا في السكون ولم يسمع الحارس أي حدث", 9)
         assertTrue(plan.cues == setOf(WolfSoundFxEngine.Cue.WIND))
         assertTrue(plan.events.isEmpty())
     }

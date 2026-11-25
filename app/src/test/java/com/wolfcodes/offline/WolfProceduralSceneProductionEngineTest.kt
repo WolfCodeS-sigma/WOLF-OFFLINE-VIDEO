@@ -10,7 +10,7 @@ class WolfProceduralSceneProductionEngineTest {
     @Test
     fun environmentPlannerRecognizesArabicAndEnglishSceneCues() {
         assertEquals(WolfProceduralSceneProductionEngine.Environment.FOREST,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("كانت الأشجار تتحرك في الغابة"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("تكسرت أغصان الأشجار فوق المقبرة المهجورة بينما زحف ظل بين الجذوع"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.CORRIDOR,
             WolfProceduralSceneProductionEngine.classifyEnvironment("A shadow moved down the corridor"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.WINDOW,
@@ -18,9 +18,9 @@ class WolfProceduralSceneProductionEngineTest {
         assertEquals(WolfProceduralSceneProductionEngine.Environment.DOOR,
             WolfProceduralSceneProductionEngine.classifyEnvironment("الباب يفتح وحده"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.ROOM,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("The bedroom was empty"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("A shadow crossed the abandoned bedroom while the door creaked"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.CEMETERY,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("The graveyard was silent"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("A shadow moved between the graveyard tombstones after midnight"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.HAUNTED_HOUSE,
             WolfProceduralSceneProductionEngine.classifyEnvironment("سمعت خطوات غامضة في الخارج"))
     }
@@ -28,13 +28,13 @@ class WolfProceduralSceneProductionEngineTest {
     @Test
     fun environmentPlannerRecognizesAdditionalImageFreeLandscapes() {
         assertEquals(WolfProceduralSceneProductionEngine.Environment.BEACH,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("على الشاطئ المهجور تتراجع الأمواج"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("على الشاطئ المهجور خرج شبح غريق من الضباب مع تراجع الأمواج"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.SEA,
             WolfProceduralSceneProductionEngine.classifyEnvironment("The abandoned ocean was covered by fog"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.DESERT,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("تحركت الرياح فوق كثبان الصحراء"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("ظهر كيان أسود فوق كثبان الصحراء يطارد الحارس نحو المقبرة"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.ROAD,
-            WolfProceduralSceneProductionEngine.classifyEnvironment("A lonely road disappeared into the fog"))
+            WolfProceduralSceneProductionEngine.classifyEnvironment("A lonely road disappeared into the fog as something followed the headlights"))
         assertEquals(WolfProceduralSceneProductionEngine.Environment.RURAL,
             WolfProceduralSceneProductionEngine.classifyEnvironment("كانت القرية المهجورة محاطة بحقول مظلمة"))
     }
@@ -42,7 +42,7 @@ class WolfProceduralSceneProductionEngineTest {
     @Test
     fun storyDirectorAndProceduralPlannerAgreeOnBeachAndSeaLocations() {
         val beachPlan = StoryDirectorEngine.analyze(
-            story = "على الشاطئ المهجور كانت الأمواج تتراجع بينما يقترب صوت غامض من الضباب.",
+            story = "على الشاطئ المهجور خرج شبح غريق من الضباب بينما تراجعت الأمواج.",
             durationSeconds = 3,
             aspectRatio = "16:9",
             visualStyle = "واقعي مظلم",
