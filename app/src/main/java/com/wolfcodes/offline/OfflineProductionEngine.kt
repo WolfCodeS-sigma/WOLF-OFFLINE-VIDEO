@@ -1061,17 +1061,19 @@ object OfflineProductionEngine {
             )
             onRenderBackend?.invoke(selectedBackend)
 
-            WolfProceduralMotionEngine.renderDepthAware(
-                canvas = c,
-                width = w,
-                height = h,
-                caption = caption,
-                sceneIndex = sourceSceneIndex,
-                shotIndex = safeShotIndex,
-                progress = plannedProgress,
-                storyEvent = sceneEvent,
-                continuityKey = sceneRenderContext?.continuityKey ?: 0
-            )
+            if (selectedBackend == WolfSceneRenderPipeline.Backend.UPLOADED_IMAGE) {
+                WolfProceduralMotionEngine.renderDepthAware(
+                    canvas = c,
+                    width = w,
+                    height = h,
+                    caption = caption,
+                    sceneIndex = sourceSceneIndex,
+                    shotIndex = safeShotIndex,
+                    progress = plannedProgress,
+                    storyEvent = sceneEvent,
+                    continuityKey = sceneRenderContext?.continuityKey ?: 0
+                )
+            }
             drawPlannedLighting(c, w, h, shotPlan?.lighting.orEmpty())
             drawHorrorTypography(c, w, h, typographyCue, sceneFrameIndex, fps)
             if (includeWatermark) {
