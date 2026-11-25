@@ -711,7 +711,8 @@ object OfflineProductionEngine {
         shotPlansPerScene: List<List<StoryDirectorEngine.ShotPlan>>? = null,
         shotFrameOffsets: List<List<Int>>? = null,
         fullShotFrameCounts: List<List<Int>>? = null,
-        sceneRenderContexts: List<StoryDirectorEngine.SceneRenderContext>? = null) {
+        sceneRenderContexts: List<StoryDirectorEngine.SceneRenderContext>? = null,
+        onRenderBackend: ((WolfSceneRenderPipeline.Backend) -> Unit)? = null) {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, 0x7F000789)
             setInteger(MediaFormat.KEY_BIT_RATE, bitRate.coerceIn(400_000, 2_500_000))
@@ -800,7 +801,8 @@ object OfflineProductionEngine {
                                 w, h, scenes[s], s, sourceShotIndex, shotProgress, image, preparedShot, includeWatermark,
                                 typographyCues.getOrNull(s), sceneFrameOffset + f, fps, shotPlan,
                                 sceneRenderContext = sceneRenderContexts?.getOrNull(s),
-                                userImageSelected = shotUri != null
+                                userImageSelected = shotUri != null,
+                                onRenderBackend = onRenderBackend
                             )
                             val drained = drain(codec, muxer, info, started, track, false)
                             track = drained.first
@@ -873,7 +875,8 @@ object OfflineProductionEngine {
         sceneFrameIndex: Int, fps: Int,
         shotPlan: StoryDirectorEngine.ShotPlan? = null,
         sceneRenderContext: StoryDirectorEngine.SceneRenderContext? = null,
-        userImageSelected: Boolean = bitmap != null
+        userImageSelected: Boolean = bitmap != null,
+        onRenderBackend: ((WolfSceneRenderPipeline.Backend) -> Unit)? = null
     ) {
         validateRenderFallbackState(
             userImageSelected = userImageSelected,
@@ -891,7 +894,7 @@ object OfflineProductionEngine {
         )
         try {
             val imageLayers = preparedShot.image?.layers
-            WolfSceneRenderPipeline.renderPreparedShot(
+            val selectedBackend = WolfSceneRenderPipeline.renderPreparedShot(
                 preparedShot = preparedShot,
                 renderProcedural = {
                     WolfProceduralSceneProductionEngine.render(
@@ -1056,6 +1059,7 @@ object OfflineProductionEngine {
                     android.util.Log.w("WOLF_SCENE_PIPELINE", "Render dispatch: $reason")
                 }
             )
+            onRenderBackend?.invoke(selectedBackend)
 
             WolfProceduralMotionEngine.renderDepthAware(
                 canvas = c,
