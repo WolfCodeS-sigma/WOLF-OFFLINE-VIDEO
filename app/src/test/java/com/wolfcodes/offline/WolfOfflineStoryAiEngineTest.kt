@@ -183,6 +183,6 @@ class WolfOfflineStoryAiEngineTest {
 
     private fun brief(words: Int) = WolfOfflineStoryAiEngine.Brief(
         "رعب القبو", "كيان يطارد الحارس من خلف باب القبو كل ليلة", "رعب نفسي",
-        "منزل قديم", "حارس ليلي", "مظلم", "مفتوحة", words
+        "منزل مهجور مسكون", "حارس ليلي", "مظلم", "مفتوحة", words
     )
 }

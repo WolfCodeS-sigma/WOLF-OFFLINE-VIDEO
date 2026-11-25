@@ -379,7 +379,7 @@ class WolfScenePipelineEncoderIntegrationTest {
     @Test
     fun imageFreeOpenSeaFrameContainsHorizonAndLayeredWater() {
         val bitmap = renderImageFreeScene(
-            "في البحر المفتوح ظهرت أضواء بعيدة تحت ضباب بارد ثم اختفت"
+            "في البحر المفتوح ظهرت أضواء بعيدة تحت ضباب بارد ثم صعد ظل غريق من الماء واختفى"
         )
         try {
             val sky = bitmap.getPixel((bitmap.width * 0.12f).toInt(), (bitmap.height * 0.20f).toInt())
