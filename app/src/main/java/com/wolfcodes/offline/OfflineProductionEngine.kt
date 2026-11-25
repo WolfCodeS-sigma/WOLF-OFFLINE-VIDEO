@@ -729,7 +729,7 @@ object OfflineProductionEngine {
             muxer = MediaMuxer(file.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             val info = MediaCodec.BufferInfo()
             if(introSeconds > 0) {
-                val introCount=fps*introSeconds
+                val introCount = WolfCinematicIdentity.introFrameCount(introSeconds, fps)
                 for(frame in 0 until introCount) {
                     if(frame % (fps*2) == 0) WolfResourceGuard.ensureSafeToContinue(context)
                     drawIntro(
