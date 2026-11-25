@@ -20,6 +20,7 @@ class WolfScenePipelineEncoderIntegrationTest : InstrumentationTestCase() {
     fun testNoImageSceneUsesProceduralPipelineAndProducesMp4Frames() {
         val context = instrumentation.targetContext
         val output = File(context.cacheDir, "wolf-stage-06-b-procedural-${System.nanoTime()}.mp4")
+        val normalized = File(context.cacheDir, "wolf-stage-06-b-procedural-normalized-${System.nanoTime()}.mp4")
         val backendFrames = mutableListOf<WolfSceneRenderPipeline.Backend>()
 
         try {
@@ -45,15 +46,18 @@ class WolfScenePipelineEncoderIntegrationTest : InstrumentationTestCase() {
 
             assertEquals(TEST_FRAME_COUNT, backendFrames.size)
             assertTrue(backendFrames.all { it == WolfSceneRenderPipeline.Backend.PROCEDURAL })
-            assertEncodedVideo(output)
+            OfflineProductionEngine.normalizeVideoTimestamps(output, normalized, TEST_FPS)
+            assertEncodedVideo(normalized)
         } finally {
             output.delete()
+            normalized.delete()
         }
     }
 
     fun testSelectedUserImageStaysOnUploadedPipelineThroughEncoder() {
         val context = instrumentation.targetContext
         val output = File(context.cacheDir, "wolf-stage-06-b-uploaded-${System.nanoTime()}.mp4")
+        val normalized = File(context.cacheDir, "wolf-stage-06-b-uploaded-normalized-${System.nanoTime()}.mp4")
         val imageFile = File(context.cacheDir, "wolf-stage-06-b-image-${System.nanoTime()}.png")
         val backendFrames = mutableListOf<WolfSceneRenderPipeline.Backend>()
         val source = Bitmap.createBitmap(96, 160, Bitmap.Config.ARGB_8888)
@@ -95,10 +99,12 @@ class WolfScenePipelineEncoderIntegrationTest : InstrumentationTestCase() {
 
             assertEquals(TEST_FRAME_COUNT, backendFrames.size)
             assertTrue(backendFrames.all { it == WolfSceneRenderPipeline.Backend.UPLOADED_IMAGE })
-            assertEncodedVideo(output)
+            OfflineProductionEngine.normalizeVideoTimestamps(output, normalized, TEST_FPS)
+            assertEncodedVideo(normalized)
         } finally {
             source.recycle()
             output.delete()
+            normalized.delete()
             imageFile.delete()
         }
     }
