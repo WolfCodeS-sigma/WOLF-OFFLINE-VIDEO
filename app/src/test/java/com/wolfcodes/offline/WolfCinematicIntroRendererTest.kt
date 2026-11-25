@@ -24,7 +24,7 @@ class WolfCinematicIntroRendererTest {
     @Test
     fun frameProgressMovesFromOpeningToFinalTransitionDeterministically() {
         assertEquals(0f, WolfCinematicIntroRenderer.progressForFrame(0, 36), 0.0001f)
-        assertEquals(0.5f, WolfCinematicIntroRenderer.progressForFrame(18, 36), 0.0001f)
+        assertEquals(18f / 35f, WolfCinematicIntroRenderer.progressForFrame(18, 36), 0.0001f)
         assertEquals(1f, WolfCinematicIntroRenderer.progressForFrame(35, 36), 0.0001f)
         assertEquals(1f, WolfCinematicIntroRenderer.progressForFrame(0, 1), 0.0001f)
     }
