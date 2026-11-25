@@ -7,7 +7,7 @@ import org.junit.Test
 class OfflineMotionEngineTest {
     @Test
     fun frameAllocationPreservesExactDurationAndMinimumPerScene() {
-        val scenes = listOf("الغرفة ساكنة والنافذة مغلقة", "ظهر شبح فجأة خلف الباب", "هرب الرجل في ممر طويل")
+        val scenes = listOf("الغرفة المهجورة ساكنة والنافذة ترتجف قرب باب القبو", "ظهر شبح فجأة خلف الباب", "هرب الرجل في ممر طويل")
         val frames = OfflineMotionEngine.allocateFrames(scenes, totalFrames = 12 * 18, minimumFramesPerScene = 36)
 
         assertEquals(12 * 18, frames.sum())
@@ -18,7 +18,7 @@ class OfflineMotionEngineTest {
     @Test
     fun revealReceivesMoreTimeThanQuietAtmosphere() {
         val scenes = listOf(
-            "كانت الغرفة ساكنة والنافذة مغلقة",
+            "الغرفة المهجورة ساكنة والنافذة ترتجف قرب باب القبو",
             "ظهر شبح فجأة خلف الباب وانكشف وجهه"
         )
         val frames = OfflineMotionEngine.allocateFrames(scenes, totalFrames = 12 * 12, minimumFramesPerScene = 36)
@@ -29,7 +29,7 @@ class OfflineMotionEngineTest {
 
     @Test
     fun motionProfilesDistinguishSuspenseRevealAndChase() {
-        val suspense = OfflineMotionEngine.profile("الغرفة ساكنة")
+        val suspense = OfflineMotionEngine.profile("الغرفة المهجورة ساكنة داخل القبو")
         val reveal = OfflineMotionEngine.profile("ظهر شبح فجأة")
         val chase = OfflineMotionEngine.profile("هرب الرجل وبدأت المطاردة")
 
@@ -52,14 +52,14 @@ class OfflineMotionEngineTest {
     @Test(expected = IllegalArgumentException::class)
     fun allocationRejectsFrameBudgetBelowMinimum() {
         OfflineMotionEngine.allocateFrames(
-            captions = listOf("مشهد أول", "مشهد ثان"),
+            captions = listOf("مشهد رعب أول: طرقات القبو", "مشهد رعب ثان: ظل خلف الباب"),
             totalFrames = 60,
             minimumFramesPerScene = 36
         )
     }
     @Test
     fun cameraMovesVaryAcrossShotsAndAdjacentScenes() {
-        val caption = "الغرفة ساكنة ثم ظهر ظل خلف الباب"
+        val caption = "الغرفة المهجورة ساكنة ثم ظهر ظل خلف باب القبو"
         val moves = (0..2).map { shot ->
             OfflineMotionEngine.cameraFrame(0.65f, 0, caption, shot)
         } + (0..2).map { shot ->
@@ -73,7 +73,7 @@ class OfflineMotionEngineTest {
     @Test
     fun cameraFramesStayInsideSafeMotionBounds() {
         val captions = listOf(
-            "الغرفة ساكنة والنافذة مغلقة",
+            "الغرفة المهجورة ساكنة والنافذة ترتجف قرب باب القبو",
             "ظهر شبح فجأة خلف الباب",
             "هرب الرجل وبدأت المطاردة"
         )

@@ -35,7 +35,7 @@ class StoryPipelineTest {
 
     @Test
     fun approvedNarrationKeepsItsDurationInsteadOfEnforcingThreeSecondsPerScene() {
-        val story = (1..12).joinToString("\n\n") { "مشهد رقم " + it + "." }
+        val story = (1..12).joinToString("\n\n") { "مشهد رعب رقم " + it + " حيث يتحرك ظل خلف باب القبو." }
         val plan = StoryDirectorEngine.analyze(
             story, 25, "9:16", "سينمائي", "رعب نفسي",
             audioDrivenDuration = true,
@@ -307,7 +307,7 @@ class StoryPipelineTest {
         assertEquals(
             "شاطئ أو ساحل",
             StoryDirectorEngine.analyze(
-                "وصلت إلى شاطئ البحر ليلًا.", 10, "9:16", "سينمائي", "رعب نفسي"
+                "وصلت إلى الشاطئ المهجور ليلًا وسمعت همسًا يصعد من الماء.", 10, "9:16", "سينمائي", "رعب نفسي"
             ).scenes.first().setting
         )
         assertEquals(
@@ -319,7 +319,7 @@ class StoryPipelineTest {
     @Test
     fun storyboardCameraIntentChangesTheActualCameraTransform() {
         val still = OfflineMotionEngine.cameraFrame(
-            0.9f, 0, "قصة اختبار", 0, StoryDirectorEngine.CameraMovement.HOLD
+            0.9f, 0, "قصة رعب اختبار", 0, StoryDirectorEngine.CameraMovement.HOLD
         )
         assertEquals(0f, still.zoom, 0.0001f)
         assertEquals(0f, still.offsetX, 0.0001f)
