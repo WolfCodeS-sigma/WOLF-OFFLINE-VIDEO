@@ -76,7 +76,7 @@ object StoryDirectorEngine {
     fun classifyEvent(text: String): StoryEvent {
         val lower = text.lowercase(Locale.ROOT)
         return when {
-            listOf("يطارد", "يجري", "هرب", "يهرب", "مطاردة", "يلحق", "ركض", "فرّ", "chase", "running", "escape")
+            listOf("يطارد", "طارد", "طاردني", "طاردها", "طاردهم", "تطارده", "يجري", "هرب", "يهرب", "مطاردة", "يلحق", "ركض", "فرّ", "chase", "running", "escape")
                 .any { lower.contains(it) } -> StoryEvent.CHASE
             listOf("همس", "صوت", "أنفاس", "ينادي", "طرق", "خطوات", "صرير", "whisper", "footsteps", "knock")
                 .any { lower.contains(it) } -> StoryEvent.SOUND

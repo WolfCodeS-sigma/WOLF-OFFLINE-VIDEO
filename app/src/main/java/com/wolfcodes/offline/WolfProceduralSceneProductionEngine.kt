@@ -99,9 +99,10 @@ object WolfProceduralSceneProductionEngine {
             has("مزرعة", "حقل", "قرية", "farm", "field", "village", "rural") ->
                 Environment.RURAL
             has("ممر", "طرقة", "الممر", "hallway", "corridor") -> Environment.CORRIDOR
+            // A room is the dominant location; doors and windows are props within it.
+            has("غرفة", "حجرة", "الغرفة", "room", "bedroom") -> Environment.ROOM
             has("نافذة", "شباك", "زجاج", "window") -> Environment.WINDOW
             has("باب", "أبواب", "مدخل", "door", "entrance") -> Environment.DOOR
-            has("غرفة", "حجرة", "الغرفة", "room", "bedroom") -> Environment.ROOM
             else -> Environment.HAUNTED_HOUSE
         }
     }

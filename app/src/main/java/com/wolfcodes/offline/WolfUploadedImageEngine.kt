@@ -113,7 +113,7 @@ object WolfUploadedImageEngine {
     ): MotionPlan {
         val text = story.lowercase()
         val atmosphere = when {
-            hasAny(text, "مطاردة", "يطارد", "يجري", "يركض", "هرب", "لاحق", "يلاحق") -> Atmosphere.CHASE
+            hasAny(text, "مطاردة", "يطارد", "طارد", "طاردني", "طاردها", "طاردهم", "تطارده", "يجري", "يركض", "هرب", "لاحق", "يلاحق") -> Atmosphere.CHASE
             hasAny(text, "مطر", "تمطر", "عاصفة", "ماطر", "رعد") -> Atmosphere.RAIN
             hasAny(text, "مقبرة", "قبر", "مدفن", "جنازة") -> Atmosphere.CEMETERY
             hasAny(text, "غابة", "شجرة", "أشجار", "غصن", "غصون") -> Atmosphere.FOREST

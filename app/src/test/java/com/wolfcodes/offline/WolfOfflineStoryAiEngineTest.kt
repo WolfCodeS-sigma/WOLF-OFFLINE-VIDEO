@@ -36,7 +36,7 @@ class WolfOfflineStoryAiEngineTest {
         assertEquals(1, next.chapters.size)
         assertTrue(next.isComplete)
         assertFalse(next.approved)
-        assertTrue(next.continuitySummary.contains("هذا فصل تجريبي"))
+        assertTrue(next.continuitySummary.contains("سمع الحارس طرقات"))
         assertFalse(runCatching { WolfOfflineStoryAiEngine.withChapter(next, "ظهر كيان غامض خلف باب المشرحة. ".repeat(20)) }.isSuccess)
     }
 

@@ -53,8 +53,9 @@ object OfflineMotionEngine {
         val lengthBoost = (caption.length.coerceAtMost(420) / 420.0) * 0.12
 
         val chase = has(
-            "مطاردة", "يطارد", "هرب", "يهرب", "يجري", "ركض", "اندفع", "هاجم",
-            "يطاردها", "يطارده", "chase", "running", "escape", "attack", "runs"
+            "مطاردة", "يطارد", "طارد", "طاردني", "طاردها", "طاردهم", "تطارده",
+            "هرب", "يهرب", "يجري", "ركض", "اندفع", "هاجم", "يطاردها", "يطارده",
+            "chase", "running", "escape", "attack", "runs"
         )
         val reveal = has(
             "ظهر", "ظهرت", "فجأة", "انكشف", "كشف", "التفت", "خلفه", "شبح",

@@ -13,6 +13,18 @@ class StoryPipelineTest {
         assertEquals(offline, director.scenes.map { it.sourceText })
     }
 
+
+    @Test
+    fun pastTenseArabicPursuitIsClassifiedAsChaseAcrossPlanningAndMotion() {
+        val story = "طارد كيان أسود الحارس عبر ممر المستشفى المهجور حتى اختفى خلف باب القبو"
+        assertEquals(StoryDirectorEngine.StoryEvent.CHASE, StoryDirectorEngine.classifyEvent(story))
+        assertEquals(OfflineMotionEngine.Movement.CHASE, OfflineMotionEngine.profile(story).movement)
+        assertEquals(
+            WolfUploadedImageEngine.Atmosphere.CHASE,
+            WolfUploadedImageEngine.planMotion(story, sceneIndex = 0, shotIndex = 0, durationProgress = 0.5f).atmosphere
+        )
+    }
+
     @Test
     fun longStoryKeepsAllParagraphsWithinTwelveScenes() {
         val story = (1..20).joinToString("\n\n") { "الفقرة رقم $it تصف ظلًا يطارد الحارس داخل المنزل المهجور." }
@@ -51,7 +63,7 @@ class StoryPipelineTest {
         val scenes = (1..8).map { "فقرة رعب رقم " + it + " تصف طرقات متتابعة خلف باب القبو." }
         val fitted = StoryDirectorEngine.fitSceneTextsToDuration(scenes, 3)
         assertEquals(3, fitted.size)
-        for (number in 1..8) assertTrue(fitted.any { it.contains("فقرة رقم " + number) })
+        for (number in 1..8) assertTrue(fitted.any { it.contains("فقرة رعب رقم " + number) })
     }
 
     
@@ -120,7 +132,7 @@ class StoryPipelineTest {
 
     @Test
     fun renderRevisionInvalidatesLegacyStoryboardCheckpointFingerprint() {
-        assertEquals("storyboard-planner-v4", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
+        assertEquals("storyboard-planner-v5-safe-user-image", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
         assertEquals(2, WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION)
 
         val legacy = WolfLongFilmEngine.fingerprint(
