@@ -84,44 +84,80 @@ object WolfProceduralSceneProductionEngine {
             else -> ShotComposition(1.24f, 0f, 0f, 0f, 0.56f, 0.44f)
         }
 
-    /** Atmosphere-only frame rendering; no subject or prop geometry is generated. */
+    /**
+     * Renders the selected environment plan using the same storyboard context and
+     * camera intent that OfflineProductionEngine previously applied to its direct
+     * no-image drawing branch. Subject and prop geometry remain prohibited here.
+     */
     fun render(
         canvas: Canvas,
         width: Int,
         height: Int,
         plan: ScenePlan,
         shotIndex: Int,
-        progress: Float
+        progress: Float,
+        sceneRenderContext: StoryDirectorEngine.SceneRenderContext? = null,
+        shotPlan: StoryDirectorEngine.ShotPlan? = null
     ) {
         if (width <= 0 || height <= 0) return
-        val safeShot = shotIndex.coerceIn(0, 2)
-        val shot = shotComposition(safeShot)
+
+        val safeShot = shotIndex.coerceIn(0, WolfSceneAssetStore.SHOTS_PER_SCENE - 1)
+        val caption = plan.caption
+        val plannedProgress = StoryDirectorEngine.motionProgress(shotPlan?.motion.orEmpty(), progress)
+        val sourceSceneIndex = (sceneRenderContext?.sceneNumber?.minus(1) ?: plan.sceneIndex)
+            .coerceAtLeast(0)
+        val cameraMovement = StoryDirectorEngine.resolveCameraMovement(
+            shotPlan?.motion.orEmpty(), caption, shotPlan?.camera.orEmpty()
+        )
+        val compositionFocusX = shotPlan?.let {
+            StoryDirectorEngine.compositionFocusX(it.composition, it.camera)
+        }
+        val compositionFocusY = shotPlan?.let {
+            StoryDirectorEngine.compositionFocusY(it.composition, it.camera)
+        }
+        val horizontalOffset = compositionFocusX?.let { (it - 0.5f) * width * 0.08f } ?: 0f
+        val verticalOffset = compositionFocusY?.let { (it - 0.5f) * height * 0.06f } ?: 0f
+        val sceneCamera = OfflineMotionEngine.cameraFrame(
+            plannedProgress, sourceSceneIndex, caption, safeShot, cameraMovement
+        )
+        val sceneScale = (1f + sceneCamera.zoom).coerceIn(0.98f, 1.08f)
+        val setting = sceneRenderContext?.setting?.takeIf { it.isNotBlank() }
+            ?: settingFor(plan.environment)
+
         val saved = canvas.save()
         try {
-            canvas.drawColor(android.graphics.Color.BLACK)
-            canvas.translate(width * (0.5f + shot.offsetX), height * (0.5f + shot.offsetY))
-            canvas.rotate(shot.rotationDegrees)
-            canvas.scale(shot.scale, shot.scale)
-            canvas.translate(-width * shot.focusX, -height * shot.focusY)
+            canvas.translate(
+                width * 0.5f + sceneCamera.offsetX * width + horizontalOffset,
+                height * 0.5f + sceneCamera.offsetY * height + verticalOffset
+            )
+            canvas.rotate(sceneCamera.rotationDegrees)
+            canvas.scale(sceneScale, sceneScale)
+            canvas.translate(-width * 0.5f, -height * 0.5f)
             WolfSceneArtEngine.draw(
                 canvas = canvas,
                 width = width,
                 height = height,
-                caption = plan.caption,
-                scene = plan.sceneIndex * 3 + safeShot,
-                progress = progress.coerceIn(0f, 1f)
-            )
-            WolfProceduralMotionEngine.renderDepthAware(
-                canvas = canvas,
-                width = width,
-                height = height,
-                caption = plan.caption,
-                sceneIndex = plan.sceneIndex,
-                shotIndex = safeShot,
-                progress = progress.coerceIn(0f, 1f)
+                caption = caption,
+                scene = sourceSceneIndex * WolfSceneAssetStore.SHOTS_PER_SCENE + safeShot,
+                progress = plannedProgress,
+                setting = setting,
+                mood = sceneRenderContext?.mood.orEmpty(),
+                continuityKey = sceneRenderContext?.continuityKey ?: 0,
+                visualStyle = sceneRenderContext?.visualStyle.orEmpty(),
+                horrorType = sceneRenderContext?.horrorType.orEmpty()
             )
         } finally {
             canvas.restoreToCount(saved)
         }
+    }
+
+    private fun settingFor(environment: Environment): String = when (environment) {
+        Environment.FOREST -> "غابة"
+        Environment.CORRIDOR -> "ممر"
+        Environment.WINDOW -> "نافذة"
+        Environment.DOOR -> "باب"
+        Environment.CEMETERY -> "مقابر"
+        Environment.ROOM -> "مكان داخلي"
+        Environment.HAUNTED_HOUSE -> "منزل مهجور"
     }
 }
