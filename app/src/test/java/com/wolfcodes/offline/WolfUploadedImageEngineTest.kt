@@ -55,4 +55,31 @@ class WolfUploadedImageEngineTest {
         assertTrue(first.focusY in 0f..1f)
         assertEquals(WolfUploadedImageEngine.Atmosphere.DOOR, otherShot.atmosphere)
     }
+
+    @Test
+    fun unverifiedImageFitKeepsTheCompleteSourceAspectInsideTheOutput() {
+        val landscape = WolfUploadedImageEngine.aspectFitDestination(
+            sourceWidth = 1600,
+            sourceHeight = 900,
+            outputWidth = 320,
+            outputHeight = 568
+        )
+        assertEquals(320f, landscape.width, 0.001f)
+        assertEquals(180f, landscape.height, 0.001f)
+        assertEquals(194f, landscape.top, 0.001f)
+        assertEquals(0f, landscape.left, 0.001f)
+        assertTrue(landscape.top >= 0f && landscape.bottom <= 568f)
+
+        val portrait = WolfUploadedImageEngine.aspectFitDestination(
+            sourceWidth = 900,
+            sourceHeight = 1600,
+            outputWidth = 568,
+            outputHeight = 320
+        )
+        assertEquals(180f, portrait.width, 0.001f)
+        assertEquals(320f, portrait.height, 0.001f)
+        assertEquals(194f, portrait.left, 0.001f)
+        assertEquals(0f, portrait.top, 0.001f)
+        assertTrue(portrait.left >= 0f && portrait.right <= 568f)
+    }
 }
