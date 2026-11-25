@@ -703,7 +703,7 @@ object OfflineProductionEngine {
         else -> 480 to 854
     }
 
-    private fun encode(context: Context, file: File, scenes: List<String>, w: Int, h: Int, fps: Int,
+    internal fun encode(context: Context, file: File, scenes: List<String>, w: Int, h: Int, fps: Int,
         framesPerScene: List<Int>, sceneImageUris: List<List<Uri?>>, includeWatermark: Boolean,
         typographyCues: List<WolfHorrorTypographyEngine.Cue?>,
         introSeconds: Int, onSceneProgress: ((Int, Int) -> Unit)?, bitRate: Int,
@@ -768,22 +768,21 @@ object OfflineProductionEngine {
                             "تعذر قراءة صورة المستخدم المحددة للمشهد؛ تم إيقاف هذا المسار بدل استبدالها برسوم مولدة"
                         )
                     }
-                    val imageLayers = try {
-                        if (WolfImageDepthSegmenter.isSemanticSegmentationReady() && image != null) {
-                            WolfImageDepthSegmenter.segment(image).let { candidate ->
-                                if (candidate.safeForParallax) candidate else {
-                                    candidate.recycle()
-                                    null
-                                }
-                            }
-                        } else null
-                    } catch (segmentationError: Exception) {
+                    val sourceSceneIndex = (sceneRenderContexts?.getOrNull(s)?.sceneNumber?.minus(1) ?: s)
+                        .coerceAtLeast(0)
+                    val preparedShot = WolfSceneRenderPipeline.prepare(
+                        caption = scenes[s],
+                        sceneIndex = sourceSceneIndex,
+                        source = image
+                    ) { reason ->
                         WolfDiagnostics.record(
-                            context, "استعادة الرندر", "WOLF IMAGE FALLBACK", "WARNING",
-                            "تعذر فصل الصورة إلى طبقات؛ سيتم الحفاظ على الصورة الأصلية دون تحريك كاميرا مشوّه",
-                            segmentationError.javaClass.simpleName
+                            context,
+                            "توجيه الرندر الموحد",
+                            "WOLF SCENE PIPELINE",
+                            if (reason == "NoUploadedImage") "INFO" else "WARNING",
+                            "اختيار مسار اللقطة: $reason",
+                            reason
                         )
-                        null
                     }
                     try {
                         for (f in 0 until shotFrames) {
@@ -798,7 +797,7 @@ object OfflineProductionEngine {
                             )
                             draw(
                                 inputSurface ?: throw IllegalStateException("تعذر إنشاء سطح إدخال الفيديو"),
-                                w, h, scenes[s], s, sourceShotIndex, shotProgress, image, imageLayers, includeWatermark,
+                                w, h, scenes[s], s, sourceShotIndex, shotProgress, image, preparedShot, includeWatermark,
                                 typographyCues.getOrNull(s), sceneFrameOffset + f, fps, shotPlan,
                                 sceneRenderContext = sceneRenderContexts?.getOrNull(s),
                                 userImageSelected = shotUri != null
@@ -808,7 +807,7 @@ object OfflineProductionEngine {
                             started = drained.second
                         }
                     } finally {
-                        imageLayers?.recycle()
+                        preparedShot.recycle()
                         if (image != null && !image.isRecycled) image.recycle()
                     }
                     sceneFrameOffset += shotFrames
@@ -869,7 +868,7 @@ object OfflineProductionEngine {
 
     private fun draw(
         surface: Surface, w: Int, h: Int, caption: String, scene: Int,
-        shotIndex: Int, t: Float, bitmap: Bitmap?, imageLayers: WolfImageDepthSegmenter.Layers?,
+        shotIndex: Int, t: Float, bitmap: Bitmap?, preparedShot: WolfSceneRenderPipeline.PreparedShot,
         includeWatermark: Boolean, typographyCue: WolfHorrorTypographyEngine.Cue?,
         sceneFrameIndex: Int, fps: Int,
         shotPlan: StoryDirectorEngine.ShotPlan? = null,
@@ -891,180 +890,173 @@ object OfflineProductionEngine {
             shotPlan?.motion.orEmpty(), caption, shotPlan?.camera.orEmpty()
         )
         try {
-            if(bitmap != null) {
-                c.drawColor(android.graphics.Color.BLACK)
-                val source=Rect(0,0,bitmap.width,bitmap.height)
-                val targetRatio=w.toFloat()/h.toFloat()
-                val imageRatio=bitmap.width.toFloat()/bitmap.height.toFloat()
-                if(imageRatio>targetRatio) {
-                    val cropWidth=(bitmap.height*targetRatio).toInt().coerceAtLeast(1)
-                    source.left=(bitmap.width-cropWidth)/2
+            val imageLayers = preparedShot.image?.layers
+            WolfSceneRenderPipeline.renderPreparedShot(
+                preparedShot = preparedShot,
+                renderProcedural = {
+                    WolfProceduralSceneProductionEngine.render(
+                        canvas = c,
+                        width = w,
+                        height = h,
+                        plan = preparedShot.requireProceduralPlan(),
+                        shotIndex = safeShotIndex,
+                        progress = plannedProgress,
+                        sceneRenderContext = sceneRenderContext,
+                        shotPlan = shotPlan
+                    )
+                },
+                renderUploadedImage = {
+                    if (bitmap == null || bitmap.isRecycled) {
+                        WolfUploadedImageEngine.Result.SAFE_FRAME
+                    } else {
+                    c.drawColor(android.graphics.Color.BLACK)
+                    val source=Rect(0,0,bitmap.width,bitmap.height)
+                    val targetRatio=w.toFloat()/h.toFloat()
+                    val imageRatio=bitmap.width.toFloat()/bitmap.height.toFloat()
+                    if(imageRatio>targetRatio) {
+                        val cropWidth=(bitmap.height*targetRatio).toInt().coerceAtLeast(1)
+                        source.left=(bitmap.width-cropWidth)/2
+                        source.right=source.left+cropWidth
+                    } else {
+                        val cropHeight=(bitmap.width/targetRatio).toInt().coerceAtLeast(1)
+                        source.top=(bitmap.height-cropHeight)/2
+                        source.bottom=source.top+cropHeight
+                    }
+                    val originalSource = Rect(source)
+                    // Depth-aware motion is only safe when segmentation produced valid layers.
+                    // Otherwise retain the full aspect-matched source crop without camera warping.
+                    val shotProgress = plannedProgress
+                    val baseLeft=source.left
+                    val baseTop=source.top
+                    val baseWidth=source.width()
+                    val baseHeight=source.height()
+                    val depthLayersAvailable = imageLayers?.safeForParallax == true
+                    val cropScale=if (!useSafeStillImageFallback(depthLayersAvailable)) {
+                        when(shotIndex) { 0 -> 1f; 1 -> 0.78f; else -> 0.60f }
+                    } else 1f
+                    val cropWidth=(baseWidth*cropScale).toInt().coerceAtLeast(1)
+                    val cropHeight=(baseHeight*cropScale).toInt().coerceAtLeast(1)
+                    val plannedFocusX = shotPlan?.let {
+                        StoryDirectorEngine.compositionFocusX(it.composition, it.camera)
+                    }
+                    val focusX = plannedFocusX ?: when(shotIndex) {
+                        0 -> 0.50f
+                        1 -> 0.34f + 0.30f * shotProgress
+                        else -> 0.62f - 0.24f * shotProgress
+                    }
+                    val plannedFocusY = shotPlan?.let {
+                        StoryDirectorEngine.compositionFocusY(it.composition, it.camera)
+                    }
+                    val focusY = plannedFocusY ?: when(shotIndex) {
+                        0 -> 0.50f
+                        1 -> 0.45f
+                        else -> 0.40f + 0.12f * shotProgress
+                    }
+                    source.left=(baseLeft+(baseWidth-cropWidth)*focusX).toInt().coerceIn(baseLeft,baseLeft+baseWidth-cropWidth)
+                    source.top=(baseTop+(baseHeight-cropHeight)*focusY).toInt().coerceIn(baseTop,baseTop+baseHeight-cropHeight)
                     source.right=source.left+cropWidth
-                } else {
-                    val cropHeight=(bitmap.width/targetRatio).toInt().coerceAtLeast(1)
-                    source.top=(bitmap.height-cropHeight)/2
                     source.bottom=source.top+cropHeight
-                }
-                val originalSource = Rect(source)
-                // Depth-aware motion is only safe when segmentation produced valid layers.
-                // Otherwise retain the full aspect-matched source crop without camera warping.
-                val shotProgress = plannedProgress
-                val baseLeft=source.left
-                val baseTop=source.top
-                val baseWidth=source.width()
-                val baseHeight=source.height()
-                val depthLayersAvailable = imageLayers?.safeForParallax == true
-                val cropScale=if (!useSafeStillImageFallback(depthLayersAvailable)) {
-                    when(shotIndex) { 0 -> 1f; 1 -> 0.78f; else -> 0.60f }
-                } else 1f
-                val cropWidth=(baseWidth*cropScale).toInt().coerceAtLeast(1)
-                val cropHeight=(baseHeight*cropScale).toInt().coerceAtLeast(1)
-                val plannedFocusX = shotPlan?.let {
-                    StoryDirectorEngine.compositionFocusX(it.composition, it.camera)
-                }
-                val focusX = plannedFocusX ?: when(shotIndex) {
-                    0 -> 0.50f
-                    1 -> 0.34f + 0.30f * shotProgress
-                    else -> 0.62f - 0.24f * shotProgress
-                }
-                val plannedFocusY = shotPlan?.let {
-                    StoryDirectorEngine.compositionFocusY(it.composition, it.camera)
-                }
-                val focusY = plannedFocusY ?: when(shotIndex) {
-                    0 -> 0.50f
-                    1 -> 0.45f
-                    else -> 0.40f + 0.12f * shotProgress
-                }
-                source.left=(baseLeft+(baseWidth-cropWidth)*focusX).toInt().coerceIn(baseLeft,baseLeft+baseWidth-cropWidth)
-                source.top=(baseTop+(baseHeight-cropHeight)*focusY).toInt().coerceIn(baseTop,baseTop+baseHeight-cropHeight)
-                source.right=source.left+cropWidth
-                source.bottom=source.top+cropHeight
-                val camera = if (depthLayersAvailable) {
-                    OfflineMotionEngine.cameraFrame(
-                        shotProgress, sourceSceneIndex, caption, safeShotIndex, cameraMovement
+                    val camera = if (depthLayersAvailable) {
+                        OfflineMotionEngine.cameraFrame(
+                            shotProgress, sourceSceneIndex, caption, safeShotIndex, cameraMovement
+                        )
+                    } else null
+                    val plannedZoom = when {
+                        shotPlan?.camera?.contains("24mm") == true -> 1.012f
+                        shotPlan?.camera?.contains("50mm") == true -> 1.034f
+                        shotPlan?.camera?.contains("85mm") == true -> 1.058f
+                        else -> when (shotIndex) {
+                            0 -> 1.012f
+                            1 -> 1.034f
+                            else -> 1.058f
+                        }
+                    }
+                    val baseZoom = if (
+                        depthLayersAvailable && cameraMovement != StoryDirectorEngine.CameraMovement.HOLD
+                    ) plannedZoom else 1f
+                    // Keep the original image static when segmentation is unavailable.
+                    val scale = when {
+                        camera == null -> 1f
+                        cameraMovement == StoryDirectorEngine.CameraMovement.HOLD -> 1f
+                        else -> (baseZoom + camera.zoom).coerceAtLeast(1.006f)
+                    }
+                    val dw = w * scale
+                    val dh = h * scale
+                    val shiftX = camera?.offsetX?.times(w) ?: 0f
+                    val shiftY = camera?.offsetY?.times(h) ?: 0f
+                    val destination = RectF(
+                        (w - dw) / 2f + shiftX,
+                        (h - dh) / 2f + shiftY,
+                        (w + dw) / 2f + shiftX,
+                        (h + dh) / 2f + shiftY
                     )
-                } else null
-                val plannedZoom = when {
-                    shotPlan?.camera?.contains("24mm") == true -> 1.012f
-                    shotPlan?.camera?.contains("50mm") == true -> 1.034f
-                    shotPlan?.camera?.contains("85mm") == true -> 1.058f
-                    else -> when (shotIndex) {
-                        0 -> 1.012f
-                        1 -> 1.034f
-                        else -> 1.058f
+                    p.alpha = 255
+                    if (imageLayers?.safeForParallax == true) {
+                        val layerScale = imageLayers.sourceScale
+                        val layerLeft = (source.left * layerScale).toInt()
+                            .coerceIn(0, imageLayers.background.width - 1)
+                        val layerTop = (source.top * layerScale).toInt()
+                            .coerceIn(0, imageLayers.background.height - 1)
+                        val layerRight = (source.right * layerScale).toInt()
+                            .coerceIn(layerLeft + 1, imageLayers.background.width)
+                        val layerBottom = (source.bottom * layerScale).toInt()
+                            .coerceIn(layerTop + 1, imageLayers.background.height)
+                        val layerSource = Rect(layerLeft, layerTop, layerRight, layerBottom)
+                        try {
+                            WolfSceneDepthComposer.renderImageLayers(
+                                canvas = c,
+                                width = w,
+                                height = h,
+                                sceneIndex = sourceSceneIndex,
+                                progress = shotProgress,
+                                layers = imageLayers,
+                                source = layerSource,
+                                destination = destination,
+                                rotationDegrees = camera?.rotationDegrees ?: 0f
+                            )
+                        } catch (compositionError: Exception) {
+                            android.util.Log.w(
+                                "WOLF_RENDER",
+                                "Depth composition failed; preserving the original user image",
+                                compositionError
+                            )
+                            c.drawColor(android.graphics.Color.BLACK)
+                            c.drawBitmap(
+                                bitmap,
+                                originalSource,
+                                RectF(0f, 0f, w.toFloat(), h.toFloat()),
+                                p
+                            )
+                        }
+                    } else {
+                        val cameraSave = c.save()
+                        try {
+                            if (camera != null) c.rotate(camera.rotationDegrees, w / 2f, h / 2f)
+                            c.drawBitmap(bitmap, source, destination, p)
+                        } finally {
+                            c.restoreToCount(cameraSave)
+                        }
                     }
-                }
-                val baseZoom = if (
-                    depthLayersAvailable && cameraMovement != StoryDirectorEngine.CameraMovement.HOLD
-                ) plannedZoom else 1f
-                // Keep the original image static when segmentation is unavailable.
-                val scale = when {
-                    camera == null -> 1f
-                    cameraMovement == StoryDirectorEngine.CameraMovement.HOLD -> 1f
-                    else -> (baseZoom + camera.zoom).coerceAtLeast(1.006f)
-                }
-                val dw = w * scale
-                val dh = h * scale
-                val shiftX = camera?.offsetX?.times(w) ?: 0f
-                val shiftY = camera?.offsetY?.times(h) ?: 0f
-                val destination = RectF(
-                    (w - dw) / 2f + shiftX,
-                    (h - dh) / 2f + shiftY,
-                    (w + dw) / 2f + shiftX,
-                    (h + dh) / 2f + shiftY
-                )
-                p.alpha = 255
-                if (imageLayers?.safeForParallax == true) {
-                    val layerScale = imageLayers.sourceScale
-                    val layerLeft = (source.left * layerScale).toInt()
-                        .coerceIn(0, imageLayers.background.width - 1)
-                    val layerTop = (source.top * layerScale).toInt()
-                        .coerceIn(0, imageLayers.background.height - 1)
-                    val layerRight = (source.right * layerScale).toInt()
-                        .coerceIn(layerLeft + 1, imageLayers.background.width)
-                    val layerBottom = (source.bottom * layerScale).toInt()
-                        .coerceIn(layerTop + 1, imageLayers.background.height)
-                    val layerSource = Rect(layerLeft, layerTop, layerRight, layerBottom)
-                    try {
-                        WolfSceneDepthComposer.renderImageLayers(
-                            canvas = c,
-                            width = w,
-                            height = h,
-                            sceneIndex = sourceSceneIndex,
-                            progress = shotProgress,
-                            layers = imageLayers,
-                            source = layerSource,
-                            destination = destination,
-                            rotationDegrees = camera?.rotationDegrees ?: 0f
-                        )
-                    } catch (compositionError: Exception) {
-                        android.util.Log.w(
-                            "WOLF_RENDER",
-                            "Depth composition failed; preserving the original user image",
-                            compositionError
-                        )
-                        c.drawColor(android.graphics.Color.BLACK)
-                        c.drawBitmap(
-                            bitmap,
-                            originalSource,
-                            RectF(0f, 0f, w.toFloat(), h.toFloat()),
-                            p
-                        )
-                    }
-                } else {
-                    val cameraSave = c.save()
-                    try {
-                        if (camera != null) c.rotate(camera.rotationDegrees, w / 2f, h / 2f)
-                        c.drawBitmap(bitmap, source, destination, p)
-                    } finally {
-                        c.restoreToCount(cameraSave)
-                    }
-                }
-                p.color=android.graphics.Color.argb(46,0,0,0)
-                c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
-                if(shotProgress<0.08f) {
-                    val fade=((0.08f-shotProgress)/0.08f*36f).toInt().coerceIn(0,36)
-                    p.color=android.graphics.Color.argb(fade,0,0,0)
+                    p.color=android.graphics.Color.argb(46,0,0,0)
                     c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
+                    if(shotProgress<0.08f) {
+                        val fade=((0.08f-shotProgress)/0.08f*36f).toInt().coerceIn(0,36)
+                        p.color=android.graphics.Color.argb(fade,0,0,0)
+                        c.drawRect(0f,0f,w.toFloat(),h.toFloat(),p)
+                    }
+    
+                        if (imageLayers?.safeForParallax == true) {
+                            WolfUploadedImageEngine.Result.DEPTH_LAYERS
+                        } else {
+                            WolfUploadedImageEngine.Result.ORIGINAL_IMAGE
+                        }
+                    }
+                },
+                onFallback = { reason ->
+                    android.util.Log.w("WOLF_SCENE_PIPELINE", "Render dispatch: $reason")
                 }
-            } else {
-                val compositionFocusX = shotPlan?.let {
-                    StoryDirectorEngine.compositionFocusX(it.composition, it.camera)
-                }
-                val compositionFocusY = shotPlan?.let {
-                    StoryDirectorEngine.compositionFocusY(it.composition, it.camera)
-                }
-                val horizontalOffset = compositionFocusX?.let { (it - 0.5f) * w * 0.08f } ?: 0f
-                val verticalOffset = compositionFocusY?.let { (it - 0.5f) * h * 0.06f } ?: 0f
-                // Procedural scenes contain atmosphere only, so the planned camera can move
-                // this background safely without inventing or deforming story subjects.
-                val sceneCamera = OfflineMotionEngine.cameraFrame(
-                    plannedProgress, sourceSceneIndex, caption, safeShotIndex, cameraMovement
-                )
-                val compositionSave = c.save()
-                try {
-                    c.translate(
-                        w * 0.5f + sceneCamera.offsetX * w + horizontalOffset,
-                        h * 0.5f + sceneCamera.offsetY * h + verticalOffset
-                    )
-                    c.rotate(sceneCamera.rotationDegrees)
-                    val sceneScale = (1f + sceneCamera.zoom).coerceIn(0.98f, 1.08f)
-                    c.scale(sceneScale, sceneScale)
-                    c.translate(-w * 0.5f, -h * 0.5f)
-                    WolfSceneArtEngine.draw(
-                        c, w, h, caption,
-                        sourceSceneIndex * WolfSceneAssetStore.SHOTS_PER_SCENE + safeShotIndex,
-                        plannedProgress,
-                        setting = sceneRenderContext?.setting.orEmpty(),
-                        mood = sceneRenderContext?.mood.orEmpty(),
-                        continuityKey = sceneRenderContext?.continuityKey ?: 0,
-                        visualStyle = sceneRenderContext?.visualStyle.orEmpty(),
-                        horrorType = sceneRenderContext?.horrorType.orEmpty()
-                    )
-                } finally {
-                    c.restoreToCount(compositionSave)
-                }
-            }
+            )
+
             WolfProceduralMotionEngine.renderDepthAware(
                 canvas = c,
                 width = w,
