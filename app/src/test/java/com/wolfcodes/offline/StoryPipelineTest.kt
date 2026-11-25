@@ -132,7 +132,7 @@ class StoryPipelineTest {
 
     @Test
     fun renderRevisionInvalidatesLegacyStoryboardCheckpointFingerprint() {
-        assertEquals("storyboard-planner-v5-safe-user-image", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
+        assertEquals("storyboard-planner-v6-wolf-intro-motion-v1", OfflineProductionEngine.STORYBOARD_RENDER_REVISION)
         assertEquals(2, WolfSceneAssetStore.DEPTH_SEGMENTATION_VERSION)
 
         val legacy = WolfLongFilmEngine.fingerprint(

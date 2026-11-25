@@ -18,7 +18,10 @@ data class WolfCinematicAudioTimeline(
             authoritativeNarrationDurationMs: Long? = null
         ): WolfCinematicAudioTimeline {
             require(requestedDurationSeconds in 1..1800) { "مدة الفيلم غير صالحة" }
-            val intro = if (includeIntro) minOf(3, (requestedDurationSeconds - 1).coerceAtLeast(0)) else 0
+            val intro = WolfCinematicIdentity.introDurationSeconds(
+                requestedTotal = requestedDurationSeconds,
+                includeIntro = includeIntro
+            )
             require(
                 authoritativeNarrationDurationMs == null ||
                     authoritativeNarrationDurationMs in 1_000L..1_800_000L
