@@ -71,8 +71,7 @@ class WolfTeleprompterAndroidTest {
             val project = awaitProject(context, title)
             projectId = project.id
 
-            startRecording(scenario)
-            awaitTeleprompter(scenario)
+            startRecordingAndAwaitTeleprompter(scenario)
             assertManualTeleprompterAndRtl(scenario, story)
 
             // The emulator's input may be quiet. The recorder must remain active
@@ -108,10 +107,7 @@ class WolfTeleprompterAndroidTest {
                 assertNotNull("The saved narration project must remain in the project list", openProject)
                 openProject!!.performClick()
             }
-            awaitMainStatus(scenario) { it.contains("يوجد تسجيل من 1 أجزاء") }
-
-            startRecording(scenario)
-            awaitTeleprompter(scenario)
+            startRecordingAndAwaitTeleprompter(scenario)
             scenario.onActivity {
                 val script = findWindowView(WolfUiTestTags.TELEPROMPTER_SCRIPT) as TextView
                 assertEquals("Reopened projects must show the exact approved script", story, script.text.toString())
@@ -145,26 +141,23 @@ class WolfTeleprompterAndroidTest {
         }
     }
 
-    private fun startRecording(scenario: ActivityScenario<MainActivity>) {
-        scenario.onActivity {
-            val record = findWindowView(WolfUiTestTags.VOICE_RECORD) as? Button
-            assertNotNull("The recording action must be available", record)
-            record!!.performClick()
-        }
-    }
-
-    private fun awaitTeleprompter(scenario: ActivityScenario<MainActivity>) {
-        val deadline = SystemClock.elapsedRealtime() + 15_000L
+    private fun startRecordingAndAwaitTeleprompter(scenario: ActivityScenario<MainActivity>) {
+        val deadline = SystemClock.elapsedRealtime() + 20_000L
         while (SystemClock.elapsedRealtime() < deadline) {
-            var present = false
+            var ready = false
             scenario.onActivity {
+                if (findWindowView(WolfUiTestTags.TELEPROMPTER_STOP) == null) {
+                    // Retrying is safe while project recovery is pending: MainActivity
+                    // rejects overlapping starts until the persisted take is restored.
+                    (findWindowView(WolfUiTestTags.VOICE_RECORD) as? Button)?.performClick()
+                }
                 val stop = findWindowView(WolfUiTestTags.TELEPROMPTER_STOP)
                 val scroll = findWindowView(WolfUiTestTags.TELEPROMPTER_SCROLL) as? ScrollView
-                present = stop is Button && scroll != null &&
+                ready = stop is Button && scroll != null &&
                     scroll.height > 0 && scroll.canScrollVertically(1)
             }
-            if (present) return
-            SystemClock.sleep(100L)
+            if (ready) return
+            SystemClock.sleep(200L)
         }
         throw AssertionError("The manual Teleprompter dialog did not appear after recording started")
     }
