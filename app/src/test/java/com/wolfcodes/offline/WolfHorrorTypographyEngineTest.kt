@@ -19,9 +19,9 @@ class WolfHorrorTypographyEngineTest {
     }
 
     @Test
-    fun neutralSceneDoesNotReceiveUnfoundedPhrase() {
+    fun unsupportedHorrorCueDoesNotReceiveUnfoundedPhrase() {
         val cues = WolfHorrorTypographyEngine.plan(
-            listOf("جلست الأسرة لتناول العشاء في هدوء."), listOf(120)
+            listOf("القبو الرطب يضيق في سكون ثقيل، وتغلق العتمة آخر منفذ للضوء."), listOf(120)
         )
 
         assertNull(cues.single())
@@ -31,7 +31,7 @@ class WolfHorrorTypographyEngineTest {
     fun limitsFrequencyAndLeavesAtLeastOneSceneBetweenCues() {
         val scenes = List(12) { index ->
             if (index % 2 == 0) "سمعوا طرقًا متكررًا على الباب في الممر رقم $index"
-            else "ظل المكان هادئًا للحظات."
+            else "سكن السرداب لحظة قبل أن تتحرك السلسلة خلف الباب."
         }
         val cues = WolfHorrorTypographyEngine.plan(scenes, List(12) { 120 })
         val cueIndexes = cues.mapIndexedNotNull { index, cue -> if (cue != null) index else null }

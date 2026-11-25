@@ -99,9 +99,59 @@ object WolfProceduralSceneProductionEngine {
             has("مزرعة", "حقل", "قرية", "farm", "field", "village", "rural") ->
                 Environment.RURAL
             has("ممر", "طرقة", "الممر", "hallway", "corridor") -> Environment.CORRIDOR
-            has("نافذة", "شباك", "زجاج", "window") -> Environment.WINDOW
-            has("باب", "أبواب", "مدخل", "door", "entrance") -> Environment.DOOR
-            has("غرفة", "حجرة", "الغرفة", "room", "bedroom") -> Environment.ROOM
+            else -> classifyInteriorEnvironment(text)
+        }
+    }
+
+    /**
+     * Scores the interior location separately from its focal door/window.
+     * Incidental props do not override an explicit room, but a prop that anchors
+     * the event (for example, a figure behind a window) becomes the scene focus.
+     */
+    private fun classifyInteriorEnvironment(text: String): Environment {
+        fun has(vararg terms: String) = terms.any(text::contains)
+
+        val roomMentioned = has("غرفة", "حجرة", "الغرفة", "room", "bedroom")
+        val windowTerms = listOf("نافذة", "شباك", "زجاج", "window")
+        val doorTerms = listOf("باب", "أبواب", "مدخل", "door", "entrance")
+        val windowFocusTerms = listOf(
+            "خلف النافذة", "وراء النافذة", "عند النافذة", "من النافذة", "عبر النافذة",
+            "behind the window", "behind a window", "through the window",
+            "at the window", "outside the window", "from the window"
+        )
+        val doorFocusTerms = listOf(
+            "خلف الباب", "وراء الباب", "عند الباب", "الباب يفتح", "الباب انفتح",
+            "انفتح الباب", "يفتح الباب", "فتح الباب",
+            "behind the door", "behind a door", "at the door", "through the door",
+            "the door opens", "the door opened", "door opens", "door opened"
+        )
+
+        val windowMentioned = windowTerms.any(text::contains)
+        val doorMentioned = doorTerms.any(text::contains)
+        val windowFocused = windowFocusTerms.any(text::contains)
+        val doorFocused = doorFocusTerms.any(text::contains)
+
+        // A named room outweighs a passing prop mention (4 vs 2).
+        // A clear focal relation/action outweighs the room (2 + 5 vs 4).
+        val roomScore = if (roomMentioned) 4 else 0
+        val windowScore = (if (windowMentioned) 2 else 0) + (if (windowFocused) 5 else 0)
+        val doorScore = (if (doorMentioned) 2 else 0) + (if (doorFocused) 5 else 0)
+
+        val windowLastMention = (windowTerms + windowFocusTerms)
+            .maxOfOrNull { text.lastIndexOf(it) } ?: -1
+        val doorLastMention = (doorTerms + doorFocusTerms)
+            .maxOfOrNull { text.lastIndexOf(it) } ?: -1
+
+        return when {
+            windowScore > roomScore && windowScore > doorScore -> Environment.WINDOW
+            doorScore > roomScore && doorScore > windowScore -> Environment.DOOR
+            windowScore == doorScore && windowScore > roomScore &&
+                windowMentioned && doorMentioned -> {
+                if (windowLastMention > doorLastMention) Environment.WINDOW else Environment.DOOR
+            }
+            roomScore > 0 -> Environment.ROOM
+            windowMentioned -> Environment.WINDOW
+            doorMentioned -> Environment.DOOR
             else -> Environment.HAUNTED_HOUSE
         }
     }
@@ -147,7 +197,8 @@ object WolfProceduralSceneProductionEngine {
         val horizontalOffset = compositionFocusX?.let { (it - 0.5f) * width * 0.08f } ?: 0f
         val verticalOffset = compositionFocusY?.let { (it - 0.5f) * height * 0.06f } ?: 0f
         val sceneCamera = OfflineMotionEngine.cameraFrame(
-            plannedProgress, sourceSceneIndex, caption, safeShot, cameraMovement
+            plannedProgress, sourceSceneIndex, caption, safeShot, cameraMovement,
+            OfflineMotionEngine.MAX_HORROR_INTENSITY
         )
         val sceneScale = (1f + sceneCamera.zoom).coerceIn(0.98f, 1.08f)
         val setting = sceneRenderContext?.setting?.takeIf { it.isNotBlank() }

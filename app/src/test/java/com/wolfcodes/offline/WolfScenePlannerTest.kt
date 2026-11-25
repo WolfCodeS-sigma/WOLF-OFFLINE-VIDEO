@@ -7,7 +7,7 @@ import org.junit.Test
 class WolfScenePlannerTest {
     @Test
     fun frameAllocationPreservesExactFrameBudget() {
-        val scenes = listOf("المشهد الأول", "المشهد الثاني أطول قليلًا", "المشهد الثالث")
+        val scenes = listOf("ممر القبو المهجور", "باب المشرحة المغلق", "السرداب المظلم")
         val allocation = WolfScenePlanner.allocateFrames(scenes, 240)
         assertEquals(240, allocation.sum())
         assertEquals(3, allocation.size)

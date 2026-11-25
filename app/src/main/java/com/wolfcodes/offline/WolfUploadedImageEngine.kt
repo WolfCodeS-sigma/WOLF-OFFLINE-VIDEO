@@ -46,6 +46,58 @@ object WolfUploadedImageEngine {
     private const val MIN_CONFIDENCE = 0.12f
     private const val TAU = (2.0 * PI).toFloat()
 
+    /** Destination bounds for fit-center rendering; source pixels are never cropped. */
+    internal data class AspectFitDestination(
+        val left: Float,
+        val top: Float,
+        val right: Float,
+        val bottom: Float
+    ) {
+        val width: Float get() = right - left
+        val height: Float get() = bottom - top
+    }
+
+    internal fun aspectFitDestination(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        outputWidth: Int,
+        outputHeight: Int
+    ): AspectFitDestination {
+        require(sourceWidth > 0 && sourceHeight > 0 && outputWidth > 0 && outputHeight > 0) {
+            "Image and output dimensions must be positive"
+        }
+        val scale = minOf(
+            outputWidth.toFloat() / sourceWidth.toFloat(),
+            outputHeight.toFloat() / sourceHeight.toFloat()
+        )
+        val fittedWidth = sourceWidth * scale
+        val fittedHeight = sourceHeight * scale
+        val left = (outputWidth - fittedWidth) * 0.5f
+        val top = (outputHeight - fittedHeight) * 0.5f
+        return AspectFitDestination(left, top, left + fittedWidth, top + fittedHeight)
+    }
+
+    /**
+     * Draws every source pixel into a fit-center viewport. Letterbox/pillarbox bars are
+     * intentional: an unverified photo must not be cropped, stretched, rotated or zoomed.
+     */
+    internal fun drawOriginalStill(
+        canvas: Canvas,
+        width: Int,
+        height: Int,
+        source: Bitmap,
+        paint: Paint = imagePaint
+    ) {
+        require(width > 0 && height > 0 && !source.isRecycled && source.width > 0 && source.height > 0) {
+            "The original user image or output canvas is unavailable"
+        }
+        val fit = aspectFitDestination(source.width, source.height, width, height)
+        val destination = RectF(fit.left, fit.top, fit.right, fit.bottom)
+        val completeSource = Rect(0, 0, source.width, source.height)
+        canvas.drawColor(Color.BLACK)
+        canvas.drawBitmap(source, completeSource, destination, paint)
+    }
+
     internal fun shouldUseDepthLayers(
         separated: Boolean,
         confidence: Float,
@@ -61,7 +113,7 @@ object WolfUploadedImageEngine {
     ): MotionPlan {
         val text = story.lowercase()
         val atmosphere = when {
-            hasAny(text, "مطاردة", "يطارد", "يجري", "يركض", "هرب", "لاحق", "يلاحق") -> Atmosphere.CHASE
+            hasAny(text, "مطاردة", "يطارد", "طارد", "طاردني", "طاردها", "طاردهم", "تطارده", "يجري", "يركض", "هرب", "لاحق", "يلاحق") -> Atmosphere.CHASE
             hasAny(text, "مطر", "تمطر", "عاصفة", "ماطر", "رعد") -> Atmosphere.RAIN
             hasAny(text, "مقبرة", "قبر", "مدفن", "جنازة") -> Atmosphere.CEMETERY
             hasAny(text, "غابة", "شجرة", "أشجار", "غصن", "غصون") -> Atmosphere.FOREST
@@ -100,13 +152,8 @@ object WolfUploadedImageEngine {
             }
         }
         val progressPulse = 0.96f + 0.04f * sin((durationProgress.coerceIn(0f, 1f) * PI).toDouble()).toFloat()
-        val intensity = when (atmosphere) {
-            Atmosphere.CHASE -> 1.0f
-            Atmosphere.GHOST, Atmosphere.DOOR, Atmosphere.MIRROR -> 0.78f
-            Atmosphere.RAIN, Atmosphere.CORRIDOR -> 0.62f
-            Atmosphere.FOREST, Atmosphere.CEMETERY -> 0.48f
-            Atmosphere.QUIET -> 0.28f
-        }
+        // All approved horror story beats use peak atmosphere; unverified photos never reach this pass.
+        val intensity = 1.0f
         val focusX = when (move) {
             CameraMove.LEFT_TRACK -> 0.40f
             CameraMove.RIGHT_TRACK -> 0.60f
@@ -171,7 +218,7 @@ object WolfUploadedImageEngine {
         return try {
             val layers = prepared.layers
             if (layers == null || !layers.safeForParallax) {
-                drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, 0f, planMotion(caption, sceneIndex, shotIndex, 0f))
+                drawOriginalStill(canvas, width, height, prepared.source)
                 Result.ORIGINAL_IMAGE
             } else {
                 val t = progress.coerceIn(0f, 1f)
@@ -181,13 +228,13 @@ object WolfUploadedImageEngine {
                     drawAtmosphere(canvas, width, height, sceneIndex, shotIndex, t, plan)
                     Result.DEPTH_LAYERS
                 } else {
-                    Result.SAFE_FRAME
+                    Result.ORIGINAL_IMAGE
                 }
             }
         } catch (_: OutOfMemoryError) {
             try {
                 canvas.drawColor(Color.BLACK)
-                drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, 0f, planMotion(caption, sceneIndex, shotIndex, 0f))
+                drawOriginalStill(canvas, width, height, prepared.source)
                 Result.ORIGINAL_IMAGE
             } catch (_: Throwable) {
                 safeFrame(canvas, width, height)
@@ -195,7 +242,7 @@ object WolfUploadedImageEngine {
         } catch (_: Exception) {
             try {
                 canvas.drawColor(Color.BLACK)
-                drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, 0f, planMotion(caption, sceneIndex, shotIndex, 0f))
+                drawOriginalStill(canvas, width, height, prepared.source)
                 Result.ORIGINAL_IMAGE
             } catch (_: OutOfMemoryError) {
                 safeFrame(canvas, width, height)
@@ -214,7 +261,7 @@ object WolfUploadedImageEngine {
             layers.midground.isRecycled || layers.foreground.isRecycled
         ) {
             canvas.drawColor(Color.BLACK)
-            drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, plan)
+            drawOriginalStill(canvas, width, height, prepared.source)
             return false
         }
         val crop = cropForAspect(prepared.source.width, prepared.source.height, width, height)
@@ -227,7 +274,7 @@ object WolfUploadedImageEngine {
         )
         if (layerSource.width() <= 0 || layerSource.height() <= 0) {
             canvas.drawColor(Color.BLACK)
-            drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, plan)
+            drawOriginalStill(canvas, width, height, prepared.source)
             return false
         }
         val rendered = Wolf25DCinematicImageEngine.render(
@@ -243,26 +290,12 @@ object WolfUploadedImageEngine {
         )
         if (!rendered) {
             canvas.drawColor(Color.BLACK)
-            drawOriginal(canvas, width, height, prepared.source, sceneIndex, shotIndex, progress, plan)
+            drawOriginalStill(canvas, width, height, prepared.source)
             return false
         }
         return true
     }
 
-    private fun drawOriginal(
-        canvas: Canvas, width: Int, height: Int, source: Bitmap, sceneIndex: Int,
-        shotIndex: Int, progress: Float, plan: MotionPlan
-    ) {
-        val crop = cropForAspect(source.width, source.height, width, height)
-        val destination = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        val saved = canvas.save()
-        try {
-            // No semantic depth means no camera transform: preserve the selected still.
-            canvas.drawBitmap(source, crop, destination, imagePaint)
-        } finally {
-            canvas.restoreToCount(saved)
-        }
-    }
 
     private fun drawDepthPlane(
         canvas: Canvas, width: Int, height: Int, sceneIndex: Int, shotIndex: Int,

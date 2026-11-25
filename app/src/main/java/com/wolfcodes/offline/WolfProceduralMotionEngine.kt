@@ -187,7 +187,8 @@ object WolfProceduralMotionEngine {
             "glitch", "static", "signal", "distortion", "flicker"
         )
         val chase = storyEvent == StoryDirectorEngine.StoryEvent.CHASE || containsAny(
-            "مطاردة", "يطارد", "هرب", "يهرب", "يجري", "ركض", "اندفع", "هاجم",
+            "مطاردة", "يطارد", "طارد", "طاردني", "طاردها", "طاردهم", "تطارده",
+            "هرب", "يهرب", "يجري", "ركض", "اندفع", "هاجم",
             "chase", "running", "escape", "attack", "runs"
         )
         val reveal = storyEvent == StoryDirectorEngine.StoryEvent.REVEAL || containsAny(

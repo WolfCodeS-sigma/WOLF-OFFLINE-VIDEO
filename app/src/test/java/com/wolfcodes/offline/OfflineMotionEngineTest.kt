@@ -7,7 +7,7 @@ import org.junit.Test
 class OfflineMotionEngineTest {
     @Test
     fun frameAllocationPreservesExactDurationAndMinimumPerScene() {
-        val scenes = listOf("الغرفة ساكنة والنافذة مغلقة", "ظهر شبح فجأة خلف الباب", "هرب الرجل في ممر طويل")
+        val scenes = listOf("الغرفة المهجورة ساكنة والنافذة ترتجف قرب باب القبو", "ظهر شبح فجأة خلف الباب", "طارد كيان أسود الحارس عبر ممر المستشفى المهجور حتى اختفى خلف باب القبو")
         val frames = OfflineMotionEngine.allocateFrames(scenes, totalFrames = 12 * 18, minimumFramesPerScene = 36)
 
         assertEquals(12 * 18, frames.sum())
@@ -18,7 +18,7 @@ class OfflineMotionEngineTest {
     @Test
     fun revealReceivesMoreTimeThanQuietAtmosphere() {
         val scenes = listOf(
-            "كانت الغرفة ساكنة والنافذة مغلقة",
+            "الغرفة المهجورة ساكنة والنافذة ترتجف قرب باب القبو",
             "ظهر شبح فجأة خلف الباب وانكشف وجهه"
         )
         val frames = OfflineMotionEngine.allocateFrames(scenes, totalFrames = 12 * 12, minimumFramesPerScene = 36)
@@ -29,9 +29,9 @@ class OfflineMotionEngineTest {
 
     @Test
     fun motionProfilesDistinguishSuspenseRevealAndChase() {
-        val suspense = OfflineMotionEngine.profile("الغرفة ساكنة")
+        val suspense = OfflineMotionEngine.profile("الغرفة المهجورة ساكنة داخل القبو")
         val reveal = OfflineMotionEngine.profile("ظهر شبح فجأة")
-        val chase = OfflineMotionEngine.profile("هرب الرجل وبدأت المطاردة")
+        val chase = OfflineMotionEngine.profile("طارد كيان أسود الحارس عبر ممر المستشفى المهجور حتى اختفى خلف باب القبو")
 
         assertEquals(OfflineMotionEngine.Movement.SUSPENSE, suspense.movement)
         assertEquals(OfflineMotionEngine.Movement.REVEAL, reveal.movement)
@@ -52,14 +52,14 @@ class OfflineMotionEngineTest {
     @Test(expected = IllegalArgumentException::class)
     fun allocationRejectsFrameBudgetBelowMinimum() {
         OfflineMotionEngine.allocateFrames(
-            captions = listOf("مشهد أول", "مشهد ثان"),
+            captions = listOf("مشهد رعب أول: طرقات القبو", "مشهد رعب ثان: ظل خلف الباب"),
             totalFrames = 60,
             minimumFramesPerScene = 36
         )
     }
     @Test
     fun cameraMovesVaryAcrossShotsAndAdjacentScenes() {
-        val caption = "الغرفة ساكنة ثم ظهر ظل خلف الباب"
+        val caption = "الغرفة المهجورة ساكنة ثم ظهر ظل خلف باب القبو"
         val moves = (0..2).map { shot ->
             OfflineMotionEngine.cameraFrame(0.65f, 0, caption, shot)
         } + (0..2).map { shot ->
@@ -73,9 +73,9 @@ class OfflineMotionEngineTest {
     @Test
     fun cameraFramesStayInsideSafeMotionBounds() {
         val captions = listOf(
-            "الغرفة ساكنة والنافذة مغلقة",
+            "الغرفة المهجورة ساكنة والنافذة ترتجف قرب باب القبو",
             "ظهر شبح فجأة خلف الباب",
-            "هرب الرجل وبدأت المطاردة"
+            "طارد كيان أسود الحارس عبر ممر المستشفى المهجور حتى اختفى خلف باب القبو"
         )
         for (caption in captions) {
             for (scene in 0..11) {
@@ -99,4 +99,47 @@ class OfflineMotionEngineTest {
         assertEquals(first, second)
     }
 
+
+    @Test
+    fun maximumHorrorIntensityStrengthensDirectorMotionWithoutBreakingBounds() {
+        val movement = StoryDirectorEngine.CameraMovement.TRACK_LEFT_TO_RIGHT
+        val restrained = OfflineMotionEngine.cameraFrame(
+            progress = 0.72f,
+            scene = 2,
+            caption = "اندفع ظل غامض عبر ممر المستشفى المهجور",
+            shotIndex = 0,
+            movement = movement,
+            horrorIntensity = 0.35f
+        )
+        val maximum = OfflineMotionEngine.cameraFrame(
+            progress = 0.72f,
+            scene = 2,
+            caption = "اندفع ظل غامض عبر ممر المستشفى المهجور",
+            shotIndex = 0,
+            movement = movement,
+            horrorIntensity = OfflineMotionEngine.MAX_HORROR_INTENSITY
+        )
+        assertTrue(kotlin.math.abs(maximum.offsetX) > kotlin.math.abs(restrained.offsetX))
+        assertTrue(maximum.zoom > restrained.zoom)
+        assertTrue(maximum.offsetX in -0.075f..0.075f)
+        assertTrue(maximum.offsetY in -0.055f..0.055f)
+        assertTrue(maximum.rotationDegrees in -0.55f..0.55f)
+        assertTrue(maximum.zoom in -0.015f..0.075f)
+    }
+
+    @Test
+    fun maximumHorrorIntensityKeepsHoldShotCompletelyStill() {
+        val hold = OfflineMotionEngine.cameraFrame(
+            progress = 0.91f,
+            scene = 4,
+            caption = "اندفع كيان مخيف في السرداب المهجور",
+            shotIndex = 2,
+            movement = StoryDirectorEngine.CameraMovement.HOLD,
+            horrorIntensity = OfflineMotionEngine.MAX_HORROR_INTENSITY
+        )
+        assertEquals(0f, hold.zoom, 0f)
+        assertEquals(0f, hold.offsetX, 0f)
+        assertEquals(0f, hold.offsetY, 0f)
+        assertEquals(0f, hold.rotationDegrees, 0f)
+    }
 }

@@ -10,7 +10,7 @@ class WolfStoryOriginalityReviewEngineTest {
         text: String,
         id: String = "library-source-1",
         title: String = "مرجع اختباري",
-        type: String = "قصة خيالية"
+        type: String = "رعب خيالي"
     ) = WolfStoryOriginalityReviewEngine.SourceStamp(
         id = id,
         title = title,
@@ -37,8 +37,8 @@ class WolfStoryOriginalityReviewEngineTest {
     }
 
     @Test fun ArabicAlefFormsDiacriticsAndTatweelAreNormalizedBeforeComparison() {
-        val reference = "إِشَارَةُ الحارسِ قادتْهُ إلى أُطْرُوحَةٍ غريبةٍ داخلَ الممرِّ الحجريِّ القديم"
-        val story = "اشارة الحارس قادته الى اطروحة غريبة داخل الممر الحجري القديم"
+        val reference = "إِشَارَةُ الحارسِ قادتْهُ إلى جُثّةٍ غريبةٍ داخلَ الممرِّ الحجريِّ القديم"
+        val story = "اشارة الحارس قادته الى جثة غريبة داخل الممر الحجري القديم"
         val source = stamp(reference)
         val report = WolfStoryOriginalityReviewEngine.analyze(
             story,
@@ -50,8 +50,8 @@ class WolfStoryOriginalityReviewEngineTest {
     }
 
     @Test fun unrelatedReferenceDoesNotCreateAnOverlapFinding() {
-        val sourceText = "المطر يسقط فوق محطة القطار بينما تحمل امرأة حقيبة زرقاء وتنتظر وصول الحافلة الصباحية"
-        val story = "المرآة القديمة تعكس وجها لا يعرفه الطبيب ثم تختفي الساعة من فوق الجدار الخشبي"
+        val sourceText = "انطفأت مصابيح محطة القطار المهجورة، وسمع الحارس صفيرًا يخرج من نفق مغلق"
+        val story = "المرآة القديمة تعكس وجهًا لا يعرفه الحارس، ثم تختفي الساعة من جدار القبو الحجري"
         val source = stamp(sourceText)
         val report = WolfStoryOriginalityReviewEngine.analyze(
             story,
@@ -64,8 +64,8 @@ class WolfStoryOriginalityReviewEngineTest {
     }
 
     @Test fun continuousPhraseLengthRequiresAdjacentWindowsInTheSource() {
-        val story = "سقط المطر فوق الباب الخشبي القديم فجأة"
-        val reference = "سقط المطر فوق الباب الخشبي القديم ثم انطفأ المصباح في الممر الطويل وبعد ذلك عاد المطر فوق الباب الخشبي القديم فجأة"
+        val story = "اهتز الباب القديم حتى انطفأ المصباح"
+        val reference = "اهتز الباب القديم حتى انطفأ المصباح ثم ظهر ظل قرب النافذة ثم اهتز الباب القديم حتى انطفأ المصباح فجأة"
         val source = stamp(reference)
         val report = WolfStoryOriginalityReviewEngine.analyze(
             story,
@@ -79,8 +79,8 @@ class WolfStoryOriginalityReviewEngineTest {
     }
 
     @Test fun reportRetainsCheckedSourcesEvenWhenNoPhraseWasMatched() {
-        val reference = "المطر يسقط فوق محطة القطار بينما تحمل امرأة حقيبة زرقاء وتنتظر وصول الحافلة الصباحية"
-        val story = "المرآة القديمة تعكس وجها لا يعرفه الطبيب ثم تختفي الساعة من فوق الجدار الخشبي"
+        val reference = "انطفأت مصابيح محطة القطار المهجورة، وسمع الحارس صفيرًا يخرج من نفق مغلق"
+        val story = "المرآة القديمة تعكس وجهًا لا يعرفه الحارس، ثم تختفي الساعة من جدار القبو الحجري"
         val source = stamp(reference, id = "no-match-source", title = "مصدر بلا تطابق").copy(
             sourceLabel = "مرجع أضافه المستخدم",
             sourceDate = "2026-11-20"
@@ -110,8 +110,8 @@ class WolfStoryOriginalityReviewEngineTest {
     }
 
     @Test fun changedReferenceFingerprintIsExcludedAndExplained() {
-        val original = "رائحة الخشب المحترق ملأت الغرفة الضيقة قبل أن تنطفئ المصابيح الثلاثة فجأة"
-        val changed = "رائحة القهوة ملأت الغرفة الواسعة قبل أن تفتح النافذة الزجاجية"
+        val original = "رائحة الخشب المحترق ملأت القبو قبل أن ينطفئ المصباح وتتحرك السلسلة المعدنية وحدها"
+        val changed = "رائحة عفن باردة ملأت السرداب بعد انطفاء المصباح"
         val source = stamp(original)
         val report = WolfStoryOriginalityReviewEngine.analyze(
             changed,
@@ -125,7 +125,7 @@ class WolfStoryOriginalityReviewEngineTest {
     }
 
     @Test fun duplicateContentAcrossLibraryEntriesIsComparedOnlyOnce() {
-        val text = "توقفت السيارة أمام المنزل المهجور ووجد السائق رسالة تحمل اسمه بخط يده القديم"
+        val text = "توقفت السيارة أمام المنزل المهجور ووجد السائق رسالة تحمل اسمه وتحذّره من شيء يراقبه في القبو"
         val first = stamp(text, id = "ref-one", title = "المصدر الأول")
         val second = stamp(text, id = "ref-two", title = "نسخة مكررة")
         val report = WolfStoryOriginalityReviewEngine.analyze(
@@ -184,8 +184,8 @@ class WolfStoryOriginalityReviewEngineTest {
     }
 
     @Test fun reviewFingerprintChangesWhenReviewedTextChanges() {
-        val first = WolfStoryOriginalityReviewEngine.fingerprint("قصة أصلية")
-        val second = WolfStoryOriginalityReviewEngine.fingerprint("قصة أصلية مختلفة")
+        val first = WolfStoryOriginalityReviewEngine.fingerprint("قصة رعب أصلية")
+        val second = WolfStoryOriginalityReviewEngine.fingerprint("قصة رعب أصلية مختلفة")
         assertNotEquals(first, second)
         assertEquals(64, first.length)
     }
@@ -193,7 +193,7 @@ class WolfStoryOriginalityReviewEngineTest {
     @Test fun ledgerMergesUsageLabelsWithoutDuplicatingSameSourceVersion() {
         val root = Files.createTempDirectory("wolf-originality-ledger").toFile()
         try {
-            val text = "هذا نص مرجعي محلي لاختبار سجل المصدر"
+            val text = "سمع الحارس طرقات من داخل القبو المغلق في منتصف الليل"
             val source = stamp(text).copy(sourceDate = "2026-11-20")
             WolfStoryOriginalityReviewEngine.recordSources(root, "session-12345678", "المخطط", listOf(source))
             WolfStoryOriginalityReviewEngine.recordSources(root, "session-12345678", "الفصل 1", listOf(source))
@@ -212,7 +212,7 @@ class WolfStoryOriginalityReviewEngineTest {
         val root = Files.createTempDirectory("wolf-originality-recovery").toFile()
         val sessionId = "session-12345678"
         try {
-            val sourceText = "المصدر الأصلي الذي يجب أن يستعيده السجل المحلي بعد الانقطاع"
+            val sourceText = "المصدر الأصلي: تحركت سلسلة القبو وحدها بعد منتصف الليل ثم انطفأ المصباح"
             WolfStoryOriginalityReviewEngine.recordSources(
                 root, sessionId, "المخطط", listOf(stamp(sourceText))
             )
@@ -254,14 +254,14 @@ class WolfStoryOriginalityReviewEngineTest {
 
     @Test fun oversizedUnavailableSourceListIsCappedAndDisclosed() {
         val unavailable = (1..(WolfStoryOriginalityReviewEngine.MAX_REFERENCES + 2)).map { index ->
-            val text = "محتوى مرجع غير متاح رقم $index"
+            val text = "همس مجهول في القبو رقم $index"
             WolfStoryOriginalityReviewEngine.UnavailableSource(
                 stamp(text, id = "missing-$index", title = "مرجع غير متاح $index"),
                 "المصدر غير موجود"
             )
         }
         val report = WolfStoryOriginalityReviewEngine.analyze(
-            "قصة قصيرة للمراجعة",
+            "قصة رعب قصيرة للمراجعة",
             emptySequence(),
             unavailable
         )
