@@ -137,8 +137,7 @@ class WolfScenePipelineEncoderIntegrationTest : InstrumentationTestCase() {
                 extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)
                     ?.startsWith("video/") == true
             }
-            assertNotNull("Encoded MP4 has no video track", videoTrack)
-            val track = videoTrack ?: fail("Encoded MP4 has no video track")
+            val track = videoTrack ?: throw AssertionError("Encoded MP4 has no video track")
             val format = extractor.getTrackFormat(track)
             assertEquals(TEST_WIDTH, format.getInteger(MediaFormat.KEY_WIDTH))
             assertEquals(TEST_HEIGHT, format.getInteger(MediaFormat.KEY_HEIGHT))
