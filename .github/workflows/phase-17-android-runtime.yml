@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: phase-17-android-runtime-${{ github.event.pull_request.number || github.ref }}
+  group: phase-17-android-runtime-shared
   queue: max
 
 permissions:
