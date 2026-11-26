@@ -111,7 +111,14 @@ class WolfTeleprompterAndroidTest {
             scenario.onActivity {
                 val script = findWindowView(WolfUiTestTags.TELEPROMPTER_SCRIPT) as TextView
                 assertEquals("Reopened projects must show the exact approved script", story, script.text.toString())
+                assertEquals(View.LAYOUT_DIRECTION_RTL, script.layoutDirection)
                 assertEquals(View.TEXT_DIRECTION_FIRST_STRONG_RTL, script.textDirection)
+                assertEquals(
+                    "Reopened script START gravity must resolve to the RTL right edge",
+                    Gravity.RIGHT,
+                    Gravity.getAbsoluteGravity(script.gravity, script.layoutDirection) and
+                        Gravity.HORIZONTAL_GRAVITY_MASK
+                )
             }
 
             SystemClock.sleep(1_700L)
@@ -171,9 +178,15 @@ class WolfTeleprompterAndroidTest {
             val script = findWindowView(WolfUiTestTags.TELEPROMPTER_SCRIPT) as? TextView
             assertNotNull("The complete approved story must be visible in the Teleprompter", script)
             assertEquals(expectedStory, script!!.text.toString())
+            assertEquals(View.LAYOUT_DIRECTION_RTL, script.layoutDirection)
             assertEquals(View.TEXT_DIRECTION_FIRST_STRONG_RTL, script.textDirection)
             assertEquals(View.TEXT_ALIGNMENT_VIEW_START, script.textAlignment)
-            assertEquals("The story must be laid out from the RTL start edge", Gravity.START, script.gravity)
+            assertEquals(
+                "The script's relative START gravity must resolve to the RTL right edge",
+                Gravity.RIGHT,
+                Gravity.getAbsoluteGravity(script.gravity, script.layoutDirection) and
+                    Gravity.HORIZONTAL_GRAVITY_MASK
+            )
 
             val scroll = findWindowView(WolfUiTestTags.TELEPROMPTER_SCROLL) as? ScrollView
             assertNotNull("The story must use a scrollable manual reading surface", scroll)
