@@ -637,6 +637,9 @@ class MainActivity : Activity() {
             tag = WolfUiTestTags.TELEPROMPTER_SCRIPT
             text = story
             textSize = 23f
+            // Keep relative START alignment anchored to the RTL edge even when
+            // the device's system locale (and the surrounding dialog) is LTR.
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
             textDirection = View.TEXT_DIRECTION_FIRST_STRONG_RTL
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
             gravity = Gravity.START
