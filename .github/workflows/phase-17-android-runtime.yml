@@ -1,6 +1,9 @@
 name: Phase 17 Android runtime validation
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - feature/phase-16-offline-runtime-closure
@@ -13,8 +16,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: phase-17-android-runtime-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: phase-17-android-runtime-shared
+  queue: max
 
 permissions:
   contents: read
@@ -83,6 +86,21 @@ jobs:
           emulator-boot-timeout: 1800
           working-directory: ${{ github.workspace }}
           script: bash "$GITHUB_WORKSPACE/.github/scripts/phase-17-android-runtime-smoke.sh"
+
+      - name: Upload instrumentation and CI diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wolf-offline-video-stage-06-g-validation-reports
+          path: |
+            app/build/outputs/androidTest-results/connected/debug/
+            app/build/reports/androidTests/connected/debug/
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/reports/lint-results-debug.html
+            wolf-window.xml
+            wolf-phase17.png
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload debug APK
         if: always()

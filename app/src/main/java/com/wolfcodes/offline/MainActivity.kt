@@ -22,6 +22,20 @@ import android.widget.Toast
 import java.io.File
 import java.util.concurrent.Executors
 
+internal object WolfUiTestTags {
+    const val PROJECT_TITLE = "wolf.project.title"
+    const val PROJECT_STORY = "wolf.project.story"
+    const val PROJECT_DURATION = "wolf.project.duration"
+    const val STORY_APPROVE = "wolf.story.approve"
+    const val VOICE_RECORD = "wolf.voice.record"
+    const val MAIN_STATUS = "wolf.main.status"
+    const val PROJECT_OPEN_PREFIX = "wolf.project.open."
+    const val TELEPROMPTER_SCROLL = "wolf.teleprompter.scroll"
+    const val TELEPROMPTER_SCRIPT = "wolf.teleprompter.script"
+    const val TELEPROMPTER_PROGRESS = "wolf.teleprompter.progress"
+    const val TELEPROMPTER_STOP = "wolf.teleprompter.stop"
+}
+
 class MainActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     private lateinit var titleField: EditText
@@ -73,15 +87,17 @@ class MainActivity : Activity() {
         })
 
         root.addView(label("اسم المشروع"))
-        titleField = field("اسم الفيلم")
+        titleField = field("اسم الفيلم").apply { tag = WolfUiTestTags.PROJECT_TITLE }
         root.addView(titleField)
         root.addView(label("القصة — عدّل النص ثم اعتمده قبل التسجيل"))
         storyField = field("اكتب أو الصق قصة الرعب هنا").apply {
             minLines = 8
             gravity = Gravity.TOP
+            tag = WolfUiTestTags.PROJECT_STORY
         }
         root.addView(storyField)
         root.addView(button("اعتماد نص القصة النهائي").apply {
+            tag = WolfUiTestTags.STORY_APPROVE
             setOnClickListener { approveStory() }
         })
 
@@ -98,7 +114,10 @@ class MainActivity : Activity() {
         root.addView(ratioRow)
 
         root.addView(label("مدة الفيلم — مدد جاهزة من 5 إلى 30 دقيقة، أو مدة مخصصة بالثواني"))
-        durationField = field("المدة بالثواني — مثال: 300").apply { setText("300") }
+        durationField = field("المدة بالثواني — مثال: 300").apply {
+            tag = WolfUiTestTags.PROJECT_DURATION
+            setText("300")
+        }
         root.addView(durationField)
         WolfFilmProductionCoordinator.durationPresetsMinutes.chunked(3).forEach { minutesRow ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -148,6 +167,7 @@ class MainActivity : Activity() {
         root.addView(label("التعليق الصوتي"))
         root.addView(label("يمكنك تسجيل الراوي على أجزاء؛ إيقاف الجزء يحفظه، والضغط مجددًا يستكمل من الجزء التالي."))
         root.addView(button("تسجيل جزء جديد / استكمال التعليق الصوتي").apply {
+            tag = WolfUiTestTags.VOICE_RECORD
             setOnClickListener { startVoiceRecording() }
         })
         root.addView(button("إيقاف التسجيل").apply {
@@ -174,7 +194,10 @@ class MainActivity : Activity() {
             visibility = View.GONE
         }
         root.addView(progress)
-        status = label("جاهز للعمل محليًا دون اتصال بالإنترنت").apply { gravity = Gravity.CENTER }
+        status = label("جاهز للعمل محليًا دون اتصال بالإنترنت").apply {
+            gravity = Gravity.CENTER
+            tag = WolfUiTestTags.MAIN_STATUS
+        }
         root.addView(status)
 
         root.addView(label("حالة فصول الفيلم والاستئناف"))
@@ -605,13 +628,18 @@ class MainActivity : Activity() {
         ))
 
         val scriptScroll = ScrollView(this).apply {
+            tag = WolfUiTestTags.TELEPROMPTER_SCROLL
             isFillViewport = true
             isVerticalScrollBarEnabled = true
             overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         }
         val scriptText = TextView(this).apply {
+            tag = WolfUiTestTags.TELEPROMPTER_SCRIPT
             text = story
             textSize = 23f
+            // Keep relative START alignment anchored to the RTL edge even when
+            // the device's system locale (and the surrounding dialog) is LTR.
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
             textDirection = View.TEXT_DIRECTION_FIRST_STRONG_RTL
             textAlignment = View.TEXT_ALIGNMENT_VIEW_START
             gravity = Gravity.START
@@ -636,6 +664,7 @@ class MainActivity : Activity() {
         )
 
         teleprompterProgress = TextView(this).apply {
+            tag = WolfUiTestTags.TELEPROMPTER_PROGRESS
             text = "التسجيل مستمر — 0 ثانية"
             textSize = 14f
             gravity = Gravity.CENTER
@@ -651,6 +680,7 @@ class MainActivity : Activity() {
         )
 
         root.addView(Button(this).apply {
+            tag = WolfUiTestTags.TELEPROMPTER_STOP
             text = "إيقاف التسجيل وحفظ الجزء"
             isAllCaps = false
             textSize = 17f
@@ -838,6 +868,7 @@ class MainActivity : Activity() {
         projects.forEach { item ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             row.addView(button(item.title + " — " + item.durationSeconds + " ثانية").apply {
+                tag = WolfUiTestTags.PROJECT_OPEN_PREFIX + item.id
                 setOnClickListener { openProject(item) }
             })
             row.addView(button("حذف المشروع").apply {
